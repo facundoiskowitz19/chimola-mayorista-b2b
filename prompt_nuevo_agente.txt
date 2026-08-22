@@ -1,0 +1,85 @@
+Vas a arrancar el MVP del sitio mayorista B2B de Chimola/Lautin.
+
+CONTEXTO (leer todo antes de escribir código):
+1. Leé `CLAUDE.md` — contexto de negocio, arquitectura propuesta, reglas
+   críticas del modelo de datos.
+2. Leé `README.md` — flujo MVP, deploy, verificación.
+3. Leé `data_catalog.yaml` — diccionario de datos con foco en catálogo B2B.
+4. Leé `PLAN.md` — checklist ordenado del MVP.
+
+ECOSISTEMA:
+- Ya existe un pipeline hermano (`sql-to-bq-franquicias`) que carga toda la
+  data desde el ERP Aleph a BigQuery. Fuente de todo.
+- Ya existe un proyecto Woo (`B2B - woocommerce/generacion_de_catalogo_woocommerce`)
+  que sincroniza catálogo + stock + imágenes al WordPress actual. Vamos a
+  reemplazarlo con este sitio propio.
+- Las fotos ya están normalizadas en el bucket `ecommerce-b2b-imagenes`
+  (~1900 productos). No hace falta subirlas — solo consumirlas.
+
+ALCANCE MVP:
+- Login por email + password (cuentas en Firestore, cada una con cliente_cod).
+- Catálogo con filtros (marca, temporada, rubro, subrubro, buscar).
+- Detalle de producto con galería de fotos y variantes por color/talle.
+- Carrito editable.
+- Confirmar pedido → **export Excel** (xlsx) + backup GCS + email cliente + email Chimola.
+- Historial "mis pedidos".
+
+STACK PROPUESTO:
+- Streamlit (más rápido para MVP; migrable a Next.js después si el uso amerita).
+- BigQuery readonly (catálogo, stock, precios, dim_cliente).
+- Firestore (usuarios, pedidos, sesiones).
+- GCS signed URLs (fotos con TTL 1h — no exponer bucket público).
+- SMTP (email confirmación — reusar secret `email-smtp-credentials` del pipeline).
+- Cloud Run (deploy).
+
+REGLA IMPORTANTE: DEV PRIMERO
+- Empezar TODO en DEV (`chimola-deteccion`).
+- SA `sa-mayorista-dev@chimola-deteccion.iam.gserviceaccount.com`.
+- Cloud Run service `mayorista-b2b-dev`.
+- Validar end-to-end con usuarios de prueba antes de promover a PROD.
+- PROD (`chimola-490015`) recién cuando esté todo funcionando.
+
+REGLAS DE NEGOCIO CRÍTICAS (ver CLAUDE.md sección "Reglas de negocio críticas"):
+1. Precio = dim_producto.precio_lista{N} × (1 - dim_cliente.descuento/100).
+2. Stock B2B = solo Ezeiza NETO (restar OC pendiente).
+3. SKU = {producto_cod}_{talle}_{color_cod}. Fotos por producto_cod (no por variante).
+4. Cada usuario tiene 1 cliente_cod ligado.
+5. Guardar precio_unit en el pedido (no depender del catálogo actual).
+
+SAFEGUARDS:
+- SA readonly en BQ (`bigquery.dataViewer` + `jobUser`).
+- `maximum_bytes_billed=1GB` por query.
+- Signed URLs de fotos con TTL 1h.
+- Bcrypt/argon2 para passwords.
+- JWT con TTL 24h en cookies.
+- Rate limit en login.
+- Secrets en Secret Manager (nunca en el repo).
+
+TAREAS DEL MVP (ver `PLAN.md` para el orden completo):
+0. Setup infra en DEV (SA, buckets, Firestore, secrets).
+1. Modelo Firestore (colecciones `usuarios`, `pedidos`).
+2. Backend Python (auth, catalog, stock, fotos, pedidos, email).
+3. UI Streamlit (login, catálogo, producto, carrito, historial).
+4. Docker + deploy Cloud Run DEV.
+5. Semillas: 3 usuarios de prueba.
+6. Verificación end-to-end (ver checklist en PLAN.md).
+7. Promoción a PROD.
+8. Definiciones con Chimola: email destino, formato Excel exacto.
+
+DELIVERABLE FINAL DEL MVP:
+Una URL de Cloud Run donde una franquicia puede:
+- Loguearse.
+- Ver catálogo con fotos.
+- Armar un pedido.
+- Confirmar → recibir Excel por email + verlo en su historial.
+
+Cuando tengas dudas, preguntá antes de asumir. Si necesitás una vista nueva
+en BQ, coordiná con el pipeline hermano (no crees tablas nuevas acá, va todo
+allá).
+
+Referencias externas útiles:
+- Bucket fotos: `gs://ecommerce-b2b-imagenes/catalogo/fotos_productos/<PROD>/`
+- Secret SMTP existente: `email-smtp-credentials` (Gmail Workspace).
+- Vista base catálogo: `franquicias_marts.v_stock_omnicanal` (filtrar stock_ezeiza > 0).
+
+Manos a la obra.

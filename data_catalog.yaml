@@ -1,0 +1,232 @@
+# Data catalog — mayorista-b2b
+#
+# Diccionario curado de las tablas/vistas BQ que consume el sitio mayorista.
+# Es un subset acotado del catálogo general de Chimola (ver jarvis/data_catalog.yaml).
+# Foco: catálogo browseable + stock B2B + precios por cliente + registro de pedidos.
+#
+# Proyecto: chimola-490015 (PROD) / chimola-deteccion (DEV, mismas vistas).
+
+tables:
+
+  # ============================================================================
+  # PRODUCTOS Y VARIANTES
+  # ============================================================================
+
+  - name: franquicias_marts.v_stock_omnicanal
+    kind: view
+    purpose: |
+      Vista base del catálogo B2B. 1 fila por variante (SKU) con producto,
+      color, talle, precios y stock por canal. Filtrar por stock_ezeiza > 0
+      para publicar solo lo que hay físicamente para B2B.
+    key_columns:
+      - sku
+      - producto_cod
+      - color_cod
+      - talle
+    columns:
+      sku:              "PK. Formato: {producto_cod}_{talle}_{color_cod}. Ej: VEST2_8_2018."
+      producto_cod:     "Código del producto (padre de las variantes). Ej: M211."
+      producto_nombre:  "Nombre humano del producto. Ej: Mochila Soft Rainbow."
+      marca:            "Nombre marca. Ej: Chimola, Lima."
+      temporada:        "Temporada del producto. Ej: AW26."
+      rubro:            "Rubro del catálogo. Ej: Mochilas, Vestidos."
+      subrubro:         "Subrubro."
+      color_cod:        "Código del color en Aleph."
+      color:            "Nombre del color."
+      talle:            "Talle string. Ej: 'U', 'S', 'M', '38'."
+      precio_lista4:    "Precio de la lista 4 (mayorista base). Se pisa según cliente."
+      stock_caballito:  "Stock en el PV Caballito (no relevante para B2B)."
+      stock_ezeiza:     "Stock en depósito central Ezeiza. La única fuente para B2B. ⚠ Incluye OC pendiente (a restar antes de mostrar)."
+      # ...más columnas de stock por PV, no relevantes al mayorista
+    business_rules:
+      - "Publicar solo variantes con stock_ezeiza - OC > 0."
+      - "Precio se recalcula por cliente (ver dim_cliente.lista_precios)."
+      - "SKU es el join key para cross-referenciar con las fotos del bucket."
+    example_query: |
+      SELECT sku, producto_cod, producto_nombre, marca, temporada, rubro,
+             color, talle, precio_lista4, stock_ezeiza
+      FROM `chimola-490015.franquicias_marts.v_stock_omnicanal`
+      WHERE stock_ezeiza > 0
+        AND marca = 'Chimola'
+        AND temporada = 'AW26'
+      ORDER BY producto_cod, color, talle
+
+  - name: franquicias_dwh.dim_producto
+    kind: table
+    purpose: |
+      Dimensión producto. 1 fila por producto_cod (no por variante). Fuente
+      canónica para precios de todas las listas (1, 2, 3, 4).
+    key_columns:
+      - producto_cod
+    columns:
+      producto_cod:     "PK."
+      nombre:           "Nombre humano."
+      marca_cod:        "FK a dim marca."
+      marca:            "Denormalizado."
+      temporada:        "Ej: AW26."
+      rubro:            "Rubro."
+      subrubro:         "Subrubro."
+      precio_lista1:    "Precio de la lista 1."
+      precio_lista2:    "Precio de la lista 2."
+      precio_lista3:    "Precio de la lista 3."
+      precio_lista4:    "Precio de la lista 4 (mayorista base)."
+      activo:           "Flag activo (para catálogos)."
+    business_rules:
+      - "Para tener el precio a cobrar a un cliente, joinear con dim_cliente.lista_precios."
+
+  - name: franquicias_dwh.dim_variante
+    kind: table
+    purpose: |
+      Universo canónico de variantes (SKU). Si una variante no está acá, NO
+      llega al catálogo (el pipeline Woo hace este mismo filtro). Viene de
+      la tabla raw `articulotallecolor`.
+    key_columns:
+      - producto_cod
+      - talle
+      - color_cod
+    columns:
+      producto_cod:  "FK."
+      talle:         "String."
+      color_cod:     "FK a dim_color."
+      ean:           "Código EAN si existe."
+      sku:           "Derivado: {producto_cod}_{talle}_{color_cod}."
+
+  - name: franquicias_dwh.dim_color
+    kind: table
+    purpose: Dimensión color, con nombre canónico.
+    key_columns:
+      - color_cod
+    columns:
+      color_cod:  "PK."
+      nombre:     "Nombre humano del color."
+
+  # ============================================================================
+  # CLIENTES (mayoristas y franquicias)
+  # ============================================================================
+
+  - name: franquicias_dwh.dim_cliente
+    kind: table
+    purpose: |
+      Dimensión cliente (mayoristas + franquicias como cliente titular).
+      Fuente para precios y descuentos por cliente. Cada usuario del sitio
+      se liga a un cliente_cod acá.
+    key_columns:
+      - cliente_cod
+    columns:
+      cliente_cod:     "PK."
+      razon_social:    "Nombre fiscal."
+      nombre_fantasia: "Nombre para mostrar."
+      email:           "Email registrado en el ERP."
+      lista_precios:   "Número de lista de precios (1|2|3|4). Determina qué campo de dim_producto usar."
+      descuento:       "% descuento cabecera aplicado a todos los pedidos del cliente. Refleja el pordscto que va a la NP."
+      provincia:       "Provincia."
+      ciudad:          "Ciudad."
+      activo:          "Flag activo."
+    business_rules:
+      - "Precio del pedido: (dim_producto.precio_listaN según cliente.lista_precios) × (1 - cliente.descuento/100)."
+      - "Un usuario del sitio conoce su cliente_cod desde la colección usuarios en Firestore."
+    example_query: |
+      SELECT cliente_cod, razon_social, lista_precios, descuento, provincia
+      FROM `chimola-490015.franquicias_dwh.dim_cliente`
+      WHERE cliente_cod = 2722  -- ejemplo: franquicia Jujuy
+
+  - name: franquicias_dwh.dim_pv
+    kind: table
+    purpose: |
+      Dimensión puntos de venta / franquicias. Link entre PV físico y
+      cliente_cod titular (el cliente B2B espejo de la franquicia).
+    key_columns:
+      - pv_cod
+    columns:
+      pv_cod:                 "PK (2, 13, 14, 15, 16, 17, 18, 19)."
+      pv_nombre:              "Nombre humano (SIVA, Caballito, Santa Fe, Jujuy, Mendoza, Corrientes, Nine Shopping, Villa María)."
+      pv_tipo:                "Franquicia | Local propio."
+      cliente_cod_titular:    "FK a dim_cliente. Es el cliente B2B espejo de la franquicia — quien compra al mayorista para esa boca."
+      barrio, ciudad, provincia: "Geo."
+
+  # ============================================================================
+  # STOCK CENTRAL (Ezeiza — única fuente para B2B)
+  # ============================================================================
+
+  - name: franquicias_marts.v_stock_central_actual
+    kind: view
+    purpose: |
+      Snapshot vivo del stock central Ezeiza (depósito 6). Combina la API
+      Ariane (stock físico + OC en tránsito) + Aleph (OC pendiente).
+    key_columns:
+      - sku
+    columns:
+      sku:               "PK."
+      producto_cod:      "FK."
+      color_cod, talle:  "Coordenadas variante."
+      stock_ezeiza:      "Físico + comprometido. ⚠ Incluye OC pendiente."
+      oc_pendiente:      "OC de proveedor pendiente de recibir (depósito 1)."
+      stock_ezeiza_neto: "stock_ezeiza - oc_pendiente. ESTO es lo que se puede vender B2B."
+    business_rules:
+      - "Para B2B usar stock_ezeiza_neto (sin OC)."
+
+  # ============================================================================
+  # PARA VERIFICACIÓN / HISTORIAL DE PEDIDOS DEL CLIENTE
+  # ============================================================================
+
+  - name: central_raw.ventassql
+    kind: table
+    purpose: |
+      Cabeceras de comprobantes del ERP Aleph. Incluye NPs (tipo=90) de los
+      clientes B2B. Útil para mostrar historial de compras del mayorista al
+      loguearse (opcional — el sitio también guarda su propio historial en
+      Firestore).
+    key_columns: [codigo, tipo, numero]
+    columns:
+      codigo:    "cliente_cod del comprador."
+      tipo:      "1=Factura, 3/199=NC, 90=NP (Nota de Pedido, la compra mayorista)."
+      numero:    "Nro comprobante."
+      fecha:     "Fecha del comprobante."
+      total:     "Total del comprobante."
+      pordscto:  "% descuento cabecera aplicado por el vendedor."
+      fechaanu:  "Si NOT NULL → anulado."
+
+  - name: central_raw.itemvensql
+    kind: table
+    purpose: Detalle de líneas de los comprobantes centrales.
+    key_columns: [codigo, tipo, numero, item]
+    columns:
+      codigo, tipo, numero:      "FK a cabecera."
+      producto:                  "producto_cod."
+      talle, color, cantidad:    "Coordenadas + cantidad."
+      total:                     "Total de la línea."
+      preunit:                   "Precio unitario cobrado (referencia para el reintegro)."
+
+# ============================================================================
+# CONVENCIONES ESPECÍFICAS DE B2B
+# ============================================================================
+
+conventions:
+  precios: |
+    Precio a cobrar = dim_producto.precio_lista{N} donde N = dim_cliente.lista_precios.
+    Después aplicar cliente.descuento (% cabecera).
+    Guardar precio_unit en el pedido para no depender del catálogo actual
+    (los precios cambian con el tiempo).
+  stock: |
+    Para B2B usar SIEMPRE stock_ezeiza NETO (sin OC pendiente).
+    El pipeline Woo hace esta resta en un CTE — replicar la lógica.
+  sku: |
+    {producto_cod}_{talle}_{color_cod}. Uppercase talle sin espacios.
+    Ej: VEST2_8_2018, M211_U_BEIGE.
+  fotos: |
+    Path GCS: gs://ecommerce-b2b-imagenes/catalogo/fotos_productos/<PRODUCTO_COD>/
+    1 carpeta por producto (no por variante). Usar la 1er foto ordenada
+    alfabéticamente como principal. Signed URL con TTL 1h en cada renderizado.
+
+seed_data:
+  clientes_de_prueba:
+    - cliente_cod: 2722
+      nombre: "Franquicia Jujuy (test)"
+      email: "franquicia_jujuy_test@lautin.com.ar"
+      lista_precios: 4
+      descuento: 30
+    - cliente_cod: 2723
+      nombre: "Franquicia Mendoza (test)"
+      email: "franquicia_mendoza_test@lautin.com.ar"
+      lista_precios: 4
+      descuento: 30
