@@ -82,11 +82,16 @@ def test_parsear_lineas():
 
 def test_resolver_pegado():
     df = catalog.con_precio(_df(), 1, aplicar_descvta=False)
-    items, avisos = cr.resolver_pegado("m211_u_2059,3\n779,2\nNOEXISTE,1\nM211_U_2058,99", df)
+    items, inc = cr.resolver_pegado("m211_u_2059,3\n779,2\nNOEXISTE,1\nM211_U_2058,99\nXXX,abc", df)
     por_sku = {i["sku"]: i for i in items}
     assert por_sku["M211_U_2059"]["cantidad"] == 5          # SKU + EAN consolidados
     assert por_sku["M211_U_2058"]["cantidad"] == 5          # recortado al stock
-    assert any("NOEXISTE" in a for a in avisos) and any("solo hay 5" in a for a in avisos)
+    por_linea = {i["linea"]: i for i in inc}
+    assert por_linea[1]["tipo"] == "ok" and por_linea[2]["tipo"] == "ok"
+    assert por_linea[3]["tipo"] == "no_encontrada"
+    assert por_linea[4]["tipo"] == "ajustada" and por_linea[4]["pedido"] == 99 and por_linea[4]["cargado"] == 5
+    assert por_linea[5]["tipo"] == "ilegible"
+    assert cr.resumen_incidencias(inc) == {"agregadas": 2, "ajustadas": 1, "sin_reconocer": 2}
 
 
 def test_repetir_pedido():

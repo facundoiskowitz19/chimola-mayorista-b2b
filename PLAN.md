@@ -5,6 +5,21 @@ completos y validados end-to-end en DEV
 (https://mayorista-b2b-dev-vhnuyigzqa-uc.a.run.app). Specs funcionales en
 `SPECS.md`. Falta definir cosas con Chimola (§8) y promover a PROD (§7).
 
+## Fase 4 — Rediseño Broadsheet (handoff Claude Design, 2026-08-23) ✅
+
+- [x] Identidad nueva (decisión del usuario): Source Serif 4 + papel + cian
+      interactivo + magenta solo errores; sin emojis. Ver SPECS §10.
+- [x] Cliente: nav horizontal sin sidebar, facetas + chips con ×, carga de
+      cantidades en línea desde la card, matriz color×talle, carrito con
+      filas propias (miniatura, × por fila, avisos de ajuste inline), pegado
+      con reconciliación (contadores + tabla por línea), pedidos maestro-detalle.
+- [x] Admin: click en el producto abre el editor como PANTALLA (no modal),
+      selección múltiple con barra contextual, override vs Aleph explícito
+      (vacío = usa Aleph), publicación con captions, salud accionable, aviso
+      de stock manual por variante con números reales.
+- [x] `resolver_pegado` devuelve incidencias estructuradas; `precios` y
+      `variantes` se reemplazan completos en Firestore. Tests 20/20.
+
 ## Fase 3 — Admin UX estilo wp-admin/Woo (2026-08-23) ✅
 
 - [x] Nav del admin con contadores (`st.segmented_control`): Inicio · Catálogo ·

@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="_ds/broadsheet-0af9dc1c-0996-40d7-bbb3-84bc6aeb0cd3/styles.css">
+<script src="_ds/broadsheet-0af9dc1c-0996-40d7-bbb3-84bc6aeb0cd3/_ds_bundle.js"></script>
+<style>
+  html, body { margin:0; padding:0; background:var(--color-bg); color:var(--color-text); font-family:var(--font-body); -webkit-font-smoothing:antialiased; }
+  * { box-sizing:border-box; }
+  a { color:var(--color-accent-700); text-decoration:none; }
+  a:hover { color:var(--color-accent-2); }
+  input, textarea, button, select { font-family:inherit; }
+  :focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:var(--color-bg); padding:0 0 var(--space-8)">
+
+  <!-- barra de revisión (andamio, no parte del producto) -->
+  <div style="display:flex; align-items:center; gap:var(--space-4); padding:var(--space-2) var(--space-8); border-bottom:1px solid var(--color-divider); font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">
+    <span>Vista</span>
+    <div style="display:flex; gap:var(--space-3)">
+      <sc-for list="{{ vistas }}" as="v" hint-placeholder-count="6">
+        <button onClick="{{ v.go }}" style="{{ v.style }}">{{ v.label }}</button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="max-width:1280px; margin:0 auto; padding:0 var(--space-8)">
+
+    <div style="display:flex; justify-content:space-between; align-items:baseline; padding:var(--space-3) 0 0; font-size:13px; letter-spacing:0.12em; text-transform:uppercase; color:var(--color-neutral-600)">
+      <span>Venta exclusiva mayorista</span>
+      <span>WhatsApp <a href="#0">+54 9 11 3680 8217</a></span>
+    </div>
+
+    <!-- cabecera: filete gordo-fino de portada -->
+    <div style="height:4px; background:var(--color-text); margin-top:var(--space-2)"></div>
+    <div style="display:flex; align-items:flex-end; gap:var(--space-6); padding:var(--space-3) 0 var(--space-2)">
+      <img src="static/logo_lautin.png" alt="Lautin" style="height:38px; width:auto; display:block">
+      <div style="display:flex; gap:var(--space-4); align-items:baseline; padding-bottom:2px">
+        <sc-for list="{{ marcas }}" as="m" hint-placeholder-count="3">
+          <button onClick="{{ m.go }}" style="{{ m.style }}">{{ m.label }}</button>
+        </sc-for>
+      </div>
+      <div style="margin-left:auto; text-align:right; line-height:1.35; padding-bottom:2px">
+        <div style="font-size:17px">Franquicia Jujuy S.R.L.</div>
+        <div style="font-size:13px; color:var(--color-neutral-600)">Cliente 2722 · lista 1 · descuento cabecera 20%</div>
+      </div>
+    </div>
+    <div style="height:1px; background:var(--color-text)"></div>
+
+    <!-- navegación principal: sale del sidebar de Streamlit al head de página -->
+    <div style="display:flex; align-items:baseline; gap:var(--space-6); padding:12px 0 0">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="4">
+        <button onClick="{{ n.go }}" style="{{ n.style }}">{{ n.label }}</button>
+      </sc-for>
+      <div style="margin-left:auto; font-size:14px; color:var(--color-neutral-600)">Catálogo actualizado hace 6 min · 1.285 productos con stock</div>
+    </div>
+
+    <!-- ══════════════ CATÁLOGO ══════════════ -->
+    <sc-if value="{{ esCatalogo }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:var(--space-8) 0 0">
+        <div style="display:flex; align-items:flex-end; gap:var(--space-6)">
+          <h1 style="margin:0; font-size:52px; line-height:0.95; letter-spacing:-0.015em">Catálogo</h1>
+          <div style="font-size:14px; color:var(--color-neutral-600); padding-bottom:8px; max-width:340px; text-wrap:pretty">Precios de lista 1, sin descuento cabecera. Solo variantes con stock neto en Ezeiza.</div>
+        </div>
+
+        <!-- filtros: pasan del sidebar a una barra de facetas -->
+        <div style="display:flex; align-items:flex-end; gap:var(--space-4); padding:var(--space-6) 0 var(--space-2); flex-wrap:wrap">
+          <label style="display:flex; flex-direction:column; gap:var(--space-1); flex:1 1 300px">
+            <span style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Buscar</span>
+            <input value="mochila" placeholder="código, nombre, EAN, color" style="border:0; border-bottom:1px solid var(--color-text); background:transparent; font-size:19px; padding:4px 0; color:var(--color-text); outline:none">
+          </label>
+          <sc-for list="{{ facetas }}" as="f" hint-placeholder-count="4">
+            <label style="display:flex; flex-direction:column; gap:var(--space-1); min-width:170px">
+              <span style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">{{ f.label }}</span>
+              <select style="border:0; border-bottom:1px solid var(--color-neutral-300); background:transparent; font-size:17px; padding:4px 0; color:var(--color-text); outline:none">
+                <option>{{ f.valor }}</option>
+              </select>
+            </label>
+          </sc-for>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-3) 0 0; flex-wrap:wrap">
+          <sc-for list="{{ chips }}" as="c" hint-placeholder-count="3">
+            <span style="display:inline-flex; align-items:center; gap:8px; background:var(--color-accent-100); color:var(--color-accent-700); border-radius:var(--radius-md); padding:4px 10px; font-size:14px">{{ c }}<span style="color:var(--color-accent); cursor:pointer; font-size:15px">×</span></span>
+          </sc-for>
+          <a href="#0" style="font-size:14px; margin-left:var(--space-1)">Limpiar filtros</a>
+          <div style="margin-left:auto; font-size:15px; color:var(--color-neutral-700)">48 productos · 214 variantes con stock</div>
+        </div>
+
+        <div style="height:1px; background:var(--color-divider); margin:var(--space-4) 0 var(--space-6)"></div>
+
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:var(--space-8) var(--space-6)">
+          <sc-for list="{{ productos }}" as="p" hint-placeholder-count="8">
+            <div>
+              <div style="aspect-ratio:1/1; background:repeating-linear-gradient(135deg, var(--color-neutral-200) 0 6px, var(--color-bg) 6px 12px); border-radius:var(--radius-md); display:flex; align-items:flex-end; padding:var(--space-2)">
+                <span style="font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--color-neutral-500)">{{ p.slot }}</span>
+              </div>
+              <div style="font-size:19px; line-height:1.2; margin-top:var(--space-2)">{{ p.nombre }}</div>
+              <div style="font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-neutral-600); margin-top:var(--space-1)">{{ p.meta }}</div>
+              <div style="font-size:24px; margin-top:var(--space-1)">{{ p.precio }}</div>
+              <div style="font-size:14px; color:var(--color-neutral-700); margin-top:2px">{{ p.stock }}</div>
+              <button onClick="{{ p.go }}" style="margin-top:var(--space-2); border:1px solid var(--color-accent); background:transparent; color:var(--color-accent-700); border-radius:var(--radius-md); padding:6px 14px; font-size:14px; cursor:pointer" style-hover="background:var(--color-accent-100)" style-active="background:var(--color-accent-200)">Cargar cantidades</button>
+            </div>
+          </sc-for>
+        </div>
+
+        <!-- carga en línea: el cambio de flujo (como hace el retail de Chimola en la card) -->
+        <div style="margin-top:var(--space-8); padding:var(--space-6) 0; border-top:4px solid var(--color-text)">
+          <div style="display:flex; align-items:baseline; gap:var(--space-3); flex-wrap:wrap">
+            <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-accent-2)">Propuesta de flujo</div>
+            <div style="font-size:15px; color:var(--color-neutral-700)">Cargar cantidades sin salir de la grilla, como en chimola.com.ar: la ficha se abre en línea y el pedido se arma en una sola pantalla.</div>
+          </div>
+          <div style="display:grid; grid-template-columns:200px 1fr 260px; gap:var(--space-6); margin-top:var(--space-6); align-items:start">
+            <div style="aspect-ratio:1/1; background:repeating-linear-gradient(135deg, var(--color-neutral-200) 0 6px, var(--color-bg) 6px 12px); border-radius:var(--radius-md); display:flex; align-items:flex-end; padding:var(--space-2)">
+              <span style="font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--color-neutral-500)">foto M211</span>
+            </div>
+            <div>
+              <div style="font-size:26px; line-height:1.15">Mochila Moscú</div>
+              <div style="font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-neutral-600); margin-top:var(--space-1)">M211 · Chimola · AW26 · Marroquinería / Mochilas</div>
+              <div style="display:grid; grid-template-columns:1fr 90px 130px; margin-top:var(--space-4)">
+                <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600); padding-bottom:8px; border-bottom:1px solid var(--color-text)">Color · talle U</div>
+                <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600); padding-bottom:8px; border-bottom:1px solid var(--color-text); text-align:right">Stock</div>
+                <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600); padding-bottom:8px; border-bottom:1px solid var(--color-text); text-align:right">Cantidad</div>
+                <sc-for list="{{ variantesU }}" as="m" hint-placeholder-count="4">
+                  <div style="font-size:17px; padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200)">{{ m.color }}</div>
+                  <div style="font-size:17px; padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200); text-align:right; color:var(--color-neutral-700)">{{ m.stock }}</div>
+                  <div style="padding:6px 0; border-bottom:1px solid var(--color-neutral-200); display:flex; justify-content:flex-end">
+                    <button style="width:30px; height:30px; border:1px solid var(--color-neutral-300); border-right:0; background:transparent; color:var(--color-neutral-700); cursor:pointer; font-size:16px; border-radius:var(--radius-md) 0 0 var(--radius-md)" style-hover="background:var(--color-neutral-200)">−</button>
+                    <div style="width:52px; height:30px; border:1px solid var(--color-neutral-300); display:flex; align-items:center; justify-content:center; font-size:17px">{{ m.qty }}</div>
+                    <button style="width:30px; height:30px; border:1px solid var(--color-neutral-300); border-left:0; background:transparent; color:var(--color-neutral-700); cursor:pointer; font-size:16px; border-radius:0 var(--radius-md) var(--radius-md) 0" style-hover="background:var(--color-neutral-200)">+</button>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="padding-top:var(--space-4)">
+              <div style="font-size:15px; color:var(--color-neutral-700)">Seleccionadas</div>
+              <div style="font-size:38px; line-height:1.1">30 u.</div>
+              <div style="font-size:17px; color:var(--color-neutral-700); margin-top:var(--space-1)">$ 1.377.000 precio lista</div>
+              <div style="font-size:15px; color:var(--color-accent-700); margin-top:2px">$ 1.101.600 con tu 20%</div>
+              <button style="margin-top:var(--space-4); width:100%; border:0; background:var(--color-accent); color:var(--color-neutral-100); border-radius:var(--radius-md); padding:12px var(--space-4); font-size:17px; cursor:pointer" style-hover="background:var(--color-accent-600)" style-active="background:var(--color-accent-700)">Agregar al carrito</button>
+              <button style="margin-top:var(--space-2); width:100%; border:1px solid var(--color-neutral-300); background:transparent; color:var(--color-neutral-700); border-radius:var(--radius-md); padding:10px var(--space-4); font-size:15px; cursor:pointer" style-hover="background:var(--color-neutral-200)">Ver ficha completa</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════════ PRODUCTO (curva de talles) ══════════════ -->
+    <sc-if value="{{ esProducto }}">
+      <div style="padding:var(--space-8) 0 0">
+        <a href="#0" style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase">← Catálogo</a>
+        <div style="display:grid; grid-template-columns:0.85fr 1fr; gap:var(--space-8); margin-top:var(--space-4); align-items:start">
+          <div>
+            <div style="aspect-ratio:4/5; background:repeating-linear-gradient(135deg, var(--color-neutral-200) 0 6px, var(--color-bg) 6px 12px); border-radius:var(--radius-md); display:flex; align-items:flex-end; padding:var(--space-3)">
+              <span style="font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--color-neutral-500)">foto BZ44 · negro · 1 de 6</span>
+            </div>
+            <div style="display:flex; gap:var(--space-2); margin-top:var(--space-2)">
+              <sc-for list="{{ thumbs }}" as="t" hint-placeholder-count="6">
+                <div style="flex:1; aspect-ratio:1/1; background:repeating-linear-gradient(135deg, var(--color-neutral-200) 0 5px, var(--color-bg) 5px 10px); border-radius:var(--radius-md); border:1px solid {{ t.borde }}"></div>
+              </sc-for>
+            </div>
+            <div style="display:flex; gap:var(--space-2); margin-top:var(--space-3); flex-wrap:wrap">
+              <sc-for list="{{ coloresFoto }}" as="c" hint-placeholder-count="5">
+                <button style="{{ c.style }}">{{ c.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <h1 style="margin:0; font-size:44px; line-height:1.02; letter-spacing:-0.015em">Buzo Masie</h1>
+            <div style="font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-neutral-600); margin-top:var(--space-2)">BZ44 · Chimola · AW26 · Indumentaria Girls / Buzos</div>
+            <div style="display:flex; align-items:baseline; gap:var(--space-3); margin-top:var(--space-4)">
+              <div style="font-size:40px">$ 33.000</div>
+              <div style="font-size:14px; color:var(--color-neutral-600)">precio lista 1</div>
+            </div>
+            <div style="font-size:17px; color:var(--color-accent-700); margin-top:var(--space-1)">$ 26.400 por unidad con tu descuento cabecera del 20%</div>
+            <p style="font-size:17px; line-height:1.5; color:var(--color-neutral-800); max-width:46ch; text-wrap:pretty">Buzo de frisa con puño y cintura elastizados. Curva completa 4 al 14 en cuatro colores.</p>
+
+            <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600); margin-top:var(--space-6)">Curva de talles · cantidad por variante</div>
+            <div style="display:grid; grid-template-columns:130px repeat(6, 1fr); align-items:end; margin-top:var(--space-2); border-bottom:1px solid var(--color-text); padding-bottom:8px">
+              <div style="font-size:14px; color:var(--color-neutral-600)">Color</div>
+              <sc-for list="{{ talles }}" as="t" hint-placeholder-count="6">
+                <div style="font-size:17px; text-align:center">{{ t }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ curva }}" as="fila" hint-placeholder-count="4">
+              <div style="display:grid; grid-template-columns:130px repeat(6, 1fr); align-items:center; gap:0; border-bottom:1px solid var(--color-neutral-200); padding:var(--space-2) 0">
+                <div style="font-size:17px">{{ fila.color }}</div>
+                <sc-for list="{{ fila.celdas }}" as="c" hint-placeholder-count="6">
+                  <div style="display:flex; flex-direction:column; align-items:center; gap:2px">
+                    <div style="{{ c.style }}">{{ c.qty }}</div>
+                    <div style="font-size:11px; color:var(--color-neutral-500)">{{ c.stock }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+            <div style="display:flex; align-items:center; gap:var(--space-4); margin-top:var(--space-3)">
+              <div style="font-size:15px; color:var(--color-neutral-700)">Debajo de cada casilla, el stock disponible. Vacío = sin stock.</div>
+            </div>
+            <div style="display:flex; align-items:flex-end; gap:var(--space-4); margin-top:var(--space-4)">
+              <div>
+                <div style="font-size:15px; color:var(--color-neutral-700)">Seleccionadas</div>
+                <div style="font-size:30px; line-height:1.1">36 u. · $ 950.400 <span style="font-size:15px; color:var(--color-neutral-600)">con descuento</span></div>
+              </div>
+              <button style="margin-left:auto; border:0; background:var(--color-accent); color:var(--color-neutral-100); border-radius:var(--radius-md); padding:12px 26px; font-size:17px; cursor:pointer" style-hover="background:var(--color-accent-600)" style-active="background:var(--color-accent-700)">Agregar al carrito</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════════ COMPRA RÁPIDA ══════════════ -->
+    <sc-if value="{{ esRapida }}">
+      <div style="padding:var(--space-8) 0 0">
+        <h1 style="margin:0; font-size:52px; line-height:0.95; letter-spacing:-0.015em">Compra rápida</h1>
+        <div style="display:flex; gap:var(--space-6); margin-top:var(--space-4); align-items:baseline">
+          <sc-for list="{{ tabsRapida }}" as="t" hint-placeholder-count="2">
+            <button style="{{ t.style }}">{{ t.label }}</button>
+          </sc-for>
+        </div>
+        <div style="height:1px; background:var(--color-divider); margin-top:-1px"></div>
+
+        <div style="display:grid; grid-template-columns:1fr 1.15fr; gap:var(--space-8); margin-top:var(--space-8); align-items:start">
+          <div>
+            <div style="font-size:17px; color:var(--color-neutral-800); max-width:44ch; text-wrap:pretty">Una línea por variante: SKU y cantidad, o EAN y cantidad, separados por coma, punto y coma o tab. Podés pegar directo desde Excel.</div>
+            <textarea style="width:100%; height:240px; margin-top:var(--space-4); border:1px solid var(--color-neutral-300); border-radius:var(--radius-md); background:var(--color-neutral-100); padding:var(--space-3); font-size:16px; line-height:1.8; color:var(--color-text); outline:none; resize:vertical" style-focus="border-color:var(--color-accent)">M211_U_101,12
+P075_U_204,24
+B330_U_310,10
+R118_U_402,18
+7798218194446,6
+M999_U_001,4</textarea>
+            <button style="margin-top:var(--space-3); border:0; background:var(--color-accent); color:var(--color-neutral-100); border-radius:var(--radius-md); padding:12px 26px; font-size:17px; cursor:pointer" style-hover="background:var(--color-accent-600)" style-active="background:var(--color-accent-700)">Procesar y agregar</button>
+          </div>
+
+          <div>
+            <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Resultado · 6 líneas leídas</div>
+            <div style="display:flex; gap:var(--space-8); margin-top:var(--space-3); align-items:baseline">
+              <div><div style="font-size:34px; line-height:1">4</div><div style="font-size:14px; color:var(--color-neutral-700)">agregadas</div></div>
+              <div><div style="font-size:34px; line-height:1; color:var(--color-accent-700)">1</div><div style="font-size:14px; color:var(--color-neutral-700)">ajustada a stock</div></div>
+              <div><div style="font-size:34px; line-height:1; color:var(--color-accent-2)">1</div><div style="font-size:14px; color:var(--color-neutral-700)">sin reconocer</div></div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr auto; margin-top:var(--space-6)">
+              <sc-for list="{{ resultado }}" as="r" hint-placeholder-count="6">
+                <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200)">
+                  <div style="font-size:15px; letter-spacing:0.06em">{{ r.sku }}</div>
+                  <div style="font-size:15px; color:{{ r.color }}; margin-top:2px">{{ r.nota }}</div>
+                </div>
+                <div style="padding:12px 0 12px var(--space-4); border-bottom:1px solid var(--color-neutral-200); text-align:right; font-size:18px; white-space:nowrap; color:{{ r.color }}">{{ r.qty }}</div>
+              </sc-for>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:var(--space-4)">
+              <div style="font-size:17px">Total agregado al carrito</div>
+              <div style="font-size:26px">60 u.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════════ CARRITO ══════════════ -->
+    <sc-if value="{{ esCarrito }}">
+      <div style="padding:var(--space-8) 0 0">
+        <div style="display:flex; align-items:flex-end; gap:var(--space-6)">
+          <h1 style="margin:0; font-size:52px; line-height:0.95; letter-spacing:-0.015em">Carrito</h1>
+          <div style="font-size:15px; color:var(--color-neutral-700); padding-bottom:8px">4 variantes · 60 unidades · guardado a tu usuario</div>
+        </div>
+
+        <div style="display:flex; gap:var(--space-3); align-items:flex-start; margin-top:var(--space-6); border-left:3px solid var(--color-accent-2); padding:var(--space-2) 0 var(--space-2) var(--space-3); background:var(--color-accent-2-100)">
+          <div>
+            <div style="font-size:17px">Cambió el stock de 1 variante mientras armabas el pedido.</div>
+            <div style="font-size:15px; color:var(--color-neutral-700); margin-top:2px">Ajustamos B330_U_310 de 10 a 6 unidades. Revisá y confirmá.</div>
+          </div>
+          <button style="margin-left:auto; margin-right:var(--space-3); border:1px solid var(--color-accent-2); background:transparent; color:var(--color-accent-2-700); border-radius:var(--radius-md); padding:6px 14px; font-size:14px; cursor:pointer" style-hover="background:var(--color-accent-2-200)">Entendido</button>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 320px; gap:var(--space-8); margin-top:var(--space-6); align-items:start">
+          <div>
+            <div style="display:grid; grid-template-columns:56px 1fr 90px 80px 140px 140px 30px; align-items:center">
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px"></div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Producto</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Stock</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Cant.</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Precio lista</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Subtotal</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px"></div>
+              <sc-for list="{{ carrito }}" as="c" hint-placeholder-count="4">
+                <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200)">
+                  <div style="width:44px; height:44px; background:repeating-linear-gradient(135deg, var(--color-neutral-200) 0 5px, var(--color-bg) 5px 10px); border-radius:var(--radius-md)"></div>
+                </div>
+                <div style="padding:var(--space-3) var(--space-2) var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200)">
+                  <div style="font-size:18px; line-height:1.2">{{ c.nombre }}</div>
+                  <div style="font-size:13px; letter-spacing:0.08em; color:var(--color-neutral-600); margin-top:3px">{{ c.sku }} · {{ c.color }} · T {{ c.talle }}</div>
+                  <div style="font-size:14px; color:{{ c.avisoColor }}; margin-top:3px">{{ c.aviso }}</div>
+                </div>
+                <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); text-align:right; font-size:17px; color:var(--color-neutral-700)">{{ c.stock }}</div>
+                <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); display:flex; justify-content:flex-end">
+                  <div style="width:52px; height:30px; border:1px solid var(--color-neutral-300); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; font-size:17px">{{ c.qty }}</div>
+                </div>
+                <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); text-align:right; font-size:17px">{{ c.precio }}</div>
+                <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); text-align:right; font-size:17px">{{ c.subtotal }}</div>
+                <div style="padding:var(--space-3) 0 var(--space-3) var(--space-2); border-bottom:1px solid var(--color-neutral-200); text-align:right">
+                  <button style="border:0; background:transparent; color:var(--color-neutral-500); font-size:18px; cursor:pointer; line-height:1" style-hover="color:var(--color-accent-2)">×</button>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex; gap:var(--space-4); margin-top:var(--space-4)">
+              <a href="#0" style="font-size:15px">Seguir cargando</a>
+              <a href="#0" style="font-size:15px; color:var(--color-neutral-600)" style-hover="color:var(--color-accent-2)">Vaciar carrito</a>
+            </div>
+
+            <div style="margin-top:var(--space-8)">
+              <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Observaciones para Chimola</div>
+              <textarea placeholder="Opcional — indicaciones de entrega, remito, etc." style="width:100%; height:90px; margin-top:var(--space-2); border:1px solid var(--color-neutral-300); border-radius:var(--radius-md); background:var(--color-neutral-100); padding:12px var(--space-3); font-size:16px; color:var(--color-text); outline:none; resize:vertical" style-focus="border-color:var(--color-accent)"></textarea>
+            </div>
+          </div>
+
+          <div style="position:sticky; top:var(--space-4)">
+            <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Resumen</div>
+            <div style="height:1px; background:var(--color-text); margin:var(--space-2) 0 0"></div>
+            <sc-for list="{{ totales }}" as="t" hint-placeholder-count="3">
+              <div style="display:flex; justify-content:space-between; align-items:baseline; padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200)">
+                <span style="font-size:16px; color:var(--color-neutral-700)">{{ t.label }}</span>
+                <span style="font-size:18px">{{ t.valor }}</span>
+              </div>
+            </sc-for>
+            <div style="display:flex; justify-content:space-between; align-items:baseline; padding:var(--space-3) 0 0">
+              <span style="font-size:17px">Total</span>
+              <span style="font-size:34px; line-height:1">$ 1.134.720</span>
+            </div>
+            <button style="margin-top:var(--space-4); width:100%; border:0; background:var(--color-accent); color:var(--color-neutral-100); border-radius:var(--radius-md); padding:14px var(--space-4); font-size:18px; cursor:pointer" style-hover="background:var(--color-accent-600)" style-active="background:var(--color-accent-700)">Confirmar pedido</button>
+            <div style="font-size:14px; color:var(--color-neutral-600); margin-top:var(--space-2); line-height:1.45; text-wrap:pretty">Al confirmar revalidamos stock, generamos el Excel y te lo enviamos por email. No hay pago online.</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════════ MIS PEDIDOS ══════════════ -->
+    <sc-if value="{{ esPedidos }}">
+      <div style="padding:var(--space-8) 0 0">
+        <h1 style="margin:0; font-size:52px; line-height:0.95; letter-spacing:-0.015em">Mis pedidos</h1>
+        <div style="display:grid; grid-template-columns:110px 1fr 110px 160px 160px; align-items:baseline; margin-top:var(--space-6)">
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">N°</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Fecha</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Unidades</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Total</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Estado</div>
+          <sc-for list="{{ historial }}" as="h" hint-placeholder-count="3">
+            <div style="padding:18px 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px; letter-spacing:0.06em">{{ h.numero }}</div>
+            <div style="padding:18px 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px">{{ h.fecha }}</div>
+            <div style="padding:18px 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px; text-align:right; color:var(--color-neutral-700)">{{ h.unidades }}</div>
+            <div style="padding:18px 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px; text-align:right">{{ h.total }}</div>
+            <div style="padding:18px 0; border-bottom:1px solid var(--color-neutral-200); text-align:right">
+              <span style="{{ h.tagStyle }}">{{ h.estado }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="margin-top:var(--space-8); border-top:4px solid var(--color-text); padding-top:var(--space-4)">
+          <div style="display:flex; align-items:flex-end; gap:var(--space-4); flex-wrap:wrap">
+            <div>
+              <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Pedido 000142 · 21/08/2026</div>
+              <div style="font-size:30px; margin-top:var(--space-1)">$ 1.134.720 <span style="font-size:16px; color:var(--color-neutral-600)">60 u. · descuento 20% aplicado</span></div>
+            </div>
+            <div style="margin-left:auto; display:flex; gap:var(--space-2)">
+              <button style="border:0; background:var(--color-accent); color:var(--color-neutral-100); border-radius:var(--radius-md); padding:10px var(--space-4); font-size:16px; cursor:pointer" style-hover="background:var(--color-accent-600)" style-active="background:var(--color-accent-700)">Repetir pedido</button>
+              <button style="border:1px solid var(--color-text); background:transparent; color:var(--color-text); border-radius:var(--radius-md); padding:10px var(--space-4); font-size:16px; cursor:pointer" style-hover="background:var(--color-neutral-200)">Descargar Excel</button>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 80px 80px 150px 150px; margin-top:var(--space-4)">
+            <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Producto</div>
+            <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Talle</div>
+            <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Cant.</div>
+            <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Precio lista</div>
+            <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Subtotal</div>
+            <sc-for list="{{ carrito }}" as="c" hint-placeholder-count="4">
+              <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px">{{ c.nombre }} <span style="font-size:13px; letter-spacing:0.08em; color:var(--color-neutral-600)">{{ c.color }}</span></div>
+              <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px; text-align:right; color:var(--color-neutral-700)">{{ c.talle }}</div>
+              <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px; text-align:right">{{ c.qty }}</div>
+              <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px; text-align:right">{{ c.precio }}</div>
+              <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px; text-align:right">{{ c.subtotal }}</div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════════ LOGIN ══════════════ -->
+    <sc-if value="{{ esLogin }}">
+      <div style="padding:var(--space-8) 0 0">
+        <div style="display:grid; grid-template-columns:1.35fr 1fr; gap:var(--space-8); align-items:center">
+          <div style="aspect-ratio:4/3; background:repeating-linear-gradient(135deg, var(--color-neutral-200) 0 8px, var(--color-bg) 8px 16px); border-radius:var(--radius-md); display:flex; align-items:flex-end; padding:var(--space-4)">
+            <span style="font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--color-neutral-500)">banner temporada · chimola on the go</span>
+          </div>
+          <div>
+            <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Acceso mayorista</div>
+            <h1 style="margin:var(--space-2) 0 0; font-size:46px; line-height:1; letter-spacing:-0.015em">Ingresá al catálogo</h1>
+            <p style="font-size:17px; color:var(--color-neutral-800); line-height:1.5; max-width:40ch; text-wrap:pretty">Precios de tu lista, stock real de depósito y confirmación por email con el Excel del pedido.</p>
+            <label style="display:block; margin-top:var(--space-6)">
+              <span style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Email</span>
+              <input placeholder="tu@franquicia.com" style="width:100%; margin-top:var(--space-1); border:0; border-bottom:1px solid var(--color-text); background:transparent; font-size:20px; padding:6px 0; color:var(--color-text); outline:none">
+            </label>
+            <label style="display:block; margin-top:var(--space-4)">
+              <span style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Contraseña</span>
+              <input type="password" value="123456789" style="width:100%; margin-top:var(--space-1); border:0; border-bottom:1px solid var(--color-text); background:transparent; font-size:20px; padding:6px 0; color:var(--color-text); outline:none">
+            </label>
+            <button style="margin-top:var(--space-6); width:100%; border:0; background:var(--color-accent); color:var(--color-neutral-100); border-radius:var(--radius-md); padding:14px var(--space-4); font-size:18px; cursor:pointer" style-hover="background:var(--color-accent-600)" style-active="background:var(--color-accent-700)">Ingresar</button>
+            <div style="font-size:15px; color:var(--color-neutral-600); margin-top:var(--space-3)">¿No tenés cuenta? Pedila al equipo de Chimola por <a href="#0">WhatsApp</a>.</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <div style="height:1px; background:var(--color-divider); margin-top:var(--space-8)"></div>
+    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:var(--space-6); padding:var(--space-6) 0 0; font-size:15px; color:var(--color-neutral-700)">
+      <div>
+        <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Nuestras marcas</div>
+        <div style="margin-top:var(--space-2); color:var(--color-text); font-size:17px">Chimola</div>
+        <div style="color:var(--color-text); font-size:17px">Lima</div>
+      </div>
+      <div>
+        <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Contacto</div>
+        <div style="margin-top:var(--space-2)">+54 9 11 3680 8217</div>
+        <div><a href="#0">@chimolaoficial</a> · <a href="#0">@lima.oficial</a></div>
+      </div>
+      <div>
+        <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Información</div>
+        <div style="margin-top:var(--space-2); max-width:38ch; text-wrap:pretty">Los pedidos se confirman por email con el Excel adjunto. Sin pago online: Lautin coordina entrega y facturación.</div>
+      </div>
+    </div>
+    <div style="font-size:13px; color:var(--color-neutral-500); padding:var(--space-4) 0 0">© 2026 Lautin Accesorios</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;acento&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;var(--color-accent)&quot;,&quot;options&quot;:[&quot;#0088b0&quot;,&quot;#d6006c&quot;,&quot;#201e1d&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Tema&quot;}}">
+class Component extends DCLogic {
+  state = { screen: "catalogo", marca: "Todo", tab: "pegar", colorFoto: "NEGRO" };
+
+  go(screen) { return () => this.setState({ screen }); }
+
+  renderVals() {
+    const s = this.state.screen;
+    const acento = this.props.acento ?? "var(--color-accent)";
+
+    const vistas = [
+      ["login", "Login"], ["catalogo", "Catálogo"], ["producto", "Producto"],
+      ["rapida", "Compra rápida"], ["carrito", "Carrito"], ["pedidos", "Mis pedidos"],
+    ].map(([k, label]) => ({
+      label, go: this.go(k),
+      style: "border:0; background:transparent; cursor:pointer; padding:0; font-size:12px; letter-spacing:0.14em; text-transform:uppercase;"
+        + (s === k ? "color:var(--color-text); text-decoration:underline; text-underline-offset:3px;" : "color:var(--color-neutral-500);"),
+    }));
+
+    const nav = [["catalogo", "Catálogo"], ["rapida", "Compra rápida"], ["carrito", "Carrito · 60 u."], ["pedidos", "Mis pedidos"]]
+      .map(([k, label]) => ({
+        label, go: this.go(k),
+        style: "border:0; background:transparent; cursor:pointer; padding:0 0 10px; font-size:20px;"
+          + (s === k || (s === "producto" && k === "catalogo")
+            ? "color:var(--color-text); border-bottom:3px solid " + acento + ";"
+            : "color:var(--color-neutral-600); border-bottom:3px solid transparent;"),
+      }));
+
+    const marcas = ["Todo", "Chimola", "Lima"].map(m => ({
+      label: m, go: () => this.setState({ marca: m }),
+      style: "border:0; background:transparent; cursor:pointer; padding:0; font-size:15px; letter-spacing:0.12em; text-transform:uppercase;"
+        + (this.state.marca === m ? "color:var(--color-text);" : "color:var(--color-neutral-500);"),
+    }));
+
+    const productos = [
+      ["Mochila Moscú", "M211 · Chimola · Mochilas", "$ 45.900", "118 u. · 4 colores", "foto M211"],
+      ["Bandolera Rina", "R118 · Chimola · Bandoleras", "$ 33.900", "96 u. · 4 colores", "foto R118"],
+      ["Pouch Snack", "P075 · Chimola · Pouchs", "$ 6.500", "240 u. · 4 colores", "foto P075"],
+      ["Billetera Guada", "B330 · Chimola · Billeteras", "$ 16.900", "64 u. · 4 colores", "foto B330"],
+      ["Tote Rina", "T119 · Chimola · Bolsos | Totes", "$ 34.900", "52 u. · 4 colores", "foto T119"],
+      ["Portacosméticos Delfi", "D204 · Lima · Organizadores", "$ 16.900", "130 u. · 4 colores", "foto D204"],
+      ["Lona Maui", "L512 · Lima · Bolsos | Totes", "$ 25.000", "88 u. · 4 colores", "foto L512"],
+      ["Vaso Delfi", "V088 · Lima · Bazar CHML urban", "$ 19.000", "74 u. · 3 colores", "foto V088"],
+    ].map(([nombre, meta, precio, stock, slot]) => ({ nombre, meta, precio, stock, slot, go: this.go("producto") }));
+
+    const variantesU = [
+      { color: "BLACK", stock: "24", qty: "12" },
+      { color: "MILITAR", stock: "44", qty: "6" },
+      { color: "VISON", stock: "32", qty: "12" },
+      { color: "BLUE", stock: "18", qty: "0" },
+    ];
+
+    const thumbs = [0, 1, 2, 3, 4, 5].map(i => ({ borde: i === 0 ? acento : "var(--color-neutral-200)" }));
+
+    const coloresFoto = ["Todas", "NEGRO", "ROSA", "VIOLETA", "VERDE AGUA"].map(c => {
+      const on = this.state.colorFoto === c;
+      return {
+        label: c,
+        style: "border:1px solid " + (on ? acento : "var(--color-neutral-300)") + "; border-radius:var(--radius-md);"
+          + "background:" + (on ? "var(--color-accent-100)" : "transparent") + ";"
+          + "color:" + (on ? "var(--color-accent-700)" : "var(--color-neutral-700)") + "; padding:5px 12px; font-size:14px; cursor:pointer;",
+      };
+    });
+
+    const celda = (stock, qty) => {
+      if (stock === 0) return { qty: "—", stock: "", style: "width:100%; max-width:56px; height:32px; border:1px dashed var(--color-neutral-300); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; font-size:15px; color:var(--color-neutral-400);" };
+      const activo = qty > 0;
+      return {
+        qty: String(qty), stock: String(stock),
+        style: "width:100%; max-width:56px; height:32px; border:1px solid " + (activo ? "var(--color-accent)" : "var(--color-neutral-300)")
+          + "; background:" + (activo ? "var(--color-accent-100)" : "transparent")
+          + "; color:" + (activo ? "var(--color-accent-700)" : "var(--color-text)")
+          + "; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; font-size:17px;",
+      };
+    };
+
+    const curva = [
+      ["NEGRO", [[12, 0], [18, 3], [22, 6], [20, 6], [14, 3], [8, 0]]],
+      ["ROSA", [[8, 0], [14, 0], [16, 6], [12, 6], [10, 0], [6, 0]]],
+      ["VIOLETA", [[0, 0], [6, 0], [10, 3], [8, 3], [4, 0], [0, 0]]],
+      ["VERDE AGUA", [[4, 0], [10, 0], [12, 0], [10, 0], [6, 0], [2, 0]]],
+    ].map(([color, cs]) => ({ color, celdas: cs.map(([st, q]) => celda(st, q)) }));
+
+    const resultado = [
+      { sku: "M211_U_101", nota: "Mochila Moscú · BLACK", qty: "12 u.", color: "var(--color-neutral-700)" },
+      { sku: "P075_U_204", nota: "Pouch Snack · NACHOS", qty: "24 u.", color: "var(--color-neutral-700)" },
+      { sku: "B330_U_310", nota: "Billetera Guada · VISON — solo 6 u. disponibles, pediste 10", qty: "6 u.", color: "var(--color-accent-700)" },
+      { sku: "R118_U_402", nota: "Bandolera Rina · DARK BLUE", qty: "18 u.", color: "var(--color-neutral-700)" },
+      { sku: "7798218194446", nota: "Pouch Snack · COOKIES (por EAN)", qty: "6 u.", color: "var(--color-neutral-700)" },
+      { sku: "M999_U_001", nota: "No existe o no tiene stock publicado", qty: "—", color: "var(--color-accent-2-700)" },
+    ];
+
+    const carrito = [
+      { sku: "M211_U_101", nombre: "Mochila Moscú", color: "BLACK", talle: "U", stock: "24", qty: "12", precio: "$ 45.900", subtotal: "$ 550.800", aviso: "", avisoColor: "var(--color-neutral-700)" },
+      { sku: "P075_U_204", nombre: "Pouch Snack", color: "NACHOS", talle: "U", stock: "40", qty: "24", precio: "$ 6.500", subtotal: "$ 156.000", aviso: "", avisoColor: "var(--color-neutral-700)" },
+      { sku: "B330_U_310", nombre: "Billetera Guada", color: "VISON", talle: "U", stock: "6", qty: "6", precio: "$ 16.900", subtotal: "$ 101.400", aviso: "Ajustado de 10 a 6 u. — es todo el stock disponible", avisoColor: "var(--color-accent-2-700)" },
+      { sku: "R118_U_402", nombre: "Bandolera Rina", color: "DARK BLUE", talle: "U", stock: "30", qty: "18", precio: "$ 33.900", subtotal: "$ 610.200", aviso: "", avisoColor: "var(--color-neutral-700)" },
+    ];
+
+    const totales = [
+      { label: "Unidades", valor: "60" },
+      { label: "Subtotal lista 1", valor: "$ 1.418.400" },
+      { label: "Descuento cabecera 20%", valor: "− $ 283.680" },
+    ];
+
+    const tag = (bg, fg) => "display:inline-block; background:" + bg + "; color:" + fg
+      + "; border-radius:var(--radius-md); padding:3px 10px; font-size:13px; letter-spacing:0.08em; text-transform:uppercase;";
+    const historial = [
+      { numero: "000142", fecha: "21/08/2026", unidades: "60", total: "$ 1.134.720", estado: "Confirmado", tagStyle: tag("var(--color-accent-100)", "var(--color-accent-700)") },
+      { numero: "000138", fecha: "14/08/2026", unidades: "132", total: "$ 2.884.500", estado: "Procesado", tagStyle: tag("var(--color-neutral-200)", "var(--color-neutral-800)") },
+      { numero: "000131", fecha: "02/08/2026", unidades: "18", total: "$ 314.900", estado: "Cancelado", tagStyle: tag("var(--color-accent-2-100)", "var(--color-accent-2-700)") },
+    ];
+
+    const tabStyle = (active) => "border:0; background:transparent; cursor:pointer; padding:0 0 10px; font-size:20px;"
+      + (active ? "color:var(--color-text); border-bottom:3px solid " + acento + ";" : "color:var(--color-neutral-600); border-bottom:3px solid transparent;");
+
+    return {
+      vistas, nav, marcas, productos, variantesU, thumbs, coloresFoto, curva, resultado, carrito, totales, historial,
+      talles: ["4", "6", "8", "10", "12", "14"],
+      tabsRapida: [["tabla", "Tabla con miniaturas"], ["pegar", "Pegar códigos"]]
+        .map(([k, label]) => ({ label, style: tabStyle(this.state.tab === k) })),
+      facetas: [
+        { label: "Marca", valor: "Chimola" }, { label: "Temporada", valor: "AW26" },
+        { label: "Rubro", valor: "Marroquinería" }, { label: "Subrubro", valor: "Todos" },
+      ],
+      chips: ["Chimola", "AW26", "Marroquinería", "Solo con foto"],
+      esLogin: s === "login", esCatalogo: s === "catalogo", esProducto: s === "producto",
+      esRapida: s === "rapida", esCarrito: s === "carrito", esPedidos: s === "pedidos",
+    };
+  }
+}
+</script>
+</body>
+</html>

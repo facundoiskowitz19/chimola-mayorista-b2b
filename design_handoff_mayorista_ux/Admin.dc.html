@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="_ds/broadsheet-0af9dc1c-0996-40d7-bbb3-84bc6aeb0cd3/styles.css">
+<script src="_ds/broadsheet-0af9dc1c-0996-40d7-bbb3-84bc6aeb0cd3/_ds_bundle.js"></script>
+<style>
+  html, body { margin:0; padding:0; background:var(--color-bg); color:var(--color-text); font-family:var(--font-body); -webkit-font-smoothing:antialiased; }
+  * { box-sizing:border-box; }
+  a { color:var(--color-accent-700); text-decoration:none; }
+  a:hover { color:var(--color-accent-2); }
+  input, textarea, button, select { font-family:inherit; }
+  :focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:var(--color-bg); padding:0 0 var(--space-8)">
+  <div style="max-width:1360px; margin:0 auto; padding:0 var(--space-8)">
+
+    <div style="display:flex; justify-content:space-between; align-items:baseline; padding:var(--space-4) 0 0; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">
+      <span>Administración · Lautin mayorista</span>
+      <span>admin@lautin.com.ar · Ambiente DEV</span>
+    </div>
+    <div style="height:4px; background:var(--color-text); margin-top:var(--space-2)"></div>
+    <div style="display:flex; align-items:baseline; gap:var(--space-6); padding:12px 0 0">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="5">
+        <button onClick="{{ n.go }}" style="{{ n.style }}">{{ n.label }}</button>
+      </sc-for>
+      <div style="margin-left:auto; font-size:14px; color:var(--color-neutral-600)">BigQuery es de solo lectura · lo que edites vive en Firestore y pisa a Aleph</div>
+    </div>
+    <div style="height:1px; background:var(--color-divider)"></div>
+
+    <!-- ══════════════ INICIO ══════════════ -->
+    <sc-if value="{{ esInicio }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:var(--space-8) 0 0">
+        <h1 style="margin:0; font-size:52px; line-height:0.95; letter-spacing:-0.015em">Agosto 2026</h1>
+        <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:var(--space-6); margin-top:var(--space-6)">
+          <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="5">
+            <div>
+              <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">{{ k.label }}</div>
+              <div style="font-size:44px; line-height:1.05; margin-top:var(--space-1); color:{{ k.color }}">{{ k.valor }}</div>
+              <div style="font-size:14px; color:var(--color-neutral-600)">{{ k.nota }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1.1fr 1fr; gap:var(--space-8); margin-top:var(--space-8)">
+          <div>
+            <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Salud del catálogo</div>
+            <div style="font-size:15px; color:var(--color-neutral-700); margin-top:var(--space-1)">Cada número abre el catálogo ya filtrado.</div>
+            <sc-for list="{{ salud }}" as="s" hint-placeholder-count="5">
+              <div style="display:flex; align-items:baseline; gap:var(--space-3); padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200)">
+                <div style="font-size:28px; min-width:80px; color:{{ s.color }}">{{ s.valor }}</div>
+                <div style="font-size:17px">{{ s.label }}</div>
+                <a href="#0" style="margin-left:auto; font-size:15px">{{ s.accion }}</a>
+              </div>
+            </sc-for>
+          </div>
+          <div>
+            <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Top productos del mes</div>
+            <div style="display:grid; grid-template-columns:1fr 90px; margin-top:var(--space-3)">
+              <sc-for list="{{ top }}" as="t" hint-placeholder-count="5">
+                <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px">{{ t.nombre }} <span style="font-size:13px; letter-spacing:0.08em; color:var(--color-neutral-600)">{{ t.cod }}</span></div>
+                <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px; text-align:right">{{ t.unidades }}</div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════════ CATÁLOGO ══════════════ -->
+    <sc-if value="{{ esCatalogo }}">
+      <div style="padding:var(--space-8) 0 0">
+        <div style="display:flex; align-items:flex-end; gap:var(--space-6)">
+          <h1 style="margin:0; font-size:52px; line-height:0.95; letter-spacing:-0.015em">Catálogo</h1>
+          <div style="font-size:15px; color:var(--color-neutral-700); padding-bottom:8px">Click en el producto para editarlo. Los checkbox son solo para acciones en lote.</div>
+        </div>
+
+        <div style="display:flex; align-items:flex-end; gap:var(--space-4); padding:var(--space-6) 0 0; flex-wrap:wrap">
+          <label style="display:flex; flex-direction:column; gap:var(--space-1); flex:1 1 280px">
+            <span style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Buscar</span>
+            <input placeholder="código o nombre" style="border:0; border-bottom:1px solid var(--color-text); background:transparent; font-size:19px; padding:4px 0; color:var(--color-text); outline:none">
+          </label>
+          <sc-for list="{{ facetas }}" as="f" hint-placeholder-count="3">
+            <label style="display:flex; flex-direction:column; gap:var(--space-1); min-width:160px">
+              <span style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">{{ f.label }}</span>
+              <select style="border:0; border-bottom:1px solid var(--color-neutral-300); background:transparent; font-size:17px; padding:4px 0; color:var(--color-text); outline:none"><option>{{ f.valor }}</option></select>
+            </label>
+          </sc-for>
+        </div>
+
+        <div style="display:flex; gap:var(--space-2); margin-top:var(--space-4); flex-wrap:wrap">
+          <sc-for list="{{ pills }}" as="p" hint-placeholder-count="6">
+            <button style="{{ p.style }}">{{ p.label }}</button>
+          </sc-for>
+        </div>
+
+        <div style="display:grid; grid-template-columns:30px 52px 1fr 120px 90px 130px 90px 80px 130px 90px; align-items:center; margin-top:var(--space-6)">
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px"></div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px"></div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Producto</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Marca</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Temp.</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Publicación</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Stock</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Var.</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Precio L1</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px"></div>
+          <sc-for list="{{ filas }}" as="r" hint-placeholder-count="8">
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200)">
+              <div style="{{ r.checkStyle }}">{{ r.check }}</div>
+            </div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200)">
+              <div style="width:40px; height:40px; background:repeating-linear-gradient(135deg, var(--color-neutral-200) 0 5px, var(--color-bg) 5px 10px); border-radius:var(--radius-md)"></div>
+            </div>
+            <div style="padding:var(--space-3) var(--space-2) var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200)">
+              <button onClick="{{ r.go }}" style="border:0; background:transparent; padding:0; text-align:left; cursor:pointer; font-size:18px; color:var(--color-accent-700)" style-hover="color:var(--color-accent-2); text-decoration:underline">{{ r.nombre }}</button>
+              <div style="font-size:13px; letter-spacing:0.08em; color:var(--color-neutral-600); margin-top:2px">{{ r.cod }}{{ r.marcas }}</div>
+            </div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; color:var(--color-neutral-700)">{{ r.marca }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; color:var(--color-neutral-700)">{{ r.temp }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200)">
+              <span style="{{ r.pubStyle }}">{{ r.pub }}</span>
+            </div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; text-align:right; color:{{ r.stockColor }}">{{ r.stock }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; text-align:right; color:var(--color-neutral-700)">{{ r.variantes }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; text-align:right">{{ r.precio }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); text-align:right">
+              <button onClick="{{ r.go }}" style="border:0; background:transparent; cursor:pointer; font-size:15px; color:var(--color-accent-700); padding:0" style-hover="color:var(--color-accent-2)">Editar →</button>
+            </div>
+          </sc-for>
+        </div>
+
+        <!-- barra de lote: aparece solo con selección -->
+        <div style="display:flex; align-items:center; gap:var(--space-3); margin-top:var(--space-4); padding:var(--space-3) var(--space-4); background:var(--color-accent-100); border-radius:var(--radius-md); flex-wrap:wrap">
+          <div style="font-size:17px; color:var(--color-accent-700)">2 productos seleccionados</div>
+          <div style="display:flex; gap:var(--space-2); margin-left:var(--space-4); flex-wrap:wrap">
+            <sc-for list="{{ acciones }}" as="a" hint-placeholder-count="4">
+              <button style="border:1px solid var(--color-accent); background:transparent; color:var(--color-accent-700); border-radius:var(--radius-md); padding:6px 14px; font-size:15px; cursor:pointer" style-hover="background:var(--color-accent-200)">{{ a }}</button>
+            </sc-for>
+          </div>
+          <a href="#0" style="margin-left:auto; font-size:15px">Deseleccionar</a>
+        </div>
+
+        <div style="display:flex; align-items:baseline; gap:var(--space-4); margin-top:var(--space-4)">
+          <div style="font-size:15px; color:var(--color-neutral-700)">1.285 productos · página 1 de 26</div>
+          <div style="margin-left:auto; display:flex; gap:var(--space-2); align-items:baseline">
+            <button style="border:1px solid var(--color-neutral-300); background:transparent; color:var(--color-neutral-500); border-radius:var(--radius-md); padding:4px 12px; font-size:16px; cursor:not-allowed">‹</button>
+            <button style="border:1px solid var(--color-text); background:transparent; color:var(--color-text); border-radius:var(--radius-md); padding:4px 12px; font-size:16px; cursor:pointer" style-hover="background:var(--color-neutral-200)">›</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════════ EDITOR DE PRODUCTO ══════════════ -->
+    <sc-if value="{{ esEditor }}">
+      <div style="padding:var(--space-6) 0 0">
+        <button onClick="{{ volver }}" style="border:0; background:transparent; padding:0; cursor:pointer; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-accent-700)" style-hover="color:var(--color-accent-2)">← Catálogo</button>
+        <div style="display:flex; align-items:flex-end; gap:var(--space-4); margin-top:var(--space-3); flex-wrap:wrap">
+          <div>
+            <h1 style="margin:0; font-size:44px; line-height:1; letter-spacing:-0.015em">Mochila Moscú</h1>
+            <div style="font-size:13px; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-neutral-600); margin-top:var(--space-2)">M211 · Chimola · AW26 · Marroquinería / Mochilas · 6 fotos</div>
+          </div>
+          <div style="margin-left:auto; text-align:right">
+            <div style="font-size:14px; color:var(--color-neutral-600)">Editado por admin@lautin.com.ar</div>
+            <div style="font-size:14px; color:var(--color-neutral-600)">23/08/2026 18:42</div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:240px 1fr; gap:var(--space-8); margin-top:var(--space-6); align-items:start">
+          <div>
+            <div style="aspect-ratio:1/1; background:repeating-linear-gradient(135deg, var(--color-neutral-200) 0 6px, var(--color-bg) 6px 12px); border-radius:var(--radius-md); display:flex; align-items:flex-end; padding:var(--space-2)">
+              <span style="font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--color-neutral-500)">foto M211</span>
+            </div>
+            <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600); margin-top:var(--space-4)">Publicación</div>
+            <div style="display:flex; flex-direction:column; gap:var(--space-1); margin-top:var(--space-2)">
+              <sc-for list="{{ pubOpciones }}" as="p" hint-placeholder-count="3">
+                <button style="{{ p.style }}">{{ p.label }}<span style="display:block; font-size:13px; color:var(--color-neutral-600)">{{ p.nota }}</span></button>
+              </sc-for>
+            </div>
+            <div style="display:flex; align-items:center; gap:var(--space-2); margin-top:var(--space-4)">
+              <div style="width:18px; height:18px; border:1px solid var(--color-accent); background:var(--color-accent); border-radius:var(--radius-md); color:var(--color-neutral-100); font-size:13px; display:flex; align-items:center; justify-content:center">✓</div>
+              <span style="font-size:17px">Destacado en la grilla</span>
+            </div>
+            <div style="margin-top:var(--space-4)">
+              <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Múltiplo de compra (U.B.)</div>
+              <div style="display:flex; align-items:baseline; gap:var(--space-2); margin-top:var(--space-2)">
+                <div style="width:70px; height:34px; border:1px solid var(--color-neutral-300); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; font-size:17px">6</div>
+                <span style="font-size:15px; color:var(--color-neutral-700)">unidades</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-6)">
+              <div>
+                <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Nombre</div>
+                <input value="Mochila Moscú" style="width:100%; margin-top:var(--space-1); border:0; border-bottom:1px solid var(--color-text); background:transparent; font-size:20px; padding:4px 0; color:var(--color-text); outline:none">
+                <div style="display:flex; gap:var(--space-2); align-items:baseline; margin-top:var(--space-1)">
+                  <span style="font-size:14px; color:var(--color-neutral-600)">Aleph: MOCHILA MOSCU LONA</span>
+                  <a href="#0" style="font-size:14px">volver a Aleph</a>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Descripción</div>
+                <textarea style="width:100%; height:66px; margin-top:var(--space-1); border:1px solid var(--color-neutral-300); border-radius:var(--radius-md); background:var(--color-neutral-100); padding:8px 10px; font-size:16px; color:var(--color-text); outline:none; resize:vertical" style-focus="border-color:var(--color-accent)">Mochila de lona con cierre doble y porta notebook 13".</textarea>
+              </div>
+            </div>
+
+            <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600); margin-top:var(--space-6)">Precios por lista</div>
+            <div style="display:grid; grid-template-columns:80px 150px 150px 1fr; align-items:center; margin-top:var(--space-2)">
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Lista</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Aleph</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Manual</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px"></div>
+              <sc-for list="{{ precios }}" as="p" hint-placeholder-count="4">
+                <div style="padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px">L{{ p.lista }}</div>
+                <div style="padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px; text-align:right; color:var(--color-neutral-600)">{{ p.aleph }}</div>
+                <div style="padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200); display:flex; justify-content:flex-end">
+                  <div style="{{ p.style }}">{{ p.manual }}</div>
+                </div>
+                <div style="padding:var(--space-2) 0 var(--space-2) var(--space-3); border-bottom:1px solid var(--color-neutral-200); font-size:14px; color:{{ p.notaColor }}">{{ p.nota }}</div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex; align-items:baseline; gap:var(--space-3); margin-top:var(--space-6); flex-wrap:wrap">
+              <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Variantes</div>
+              <div style="font-size:15px; color:var(--color-neutral-700)">Stock y precio manual pisan a Aleph. Vacío = automático.</div>
+            </div>
+            <div style="display:grid; grid-template-columns:170px 110px 70px 110px 110px 90px 130px; align-items:center; margin-top:var(--space-2)">
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">SKU</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Color</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Talle</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Stock Aleph</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Stock manual</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:center">Oculta</div>
+              <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Precio manual L1</div>
+              <sc-for list="{{ variantes }}" as="v" hint-placeholder-count="4">
+                <div style="padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200); font-size:15px; letter-spacing:0.06em">{{ v.sku }}</div>
+                <div style="padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px">{{ v.color }}</div>
+                <div style="padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px">{{ v.talle }}</div>
+                <div style="padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; text-align:right; color:var(--color-neutral-600)">{{ v.stockAleph }}</div>
+                <div style="padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200); display:flex; justify-content:flex-end">
+                  <div style="{{ v.stockStyle }}">{{ v.stockManual }}</div>
+                </div>
+                <div style="padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200); display:flex; justify-content:center">
+                  <div style="{{ v.ocultaStyle }}">{{ v.oculta }}</div>
+                </div>
+                <div style="padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200); display:flex; justify-content:flex-end">
+                  <div style="{{ v.precioStyle }}">{{ v.precioManual }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex; gap:var(--space-3); align-items:flex-start; margin-top:var(--space-4); border-left:3px solid var(--color-accent-2); padding:var(--space-2) 0 var(--space-2) var(--space-3); background:var(--color-accent-2-100)">
+              <div style="font-size:15px; color:var(--color-neutral-800); max-width:70ch; text-wrap:pretty">M211_U_101 tiene stock manual (30 u.) sobre un stock real de 24. Mientras esté en manual, el sitio deja de validar contra el stock de Aleph y puede vender más de lo que hay.</div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:var(--space-3); margin-top:var(--space-6); padding-top:var(--space-4); border-top:1px solid var(--color-text)">
+              <button style="border:0; background:var(--color-accent); color:var(--color-neutral-100); border-radius:var(--radius-md); padding:12px 26px; font-size:17px; cursor:pointer" style-hover="background:var(--color-accent-600)" style-active="background:var(--color-accent-700)">Guardar producto</button>
+              <button style="border:1px solid var(--color-neutral-300); background:transparent; color:var(--color-neutral-700); border-radius:var(--radius-md); padding:12px var(--space-4); font-size:16px; cursor:pointer" style-hover="background:var(--color-neutral-200)">Descartar cambios</button>
+              <a href="#0" style="margin-left:auto; font-size:15px; color:var(--color-accent-2-700)" style-hover="color:var(--color-accent-2)">Quitar todos los overrides y volver a Aleph</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════════ PEDIDOS ══════════════ -->
+    <sc-if value="{{ esPedidos }}">
+      <div style="padding:var(--space-8) 0 0">
+        <div style="display:flex; align-items:flex-end; gap:var(--space-6)">
+          <h1 style="margin:0; font-size:52px; line-height:0.95; letter-spacing:-0.015em">Pedidos</h1>
+          <div style="font-size:15px; color:var(--color-neutral-700); padding-bottom:8px">3 sin procesar</div>
+        </div>
+        <div style="display:flex; gap:var(--space-2); margin-top:var(--space-4); flex-wrap:wrap">
+          <sc-for list="{{ pillsPedidos }}" as="p" hint-placeholder-count="4">
+            <button style="{{ p.style }}">{{ p.label }}</button>
+          </sc-for>
+        </div>
+
+        <div style="display:grid; grid-template-columns:100px 150px 1fr 100px 150px 150px 90px; align-items:center; margin-top:var(--space-6)">
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">N°</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Fecha</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Cliente</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Unid.</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Total</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Estado</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Email</div>
+          <sc-for list="{{ pedidos }}" as="p" hint-placeholder-count="4">
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px; letter-spacing:0.06em; color:var(--color-accent-700)">{{ p.numero }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px">{{ p.fecha }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px">{{ p.cliente }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; text-align:right; color:var(--color-neutral-700)">{{ p.unidades }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px; text-align:right">{{ p.total }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); text-align:right"><span style="{{ p.tagStyle }}">{{ p.estado }}</span></div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; text-align:right; color:var(--color-neutral-600)">{{ p.email }}</div>
+          </sc-for>
+        </div>
+
+        <div style="margin-top:var(--space-8); border-top:4px solid var(--color-text); padding-top:var(--space-4)">
+          <div style="display:flex; align-items:flex-end; gap:var(--space-4); flex-wrap:wrap">
+            <div>
+              <div style="display:flex; align-items:baseline; gap:var(--space-3)">
+                <h2 style="margin:0; font-size:32px; line-height:1">Pedido 000142</h2>
+                <span style="display:inline-block; background:var(--color-accent-100); color:var(--color-accent-700); border-radius:var(--radius-md); padding:3px 10px; font-size:13px; letter-spacing:0.08em; text-transform:uppercase">Confirmado</span>
+              </div>
+              <div style="font-size:16px; color:var(--color-neutral-700); margin-top:var(--space-2)">21/08/2026 14:07 · Franquicia Jujuy S.R.L. (cliente 2722) · franquicia_jujuy@lautin.com.ar · 60 u. · $ 1.134.720 (desc. 20%)</div>
+              <div style="font-size:15px; color:var(--color-neutral-600); margin-top:var(--space-1)">Obs: entregar en sucursal Jujuy centro, remito a nombre de la franquicia.</div>
+            </div>
+            <div style="margin-left:auto; display:flex; gap:var(--space-2); flex-wrap:wrap">
+              <button style="border:0; background:var(--color-accent); color:var(--color-neutral-100); border-radius:var(--radius-md); padding:10px var(--space-4); font-size:16px; cursor:pointer" style-hover="background:var(--color-accent-600)" style-active="background:var(--color-accent-700)">Marcar procesado</button>
+              <button style="border:1px solid var(--color-text); background:transparent; color:var(--color-text); border-radius:var(--radius-md); padding:10px var(--space-4); font-size:16px; cursor:pointer" style-hover="background:var(--color-neutral-200)">Reenviar email</button>
+              <button style="border:1px solid var(--color-text); background:transparent; color:var(--color-text); border-radius:var(--radius-md); padding:10px var(--space-4); font-size:16px; cursor:pointer" style-hover="background:var(--color-neutral-200)">Excel</button>
+              <button style="border:1px solid var(--color-accent-2); background:transparent; color:var(--color-accent-2-700); border-radius:var(--radius-md); padding:10px var(--space-4); font-size:16px; cursor:pointer" style-hover="background:var(--color-accent-2-200)">Cancelar</button>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1.6fr; gap:var(--space-8); margin-top:var(--space-6); align-items:start">
+            <div>
+              <div style="font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Historial</div>
+              <sc-for list="{{ historial }}" as="h" hint-placeholder-count="2">
+                <div style="padding:var(--space-2) 0; border-bottom:1px solid var(--color-neutral-200)">
+                  <div style="font-size:17px">{{ h.estado }}</div>
+                  <div style="font-size:14px; color:var(--color-neutral-600)">{{ h.cuando }} · {{ h.quien }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div>
+              <div style="display:grid; grid-template-columns:1fr 70px 70px 130px 140px">
+                <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Producto</div>
+                <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Talle</div>
+                <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Cant.</div>
+                <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Precio</div>
+                <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Subtotal</div>
+                <sc-for list="{{ items }}" as="i" hint-placeholder-count="4">
+                  <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200); font-size:17px">{{ i.nombre }} <span style="font-size:13px; letter-spacing:0.08em; color:var(--color-neutral-600)">{{ i.color }}</span></div>
+                  <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; text-align:right; color:var(--color-neutral-700)">{{ i.talle }}</div>
+                  <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; text-align:right">{{ i.qty }}</div>
+                  <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; text-align:right">{{ i.precio }}</div>
+                  <div style="padding:12px 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; text-align:right">{{ i.subtotal }}</div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════════ CLIENTES ══════════════ -->
+    <sc-if value="{{ esClientes }}">
+      <div style="padding:var(--space-8) 0 0">
+        <div style="display:flex; align-items:flex-end; gap:var(--space-6)">
+          <h1 style="margin:0; font-size:52px; line-height:0.95; letter-spacing:-0.015em">Clientes</h1>
+          <div style="font-size:15px; color:var(--color-neutral-700); padding-bottom:8px">Lista y descuento efectivos, con su origen. Click en el cliente para editarlo.</div>
+          <button style="margin-left:auto; border:0; background:var(--color-accent); color:var(--color-neutral-100); border-radius:var(--radius-md); padding:10px var(--space-4); font-size:16px; cursor:pointer" style-hover="background:var(--color-accent-600)">Nuevo usuario</button>
+        </div>
+        <div style="display:grid; grid-template-columns:1.3fr 1fr 90px 150px 150px 130px 110px; align-items:center; margin-top:var(--space-6)">
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Cliente</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Email</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Rol</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Lista</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Descuento</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600)">Último login</div>
+          <div style="border-bottom:1px solid var(--color-text); padding-bottom:8px; font-size:14px; color:var(--color-neutral-600); text-align:right">Estado</div>
+          <sc-for list="{{ clientes }}" as="c" hint-placeholder-count="4">
+            <div style="padding:var(--space-3) var(--space-2) var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200)">
+              <div style="font-size:17px; color:var(--color-accent-700)">{{ c.nombre }}</div>
+              <div style="font-size:13px; letter-spacing:0.08em; color:var(--color-neutral-600)">{{ c.cod }}</div>
+            </div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:15px; color:var(--color-neutral-700)">{{ c.email }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px; color:var(--color-neutral-700)">{{ c.rol }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px">{{ c.lista }} <span style="font-size:13px; color:{{ c.listaColor }}">{{ c.listaOrigen }}</span></div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:16px">{{ c.desc }} <span style="font-size:13px; color:{{ c.descColor }}">{{ c.descOrigen }}</span></div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); font-size:15px; color:var(--color-neutral-700)">{{ c.login }}</div>
+            <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-neutral-200); text-align:right"><span style="{{ c.tagStyle }}">{{ c.estado }}</span></div>
+          </sc-for>
+        </div>
+        <div style="font-size:15px; color:var(--color-neutral-700); margin-top:var(--space-4)">El origen "Override" marca lo que se editó acá; "Aleph" es lo que viene del ERP.</div>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;acento&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;var(--color-accent)&quot;,&quot;options&quot;:[&quot;#0088b0&quot;,&quot;#d6006c&quot;,&quot;#201e1d&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Tema&quot;}}">
+class Component extends DCLogic {
+  state = { screen: "catalogo" };
+
+  go(screen) { return () => this.setState({ screen }); }
+
+  renderVals() {
+    const s = this.state.screen;
+    const acento = this.props.acento ?? "var(--color-accent)";
+    const N = (n) => "var(--color-neutral-" + n + ")";
+
+    const nav = [["inicio", "Inicio"], ["catalogo", "Catálogo"], ["clientes", "Clientes"], ["pedidos", "Pedidos · 3 sin procesar"], ["config", "Config"]]
+      .map(([k, label]) => ({
+        label, go: this.go(k),
+        style: "border:0; background:transparent; cursor:pointer; padding:0 0 10px; font-size:20px;"
+          + (s === k || (s === "editor" && k === "catalogo")
+            ? "color:var(--color-text); border-bottom:3px solid " + acento + ";"
+            : "color:" + N(600) + "; border-bottom:3px solid transparent;"),
+      }));
+
+    const kpis = [
+      { label: "Sin procesar", valor: "3", nota: "esperando acción", color: "var(--color-accent-2)" },
+      { label: "Pedidos del mes", valor: "28", nota: "agosto 2026", color: "var(--color-text)" },
+      { label: "Ventas del mes", valor: "$ 24,6 M", nota: "sin IVA", color: "var(--color-text)" },
+      { label: "Unidades", valor: "3.412", nota: "en 28 pedidos", color: "var(--color-text)" },
+      { label: "Clientes que pidieron", valor: "17", nota: "de 42 activos", color: "var(--color-text)" },
+    ];
+
+    const salud = [
+      { valor: "1.285", label: "productos con stock", accion: "ver todos", color: "var(--color-text)" },
+      { valor: "42", label: "ocultos manualmente", accion: "filtrar ocultos", color: "var(--color-text)" },
+      { valor: "71", label: "sin foto cargada", accion: "filtrar sin foto", color: "var(--color-accent-2)" },
+      { valor: "18", label: "sin precio en lista 1", accion: "filtrar sin precio", color: "var(--color-accent-2)" },
+      { valor: "96", label: "con override activo", accion: "filtrar con override", color: "var(--color-accent-700)" },
+    ];
+
+    const top = [
+      { nombre: "Mochila Moscú", cod: "M211", unidades: "412 u." },
+      { nombre: "Pouch Snack", cod: "P075", unidades: "388 u." },
+      { nombre: "Bandolera Rina", cod: "R118", unidades: "264 u." },
+      { nombre: "Billetera Guada", cod: "B330", unidades: "196 u." },
+      { nombre: "Portacosméticos Delfi", cod: "D204", unidades: "154 u." },
+    ];
+
+    const pillStyle = (on) => "border:1px solid " + (on ? acento : N(300)) + "; background:" + (on ? "var(--color-accent-100)" : "transparent")
+      + "; color:" + (on ? "var(--color-accent-700)" : N(700)) + "; border-radius:var(--radius-md); padding:5px 14px; font-size:15px; cursor:pointer;";
+    const pills = [["Todos (1.285)", true], ["Publicados (1.243)", false], ["Ocultos (42)", false],
+      ["Destacados (12)", false], ["Sin foto (71)", false], ["Con override (96)", false]]
+      .map(([label, on]) => ({ label, style: pillStyle(on) }));
+
+    const check = (on) => on
+      ? "width:18px; height:18px; border:1px solid var(--color-accent); background:var(--color-accent); border-radius:var(--radius-md); color:" + N(100) + "; font-size:12px; display:flex; align-items:center; justify-content:center;"
+      : "width:18px; height:18px; border:1px solid " + N(300) + "; border-radius:var(--radius-md);";
+    const pubTag = (estado) => {
+      const map = {
+        Auto: [N(200), N(800)],
+        Publicado: ["var(--color-accent-100)", "var(--color-accent-700)"],
+        Oculto: ["var(--color-accent-2-100)", "var(--color-accent-2-700)"],
+      };
+      const [bg, fg] = map[estado];
+      return "display:inline-block; background:" + bg + "; color:" + fg + "; border-radius:var(--radius-md); padding:3px 10px; font-size:13px; letter-spacing:0.08em; text-transform:uppercase;";
+    };
+
+    const filas = [
+      ["M211", "Mochila Moscú", "Chimola", "AW26", "Publicado", "118", "4", "$ 45.900", true, " · editado"],
+      ["R118", "Bandolera Rina", "Chimola", "AW26", "Auto", "96", "4", "$ 33.900", true, ""],
+      ["P075", "Pouch Snack", "Chimola", "SS26", "Auto", "240", "4", "$ 6.500", false, ""],
+      ["B330", "Billetera Guada", "Chimola", "AW26", "Oculto", "64", "4", "$ 16.900", false, " · editado"],
+      ["T119", "Tote Rina", "Chimola", "AW26", "Auto", "52", "4", "$ 34.900", false, ""],
+      ["D204", "Portacosméticos Delfi", "Lima", "AW26", "Auto", "130", "4", "$ 16.900", false, ""],
+      ["L512", "Lona Maui", "Lima", "SS26", "Auto", "0", "4", "$ 25.000", false, " · sin foto"],
+      ["V088", "Vaso Delfi", "Lima", "AW26", "Auto", "74", "3", "$ 19.000", false, ""],
+    ].map(([cod, nombre, marca, temp, pub, stock, variantes, precio, sel, marcas]) => ({
+      cod, nombre, marca, temp, pub, stock, variantes, precio, marcas,
+      go: this.go("editor"),
+      check: sel ? "✓" : "", checkStyle: check(sel),
+      pubStyle: pubTag(pub),
+      stockColor: stock === "0" ? "var(--color-accent-2-700)" : N(700),
+    }));
+
+    const acciones = ["Ocultar", "Volver a automático", "Destacar", "Quitar destacado"];
+
+    const pubOpciones = [
+      ["Automático", "visible si tiene stock", false],
+      ["Publicado", "visible, siempre con stock", true],
+      ["Oculto", "nunca visible", false],
+    ].map(([label, nota, on]) => ({
+      label, nota,
+      style: "text-align:left; border:1px solid " + (on ? acento : N(300)) + "; background:" + (on ? "var(--color-accent-100)" : "transparent")
+        + "; color:" + (on ? "var(--color-accent-700)" : "var(--color-text)") + "; border-radius:var(--radius-md); padding:8px 12px; font-size:17px; cursor:pointer;",
+    }));
+
+    const campo = (activo) => "width:110px; height:32px; border:1px solid " + (activo ? "var(--color-accent)" : N(300))
+      + "; background:" + (activo ? "var(--color-accent-100)" : "transparent")
+      + "; color:" + (activo ? "var(--color-accent-700)" : N(500))
+      + "; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:flex-end; padding:0 10px; font-size:17px;";
+
+    const precios = [
+      { lista: "1", aleph: "$ 45.900", manual: "$ 42.000", style: campo(true), nota: "Manual — pisa a Aleph para lista 1", notaColor: "var(--color-accent-700)" },
+      { lista: "2", aleph: "$ 48.500", manual: "vacío", style: campo(false), nota: "Usa Aleph", notaColor: N(600) },
+      { lista: "3", aleph: "$ 51.200", manual: "vacío", style: campo(false), nota: "Usa Aleph", notaColor: N(600) },
+      { lista: "4", aleph: "$ 91.800", manual: "vacío", style: campo(false), nota: "Usa Aleph · es el PVP", notaColor: N(600) },
+    ];
+
+    const variantes = [
+      ["M211_U_101", "BLACK", "U", "24", "30", true, "vacío", false, false],
+      ["M211_U_204", "MILITAR", "U", "44", "vacío", false, "vacío", false, false],
+      ["M211_U_310", "VISON", "U", "32", "vacío", false, "$ 39.000", false, true],
+      ["M211_U_402", "BLUE", "U", "18", "vacío", false, "vacío", true, false],
+    ].map(([sku, color, talle, stockAleph, stockManual, stockOn, precioManual, oculta, precioOn]) => ({
+      sku, color, talle, stockAleph, stockManual, precioManual,
+      stockStyle: campo(stockOn), precioStyle: campo(precioOn),
+      oculta: oculta ? "✓" : "", ocultaStyle: check(oculta),
+    }));
+
+    const tag = (bg, fg) => "display:inline-block; background:" + bg + "; color:" + fg
+      + "; border-radius:var(--radius-md); padding:3px 10px; font-size:13px; letter-spacing:0.08em; text-transform:uppercase;";
+    const tagConfirmado = tag("var(--color-accent-100)", "var(--color-accent-700)");
+    const tagProcesado = tag(N(200), N(800));
+    const tagCancelado = tag("var(--color-accent-2-100)", "var(--color-accent-2-700)");
+
+    const pillsPedidos = [["Todos (142)", true], ["Confirmado (3)", false], ["Procesado (136)", false], ["Cancelado (3)", false]]
+      .map(([label, on]) => ({ label, style: pillStyle(on) }));
+
+    const pedidos = [
+      { numero: "000142", fecha: "21/08 14:07", cliente: "Franquicia Jujuy S.R.L.", unidades: "60", total: "$ 1.134.720", estado: "Confirmado", tagStyle: tagConfirmado, email: "enviado" },
+      { numero: "000141", fecha: "20/08 11:22", cliente: "Franquicia Mendoza S.A.", unidades: "88", total: "$ 1.902.400", estado: "Confirmado", tagStyle: tagConfirmado, email: "enviado" },
+      { numero: "000140", fecha: "19/08 16:48", cliente: "Accesorios del Sur", unidades: "24", total: "$ 486.300", estado: "Confirmado", tagStyle: tagConfirmado, email: "falló" },
+      { numero: "000138", fecha: "14/08 09:30", cliente: "Franquicia Jujuy S.R.L.", unidades: "132", total: "$ 2.884.500", estado: "Procesado", tagStyle: tagProcesado, email: "enviado" },
+      { numero: "000131", fecha: "02/08 17:10", cliente: "Bazar Norte", unidades: "18", total: "$ 314.900", estado: "Cancelado", tagStyle: tagCancelado, email: "enviado" },
+    ];
+
+    const historial = [
+      { estado: "Confirmado", cuando: "21/08 14:07", quien: "franquicia_jujuy@lautin.com.ar" },
+      { estado: "Email enviado con el Excel", cuando: "21/08 14:07", quien: "sistema" },
+    ];
+
+    const items = [
+      { nombre: "Mochila Moscú", color: "BLACK", talle: "U", qty: "12", precio: "$ 45.900", subtotal: "$ 550.800" },
+      { nombre: "Pouch Snack", color: "NACHOS", talle: "U", qty: "24", precio: "$ 6.500", subtotal: "$ 156.000" },
+      { nombre: "Billetera Guada", color: "VISON", talle: "U", qty: "6", precio: "$ 16.900", subtotal: "$ 101.400" },
+      { nombre: "Bandolera Rina", color: "DARK BLUE", talle: "U", qty: "18", precio: "$ 33.900", subtotal: "$ 610.200" },
+    ];
+
+    const clientes = [
+      { nombre: "Franquicia Jujuy S.R.L.", cod: "2722", email: "franquicia_jujuy@lautin.com.ar", rol: "cliente", lista: "1", listaOrigen: "Aleph", listaColor: N(600), desc: "25%", descOrigen: "Override", descColor: "var(--color-accent-700)", login: "hoy 09:12", estado: "Activo", tagStyle: tagConfirmado },
+      { nombre: "Franquicia Mendoza S.A.", cod: "2723", email: "franquicia_mendoza@lautin.com.ar", rol: "cliente", lista: "1", listaOrigen: "Aleph", listaColor: N(600), desc: "30%", descOrigen: "Aleph", descColor: N(600), login: "ayer 18:40", estado: "Activo", tagStyle: tagConfirmado },
+      { nombre: "Accesorios del Sur", cod: "2810", email: "compras@accdelsur.com.ar", rol: "cliente", lista: "2", listaOrigen: "Override", listaColor: "var(--color-accent-700)", desc: "20%", descOrigen: "Aleph", descColor: N(600), login: "19/08", estado: "Activo", tagStyle: tagConfirmado },
+      { nombre: "Bazar Norte", cod: "2904", email: "bazarnorte@gmail.com", rol: "cliente", lista: "1", listaOrigen: "Aleph", listaColor: N(600), desc: "0%", descOrigen: "Aleph", descColor: N(600), login: "02/08", estado: "Inactivo", tagStyle: tagCancelado },
+    ];
+
+    return {
+      nav, kpis, salud, top, pills, filas, acciones, pubOpciones, precios, variantes,
+      pillsPedidos, pedidos, historial, items, clientes,
+      volver: this.go("catalogo"),
+      facetas: [{ label: "Marca", valor: "Todas" }, { label: "Temporada", valor: "Todas" }, { label: "Rubro", valor: "Todos" }],
+      esInicio: s === "inicio", esCatalogo: s === "catalogo", esEditor: s === "editor",
+      esPedidos: s === "pedidos", esClientes: s === "clientes",
+    };
+  }
+}
+</script>
+</body>
+</html>

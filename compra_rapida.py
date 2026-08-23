@@ -41,38 +41,69 @@ def parsear_lineas(texto: str) -> list[tuple[str, int, int]]:
     return out
 
 
-def resolver_pegado(texto: str, df_publicadas: pd.DataFrame) -> tuple[list[dict], list[str]]:
-    """Texto pegado → (items de carrito, avisos). Busca por SKU o EAN.
-    Consolida cantidades por SKU y recorta al stock."""
+def resolver_pegado(texto: str, df_publicadas: pd.DataFrame) -> tuple[list[dict], list[dict]]:
+    """Texto pegado → (items de carrito, incidencias). Busca por SKU o EAN,
+    consolida cantidades por SKU y recorta al stock.
+
+    Cada incidencia (una por línea leída) es:
+      {"linea": n, "codigo": str, "tipo": "ok"|"ajustada"|"no_encontrada"|
+       "sin_precio"|"ilegible", "pedido": int, "cargado": int, "detalle": str}
+    (una línea consolidada sobre un SKU repetido hereda el resultado final).
+    """
     por_sku = {str(r["sku"]).upper(): r for _, r in df_publicadas.iterrows()}
     por_ean = {str(r["ean"]).upper(): r for _, r in df_publicadas.iterrows() if str(r["ean"]).strip()}
+    incidencias: list[dict] = []
     pedidos: dict[str, int] = {}
-    avisos: list[str] = []
+    lineas_por_sku: dict[str, list[int]] = {}
+
+    def inc(n, codigo, tipo, pedido, cargado, detalle):
+        incidencias.append({"linea": n, "codigo": codigo, "tipo": tipo,
+                            "pedido": pedido, "cargado": cargado, "detalle": detalle})
+
     for codigo, cant, n in parsear_lineas(texto):
         if cant == -1:
-            avisos.append(f"Línea {n}: cantidad ilegible ({codigo})")
+            inc(n, codigo, "ilegible", 0, 0, "cantidad ilegible")
             continue
         if cant <= 0:
-            avisos.append(f"Línea {n}: cantidad debe ser > 0 ({codigo})")
+            inc(n, codigo, "ilegible", cant, 0, "la cantidad debe ser mayor a 0")
             continue
         v = por_sku.get(codigo)
         if v is None:
             v = por_ean.get(codigo)
         if v is None:
-            avisos.append(f"Línea {n}: código '{codigo}' no encontrado o sin stock publicado")
+            inc(n, codigo, "no_encontrada", cant, 0, "código no encontrado o sin stock publicado")
             continue
-        pedidos[str(v["sku"])] = pedidos.get(str(v["sku"]), 0) + cant
+        sku = str(v["sku"])
+        pedidos[sku] = pedidos.get(sku, 0) + cant
+        lineas_por_sku.setdefault(sku, []).append(n)
+        inc(n, codigo, "ok", cant, cant, "")   # provisional; se corrige abajo si hubo ajuste
 
     items = []
     for sku, cant in pedidos.items():
         v = por_sku[sku.upper()]
+        propias = [i for i in incidencias if i["linea"] in lineas_por_sku[sku]]
         if pd.isna(v["precio"]):
-            avisos.append(f"{sku}: sin precio en tu lista — consultá a Chimola")
+            for i in propias:
+                i.update(tipo="sin_precio", cargado=0, detalle="sin precio en tu lista — consultá a Chimola")
             continue
         disp = int(v["stock"])
-        if cant > disp:
-            avisos.append(f"{sku}: solo hay {disp} u. (pediste {cant}); se cargó {disp}")
-            cant = disp
-        if cant > 0:
-            items.append(item_desde_variante(v, cant))
-    return items, avisos
+        final = min(cant, disp)
+        if final < cant:
+            for i in propias:
+                i.update(tipo="ajustada", cargado=final,
+                         detalle=f"solo hay {disp} u. disponibles — se cargó {final} de {cant}")
+        if final > 0:
+            items.append(item_desde_variante(v, final))
+        elif final == 0 and disp == 0:
+            for i in propias:
+                i.update(tipo="ajustada", cargado=0, detalle="sin stock disponible")
+    return items, incidencias
+
+
+def resumen_incidencias(incidencias: list[dict]) -> dict[str, int]:
+    """{agregadas, ajustadas, sin_reconocer} para los contadores de la UI."""
+    return {
+        "agregadas": sum(1 for i in incidencias if i["tipo"] == "ok"),
+        "ajustadas": sum(1 for i in incidencias if i["tipo"] == "ajustada"),
+        "sin_reconocer": sum(1 for i in incidencias if i["tipo"] in ("no_encontrada", "sin_precio", "ilegible")),
+    }

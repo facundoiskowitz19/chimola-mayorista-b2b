@@ -131,3 +131,24 @@ catalogo_overrides/{prod}    {publicado, destacado, nombre, descripcion, precios
 clientes_overrides/{cod}     {descuento_pct, lista_precios, notas, updated_at, updated_by}
 config/global                {pedidos_email_to, banner_texto, aplicar_descvta, minimo_pedido_unidades, updated_at, updated_by}
 ```
+
+## 10. Identidad visual y UX v2 (handoff 2026-08-23)
+
+Rediseño aplicado desde `design_handoff_mayorista_ux/` (Claude Design):
+- **Identidad "Broadsheet"** (decisión del usuario: reemplaza a la de Lautin):
+  Source Serif 4, fondo papel `#f3f2f2`, texto `#201e1d`, **cian `#0088b0`**
+  para todo lo interactivo (hover `#1186ac`, pressed `#006786`, tinte
+  `#e9f8ff`), **magenta `#d6006c`/`#aa0b56`** SOLO para errores/cancelado,
+  radio 2px, kickers 12px `letter-spacing:.14em`. Sin emojis en la UI.
+- **Estructura**: sidebar eliminado (nav horizontal + facetas arriba de la
+  grilla), chips de filtros activos con ×, carga de cantidades EN LÍNEA desde
+  la card, matriz color × talle (stock arriba, cantidades abajo), carrito con
+  filas propias (miniatura, × por fila, avisos de ajuste en la fila), pegado
+  con reconciliación (contadores + tabla por línea), pedidos maestro-detalle,
+  admin: click en el producto abre el **editor como pantalla** (checkbox solo
+  para lote con barra contextual), override vs Aleph explícito por lista
+  (campo vacío = usa Aleph; se eliminó el convenio del 0), publicación con
+  consecuencias escritas, salud del catálogo accionable, aviso de stock manual
+  por variante con los dos números.
+- Los mocks (`Cliente.dc.html` / `Admin.dc.html`) y el README del handoff son
+  la referencia de fidelidad; tokens en `_ds/broadsheet-*/styles.css`.

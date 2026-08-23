@@ -1,13 +1,15 @@
-"""Sección Administración (solo rol admin) — estilo wp-admin/Woo.
+"""Sección Administración (solo rol admin) — rediseño handoff Broadsheet.
 
-Inicio (KPIs) · Catálogo (selección + lote + editor modal con variantes) ·
-Clientes · Pedidos (click en fila, estados con color) · Config.
+Inicio (KPIs accionables) · Catálogo (click abre el editor; checkbox solo para
+lote) · Editor de producto como PANTALLA (no modal) con override vs Aleph
+explícito · Clientes · Pedidos (click en fila, tags de color) · Config.
 SPECS.md §3-§6. Acá se editan SOLO overrides de Firestore; BQ es readonly.
 """
 from __future__ import annotations
 
 import datetime as dt
 import logging
+import math
 import zoneinfo
 
 import pandas as pd
@@ -25,9 +27,13 @@ import pedidos
 log = logging.getLogger(__name__)
 TZ = zoneinfo.ZoneInfo(appconfig.TZ)
 
-PUB_LABELS = {None: "⚪ Auto", True: "🟢 Publicado", False: "🙈 Oculto"}
-ESTADO_BADGE = {"confirmado": ("🟡", "#b7791f", "#fef5e7"), "procesado": ("🟢", "#276749", "#e6f4ea"),
-                "cancelado": ("🔴", "#9b2c2c", "#fdecea")}
+PUB_LABELS = {None: "Auto", True: "Publicado", False: "Oculto"}
+PUB_OPCIONES = ["Automático", "Publicado", "Oculto"]
+PUB_CAPTIONS = ["Visible si tiene stock (lo decide Aleph)",
+                "Visible — igual exige stock > 0, nunca se vende sin stock",
+                "Nunca visible para clientes"]
+PUB_VALOR = {"Automático": None, "Publicado": True, "Oculto": False}
+TAG_CLS = {"confirmado": "tag-conf", "procesado": "tag-proc", "cancelado": "tag-canc"}
 SECCIONES = ["inicio", "catalogo", "clientes", "pedidos", "config"]
 
 
@@ -35,19 +41,29 @@ def _admin_email() -> str:
     return st.session_state.user["email"]
 
 
-def _badge_estado(estado: str) -> str:
-    emoji, fg, bg = ESTADO_BADGE.get(estado, ("⚪", "#555", "#eee"))
-    return (f"<span style='background:{bg};color:{fg};padding:.15rem .6rem;border-radius:999px;"
-            f"font-weight:700;font-size:.8rem'>{emoji} {estado.upper()}</span>")
+def _fmt(n) -> str:
+    if n is None or (isinstance(n, float) and math.isnan(n)):
+        return "—"
+    return f"$ {float(n):,.0f}".replace(",", ".")
+
+
+def _tag(estado: str) -> str:
+    return f"<span class='tag {TAG_CLS.get(estado, 'tag-proc')}'>{estado}</span>"
 
 
 def page_admin() -> None:
-    st.markdown("## Administración")
+    if st.session_state.get("adm_prod"):
+        _editar_producto(st.session_state.adm_prod)
+        return
+    t1, t2 = st.columns([1, 2], vertical_alignment="bottom")
+    t1.markdown("## Administración")
+    t2.markdown("<p class='muted' style='text-align:right'>BigQuery es de solo lectura · "
+                "lo que edites vive en Firestore y pisa a Aleph</p>", unsafe_allow_html=True)
     conteo = pedidos.contar_por_estado()
     sin_procesar = conteo.get("confirmado", 0)
-    labels = {"inicio": "🏠 Inicio", "catalogo": "📚 Catálogo", "clientes": "👥 Clientes",
-              "pedidos": "📦 Pedidos" + (f" · {sin_procesar} sin procesar" if sin_procesar else ""),
-              "config": "⚙️ Config"}
+    labels = {"inicio": "Inicio", "catalogo": "Catálogo", "clientes": "Clientes",
+              "pedidos": "Pedidos" + (f" · {sin_procesar} sin procesar" if sin_procesar else ""),
+              "config": "Config"}
     sec = st.segmented_control("Sección", SECCIONES, format_func=lambda s: labels[s],
                                key="adm_nav", label_visibility="collapsed", default="inicio")
     st.markdown("")
@@ -79,27 +95,39 @@ def _kpis(lista: list[dict], ahora: dt.datetime) -> dict:
     }
 
 
+def _ir_catalogo_con_pill(pill: str) -> None:
+    st.session_state.adm_nav = "catalogo"
+    st.session_state.adm_pill = pill
+
+
 def _sec_inicio() -> None:
     with st.spinner("Calculando..."):
         lista = pedidos.listar_pedidos(None)
         k = _kpis(lista, dt.datetime.now(dt.timezone.utc))
         df = catalog.variantes_admin()
     c = st.columns(5)
-    c[0].metric("🟡 Sin procesar", k["sin_procesar"])
+    c[0].metric("Sin procesar", k["sin_procesar"])
     c[1].metric("Pedidos del mes", k["pedidos_mes"])
-    c[2].metric("Ventas del mes (sin IVA)", f"$ {k['monto_mes']:,.0f}".replace(",", "."))
+    c[2].metric("Ventas del mes (sin IVA)", _fmt(k["monto_mes"]))
     c[3].metric("Unidades del mes", f"{k['unidades_mes']:,}".replace(",", "."))
     c[4].metric("Clientes que pidieron", k["clientes_mes"])
+    if k["sin_procesar"]:
+        c[0].button("Ver pedidos", key="kpi_ped", on_click=lambda: st.session_state.update(adm_nav="pedidos"))
 
     st.markdown("#### Salud del catálogo")
     prods = df.groupby("producto_cod").agg(publicado=("publicado", "first"), precio1=("precio1", "first")).reset_index()
     sin_foto = int((~prods["producto_cod"].map(fotos.tiene_fotos)).sum())
+    ocultos = int(prods["publicado"].map(lambda v: v is False).sum())
+    n_ov = len(overrides.get_catalogo_overrides())
     c = st.columns(5)
     c[0].metric("Productos con stock", len(prods))
-    c[1].metric("🙈 Ocultos", int(prods["publicado"].map(lambda v: v is False).sum()))
+    c[1].metric("Ocultos", ocultos)
+    c[1].button("Ver", key="kpi_oc", on_click=_ir_catalogo_con_pill, args=("Ocultos",))
     c[2].metric("Sin foto", sin_foto)
+    c[2].button("Ver", key="kpi_sf", on_click=_ir_catalogo_con_pill, args=("Sin foto",))
     c[3].metric("Sin precio L1", int((prods["precio1"] <= 0).sum()))
-    c[4].metric("Con overrides", len(overrides.get_catalogo_overrides()))
+    c[4].metric("Con overrides", n_ov)
+    c[4].button("Ver", key="kpi_ov", on_click=_ir_catalogo_con_pill, args=("Con override",))
 
     if k["top"]:
         st.markdown("#### Top productos del mes")
@@ -108,17 +136,21 @@ def _sec_inicio() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Catálogo
+# Catálogo — click abre el editor; checkbox solo para lote (handoff 9 y 13)
 # ---------------------------------------------------------------------------
 def _sec_catalogo() -> None:
     df = catalog.variantes_admin()
     ov = overrides.get_catalogo_overrides()
+    st.markdown("<p class='muted'>Click en un producto para editarlo. Activá «Selección múltiple» "
+                "para las acciones en lote.</p>", unsafe_allow_html=True)
 
-    c1, c2, c3, c4 = st.columns([2, 1.2, 1.2, 1.2])
+    c1, c2, c3, c4, c5 = st.columns([2, 1.1, 1.1, 1.1, 1])
     busq = c1.text_input("Buscar", key="adm_busq", placeholder="código o nombre")
-    marca = c2.multiselect("Marca", sorted(df["marca"].dropna().unique()), key="adm_marca")
-    temporada = c3.multiselect("Temporada", sorted(df["temporada"].dropna().unique()), key="adm_temp")
-    rubro = c4.multiselect("Rubro", sorted(df["rubro"].dropna().unique()), key="adm_rubro")
+    marca = c2.multiselect("Marca", sorted(df["marca"].dropna().unique()), key="adm_marca", placeholder="Todas")
+    temporada = c3.multiselect("Temporada", sorted(df["temporada"].dropna().unique()), key="adm_temp",
+                               placeholder="Todas")
+    rubro = c4.multiselect("Rubro", sorted(df["rubro"].dropna().unique()), key="adm_rubro", placeholder="Todos")
+    multi = c5.toggle("Selección múltiple", key="adm_multi")
     sub = catalog.filtrar_variantes(df, {"marca": marca, "temporada": temporada, "rubro": rubro}, busq)
 
     prods = sub.groupby("producto_cod", sort=True).agg(
@@ -129,7 +161,6 @@ def _sec_catalogo() -> None:
     prods["sin_foto"] = ~prods["producto_cod"].map(fotos.tiene_fotos)
     prods["editado"] = prods["producto_cod"].map(lambda c: c in ov)
 
-    # Filtros rápidos tipo Woo, con contadores
     counts = {
         "Todos": len(prods),
         "Publicados": int(prods["publicado"].map(lambda v: v is not False).sum()),
@@ -151,61 +182,73 @@ def _sec_catalogo() -> None:
     elif pill == "Con override":
         prods = prods[prods["editado"]]
 
-    # Paginación ‹ x/y ›
     por_pag = 50
     n_pag = max(1, -(-len(prods) // por_pag))
     pag = min(st.session_state.get("adm_pag", 1), n_pag)
     page_df = prods.iloc[(pag - 1) * por_pag: pag * por_pag].copy()
     page_df["foto"] = page_df["producto_cod"].map(lambda c: fotos.foto_principal(c) if fotos.tiene_fotos(c) else "")
     page_df["pub"] = page_df["publicado"].map(PUB_LABELS.get)
-    page_df["dest"] = page_df["destacado"].map(lambda v: "⭐" if v else "")
-    page_df["ovr"] = page_df["editado"].map(lambda v: "✏️" if v else "")
+    page_df["dest"] = page_df["destacado"].map(lambda v: "★" if v else "")
+    page_df["ovr"] = page_df["editado"].map(lambda v: "editado" if v else "")
 
+    ver = st.session_state.get("adm_tabla_ver", 0)
     ev = st.dataframe(
-        page_df[["foto", "producto_cod", "nombre", "marca", "temporada", "pub", "dest", "stock", "variantes", "precio1", "ovr"]],
-        hide_index=True, use_container_width=True, key="adm_tabla",
-        on_select="rerun", selection_mode="multi-row",
+        page_df[["foto", "producto_cod", "nombre", "marca", "temporada", "pub", "dest", "stock",
+                 "variantes", "precio1", "ovr"]],
+        hide_index=True, use_container_width=True, key=f"adm_tabla_{'m' if multi else 's'}_{ver}",
+        on_select="rerun", selection_mode="multi-row" if multi else "single-row",
         column_config={
             "foto": st.column_config.ImageColumn("", width="small"),
-            "producto_cod": "Código", "nombre": "Nombre", "marca": "Marca", "temporada": "Temp.",
-            "pub": "Publicación", "dest": "⭐", "ovr": "✏️",
+            "producto_cod": "Código", "nombre": "Producto", "marca": "Marca", "temporada": "Temp.",
+            "pub": "Publicación", "dest": "★", "ovr": "Override",
             "stock": st.column_config.NumberColumn("Stock", format="%d"),
             "variantes": st.column_config.NumberColumn("Var.", format="%d"),
             "precio1": st.column_config.NumberColumn("Precio L1", format="$ %.0f"),
         })
     sel_cods = [page_df.iloc[i]["producto_cod"] for i in ev.selection.rows]
 
-    b = st.columns([1.3, 1, 1, 1, 1, 1.4, 2])
-    b[0].markdown(f"**{len(sel_cods)} seleccionado(s)**" if sel_cods
-                  else f"<span class='muted'>Seleccioná filas con el checkbox · pág {pag}/{n_pag}</span>",
-                  unsafe_allow_html=True)
-    if b[1].button("✏️ Editar", disabled=len(sel_cods) != 1, use_container_width=True):
-        _editar_producto(sel_cods[0])
-    if b[2].button("🙈 Ocultar", disabled=not sel_cods, use_container_width=True):
-        _aplicar_lote(sel_cods, {"publicado": False})
-    if b[3].button("⚪ Auto", disabled=not sel_cods, use_container_width=True):
-        _aplicar_lote(sel_cods, {"publicado": None})
-    if b[4].button("⭐ Destacar", disabled=not sel_cods, use_container_width=True):
-        _aplicar_lote(sel_cods, {"destacado": True})
-    if b[5].button("☆ Quitar destacado", disabled=not sel_cods, use_container_width=True):
-        _aplicar_lote(sel_cods, {"destacado": False})
-    with b[6]:
-        p1, p2, p3 = st.columns(3)
-        if p1.button("‹", disabled=pag <= 1):
-            st.session_state.adm_pag = pag - 1
-            st.rerun()
-        p2.markdown(f"<div style='text-align:center;padding-top:.4rem'>{pag} / {n_pag}</div>", unsafe_allow_html=True)
-        if p3.button("›", disabled=pag >= n_pag):
-            st.session_state.adm_pag = pag + 1
-            st.rerun()
+    if not multi and sel_cods:
+        # Click en el producto abre el editor (handoff 9)
+        st.session_state.adm_prod = sel_cods[0]
+        st.session_state.adm_tabla_ver = ver + 1
+        st.rerun()
 
-    with st.expander("Acciones sobre TODO lo filtrado"):
-        st.caption(f"Afecta a los {len(prods)} productos del filtro actual (todas las páginas).")
-        f1, f2 = st.columns(2)
-        if f1.button("🙈 Ocultar todo lo filtrado", disabled=prods.empty):
-            _aplicar_lote(list(prods["producto_cod"]), {"publicado": False})
-        if f2.button("⚪ Todo lo filtrado a automático", disabled=prods.empty):
-            _aplicar_lote(list(prods["producto_cod"]), {"publicado": None})
+    if multi and sel_cods:
+        with st.container(border=True, key="adm_lote"):
+            b = st.columns([1.6, 1, 1.2, 1, 1.4, 1.2])
+            b[0].markdown(f"<b style='color:#006786'>{len(sel_cods)} producto(s) seleccionados</b>",
+                          unsafe_allow_html=True)
+            if b[1].button("Ocultar", use_container_width=True):
+                _aplicar_lote(sel_cods, {"publicado": False})
+            if b[2].button("Volver a automático", use_container_width=True):
+                _aplicar_lote(sel_cods, {"publicado": None})
+            if b[3].button("Destacar", use_container_width=True):
+                _aplicar_lote(sel_cods, {"destacado": True})
+            if b[4].button("Quitar destacado", use_container_width=True):
+                _aplicar_lote(sel_cods, {"destacado": False})
+            if b[5].button("Deseleccionar", use_container_width=True):
+                st.session_state.adm_tabla_ver = ver + 1
+                st.rerun()
+
+    n1, n2, n3 = st.columns([4.4, 0.4, 0.4])
+    n1.markdown(f"<div class='muted'>{len(prods)} productos · página {pag} de {n_pag}</div>",
+                unsafe_allow_html=True)
+    if n2.button("‹", key="adm_prev", disabled=pag <= 1):
+        st.session_state.adm_pag = pag - 1
+        st.rerun()
+    if n3.button("›", key="adm_next", disabled=pag >= n_pag):
+        st.session_state.adm_pag = pag + 1
+        st.rerun()
+
+    if multi:
+        with st.expander("Acciones sobre TODO lo filtrado"):
+            st.markdown(f"<p class='muted'>Afecta a los {len(prods)} productos del filtro actual "
+                        "(todas las páginas).</p>", unsafe_allow_html=True)
+            f1, f2 = st.columns(2)
+            if f1.button("Ocultar todo lo filtrado", disabled=prods.empty):
+                _aplicar_lote(list(prods["producto_cod"]), {"publicado": False})
+            if f2.button("Todo lo filtrado a automático", disabled=prods.empty):
+                _aplicar_lote(list(prods["producto_cod"]), {"publicado": None})
 
 
 def _aplicar_lote(cods: list[str], campos: dict) -> None:
@@ -214,7 +257,8 @@ def _aplicar_lote(cods: list[str], campos: dict) -> None:
         return
     for cod in cods:
         overrides.set_catalogo_override(cod, campos, _admin_email())
-    st.toast(f"{len(cods)} producto(s) actualizados", icon="💾")
+    st.toast(f"{len(cods)} producto(s) actualizados")
+    st.session_state.adm_tabla_ver = st.session_state.get("adm_tabla_ver", 0) + 1
     st.rerun()
 
 
@@ -222,17 +266,23 @@ def _aplicar_lote(cods: list[str], campos: dict) -> None:
 def _confirmar_lote(cods: list[str], campos: dict) -> None:
     st.warning(f"Vas a aplicar **{campos}** a **{len(cods)} productos**. ¿Seguro?")
     c1, c2 = st.columns(2)
-    if c1.button("✅ Sí, aplicar", type="primary", use_container_width=True):
+    if c1.button("Sí, aplicar", type="primary", use_container_width=True):
         for cod in cods:
             overrides.set_catalogo_override(cod, campos, _admin_email())
-        st.toast(f"{len(cods)} producto(s) actualizados", icon="💾")
+        st.toast(f"{len(cods)} producto(s) actualizados")
+        st.session_state.adm_tabla_ver = st.session_state.get("adm_tabla_ver", 0) + 1
         st.rerun()
     if c2.button("Cancelar", use_container_width=True):
         st.rerun()
 
 
-@st.dialog("Editar producto", width="large")
+# ---------------------------------------------------------------------------
+# Editor de producto como PANTALLA (handoff 10, 11, 12, 14)
+# ---------------------------------------------------------------------------
 def _editar_producto(cod: str) -> None:
+    if st.button("← Catálogo"):
+        st.session_state.adm_prod = None
+        st.rerun()
     df = catalog.variantes_admin()
     filas = df[df["producto_cod"] == cod].sort_values(["color", "talle"])
     if filas.empty:
@@ -240,37 +290,54 @@ def _editar_producto(cod: str) -> None:
         return
     f0 = filas.iloc[0]
     o = overrides.get_catalogo_overrides().get(cod, {})
-    raw = catalog.load_variantes()   # stock BQ sin overrides, para referencia
-    stock_bq = {r["sku"]: int(r["stock"]) for _, r in raw[raw["producto_cod"] == cod].iterrows()}
+    raw = catalog.load_variantes()
+    raw_p = raw[raw["producto_cod"] == cod]
+    stock_bq = {r["sku"]: int(r["stock"]) for _, r in raw_p.iterrows()}
 
-    ci, cd = st.columns([1, 2.2])
+    st.markdown(f"## {f0['producto_nombre']}")
+    n_fotos = len(fotos.indice_fotos().get(cod.upper(), []))
+    st.markdown(f"<div class='card-sub'>{cod} · {f0['marca'] or ''} · {f0['temporada'] or ''} · "
+                f"{f0['rubro'] or ''} · {n_fotos} foto(s)"
+                + (f" · overrides por {o.get('updated_by')}" if o.get("updated_by") else "")
+                + "</div>", unsafe_allow_html=True)
+    st.markdown("")
+
+    ci, cd = st.columns([1, 2.6], gap="large")
     with ci:
         st.image(fotos.foto_principal(cod), use_container_width=True)
-        n_fotos = len(fotos.indice_fotos().get(cod.upper(), []))
-        st.caption(f"**{cod}** · {f0['marca']} · {f0['temporada']} · {f0['rubro']} · {n_fotos} foto(s)")
-        if o:
-            st.caption(f"✏️ Overrides por {o.get('updated_by', '?')}")
+        pub_idx = {None: 0, True: 1, False: 2}[o.get("publicado") if o.get("publicado") in (True, False) else None]
+        pub = st.radio("Publicación", PUB_OPCIONES, index=pub_idx, captions=PUB_CAPTIONS)
+        dest = st.checkbox("Destacado (primero en el catálogo)", value=bool(o.get("destacado")))
+        ub = st.number_input("Múltiplo de compra (U.B.)", min_value=0, step=1, value=int(o.get("ub") or 0),
+                             help="Cantidad mínima y múltiplo por variante, como el u.b del Woo. 0 = libre")
     with cd:
-        nombre = st.text_input("Nombre (vacío = Aleph)", value=o.get("nombre") or "",
-                               placeholder=str(f0["producto_nombre"]))
-        descr = st.text_area("Descripción (vacío = Aleph)", value=o.get("descripcion") or "", height=80)
-        pcols = st.columns(4)
+        nombre = st.text_input("Nombre", value=o.get("nombre") or "", placeholder=str(f0["producto_nombre"]))
+        st.markdown(f"<p class='muted' style='margin-top:-0.6rem'>Aleph: {raw_p.iloc[0]['producto_nombre']}"
+                    " · vacío = usa Aleph</p>", unsafe_allow_html=True)
+        descr = st.text_area("Descripción", value=o.get("descripcion") or "", height=70,
+                             placeholder=str(raw_p.iloc[0].get("descripcion") or "—"))
+        st.markdown("<div class='kicker' style='margin:.4rem 0 .2rem'>Precios por lista — "
+                    "manual pisa a Aleph solo en esa lista</div>", unsafe_allow_html=True)
         precios = {}
-        for i, n in enumerate((1, 2, 3, 4)):
-            aleph = float(raw[raw.producto_cod == cod].iloc[0][f"precio{n}"]) if not raw[raw.producto_cod == cod].empty else 0
-            precios[str(n)] = pcols[i].number_input(f"Precio L{n}", min_value=0.0, step=100.0,
-                                                    value=float((o.get("precios") or {}).get(str(n), 0)),
-                                                    help=f"Aleph: $ {aleph:,.0f} · 0 = usar Aleph")
-        r1, r2, r3 = st.columns([1.4, 1, 1])
-        pub = r1.radio("Publicación", list(PUB_LABELS.values()),
-                       index=list(PUB_LABELS).index(o.get("publicado", None) if o.get("publicado") in (True, False) else None),
-                       horizontal=True)
-        dest = r2.checkbox("⭐ Destacado", value=bool(o.get("destacado")))
-        ub = r3.number_input("Múltiplo (U.B.)", min_value=0, step=1, value=int(o.get("ub") or 0),
-                             help="Cantidad mínima y múltiplo de compra por variante (como el u.b del Woo). 0 = libre")
+        for n in (1, 2, 3, 4):
+            aleph = float(raw_p.iloc[0][f"precio{n}"]) if not raw_p.empty else 0
+            pc = st.columns([0.9, 1.1, 2], vertical_alignment="center")
+            pc[0].markdown(f"<b>Lista {n}</b><br><span class='muted'>Aleph: {_fmt(aleph) if aleph > 0 else '—'}</span>",
+                           unsafe_allow_html=True)
+            actual = (o.get("precios") or {}).get(str(n))
+            val = pc[1].number_input(f"Manual L{n}", min_value=0.0, step=100.0,
+                                     value=float(actual) if actual else None,
+                                     placeholder="usa Aleph", key=f"pe_{cod}_{n}",
+                                     label_visibility="collapsed")
+            precios[str(n)] = val
+            if val and val > 0:
+                pc[2].markdown(f"<span style='color:#006786'>Manual — pisa a Aleph para la lista {n}</span>",
+                               unsafe_allow_html=True)
+            else:
+                pc[2].markdown("<span class='muted'>Usa Aleph</span>", unsafe_allow_html=True)
 
-    st.markdown("**Variantes** — stock/precio manual pisan a Aleph (vacío = automático). "
-                "⚠ Con stock manual el sitio deja de validar contra el stock real.")
+    st.markdown("<div class='kicker' style='margin:.8rem 0 .2rem'>Variantes — stock y precio manual "
+                "pisan a Aleph (vacío = automático)</div>", unsafe_allow_html=True)
     vov = o.get("variantes") or {}
     vdf = pd.DataFrame([{
         "sku": r["sku"], "color": r["color"], "talle": r["talle"], "ean": r["ean"],
@@ -287,11 +354,22 @@ def _editar_producto(cod: str) -> None:
             "stock_aleph": st.column_config.NumberColumn("Stock Aleph", format="%d"),
             "stock_manual": st.column_config.NumberColumn("Stock manual", min_value=0, step=1),
             "oculta": st.column_config.CheckboxColumn("Oculta"),
-            "precio_manual_l1": st.column_config.NumberColumn("Precio manual L1", min_value=0.0, step=100.0, format="$ %.0f"),
+            "precio_manual_l1": st.column_config.NumberColumn("Precio manual L1", min_value=0.0, step=100.0,
+                                                              format="$ %.0f"),
         })
+    # Advertencia por variante con stock manual, con los dos números (handoff 14)
+    for _, r in ed.iterrows():
+        if pd.notna(r["stock_manual"]):
+            real = stock_bq.get(r["sku"], 0)
+            st.markdown(f"<div class='aviso-stock'>{r['sku']} tiene stock manual "
+                        f"({int(r['stock_manual'])} u.) sobre un stock real de {real}. Mientras esté en "
+                        "manual, el sitio deja de validar contra Aleph y puede vender de más.</div>",
+                        unsafe_allow_html=True)
 
-    g1, g2 = st.columns([1, 1])
-    if g1.button("💾 Guardar producto", type="primary", use_container_width=True):
+    st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:1rem 0 .6rem'></div>",
+                unsafe_allow_html=True)
+    g1, g2, g3, _ = st.columns([1, 1, 1.3, 2])
+    if g1.button("Guardar", type="primary", use_container_width=True):
         variantes = {}
         for _, r in ed.iterrows():
             v = {}
@@ -305,15 +383,18 @@ def _editar_producto(cod: str) -> None:
                 variantes[r["sku"]] = v
         overrides.set_catalogo_override(cod, {
             "nombre": nombre.strip() or None, "descripcion": descr.strip() or None,
-            "precios": {k: v for k, v in precios.items() if v > 0},
-            "publicado": {v: k for k, v in PUB_LABELS.items()}[pub],
-            "destacado": bool(dest), "ub": int(ub) or None, "variantes": variantes,
+            "precios": {k: float(v) for k, v in precios.items() if v and v > 0},
+            "publicado": PUB_VALOR[pub], "destacado": bool(dest),
+            "ub": int(ub) or None, "variantes": variantes,
         }, _admin_email())
-        st.toast(f"{cod} guardado", icon="💾")
+        st.toast(f"{cod} guardado")
         st.rerun()
-    if g2.button("🗑 Quitar TODOS los overrides", use_container_width=True):
+    if g2.button("Descartar", use_container_width=True):
+        st.session_state.adm_prod = None
+        st.rerun()
+    if g3.button("Quitar TODOS los overrides", use_container_width=True):
         overrides.quitar_catalogo_override(cod)
-        st.toast(f"{cod} volvió 100% a Aleph", icon="🗑")
+        st.toast(f"{cod} volvió 100% a Aleph")
         st.rerun()
 
 
@@ -339,7 +420,8 @@ def _sec_clientes() -> None:
         cod = u.get("cliente_cod")
         e = efectivos.get(int(cod)) if cod is not None else None
         rows.append({
-            "Email": u["email"], "Rol": u.get("rol", "cliente"), "Activo": "✅" if u.get("activo", True) else "⛔",
+            "Email": u["email"], "Rol": u.get("rol", "cliente"),
+            "Activo": "sí" if u.get("activo", True) else "no",
             "Cliente": cod, "Nombre": (e or {}).get("nombre_display", u.get("nombre_display", "")),
             "Lista": f"{e['lista_precios']} ({e['lista_origen']})" if e else "—",
             "Desc %": f"{e['descuento']:g} ({e['descuento_origen']})" if e else "—",
@@ -349,10 +431,10 @@ def _sec_clientes() -> None:
     ev = st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True,
                       key="adm_cli_tabla", on_select="rerun", selection_mode="single-row")
     sel = usuarios[ev.selection.rows[0]] if ev.selection.rows else None
-    c1, c2, _ = st.columns([1, 1, 2])
-    if c1.button("✏️ Editar seleccionado", disabled=sel is None):
+    c1, c2, _ = st.columns([1.2, 1, 2.4])
+    if c1.button("Editar seleccionado", disabled=sel is None):
         _editar_cliente(sel["email"])
-    if c2.button("➕ Nuevo usuario"):
+    if c2.button("Nuevo usuario"):
         _alta_usuario()
     if st.session_state.get("adm_pwd_msg"):
         e, p = st.session_state.pop("adm_pwd_msg")
@@ -370,8 +452,10 @@ def _editar_cliente(email: str) -> None:
     st.markdown(f"**{email}** · rol `{u.get('rol', 'cliente')}`")
     if cod is not None:
         e = catalog.get_cliente(int(cod)) or {}
-        st.caption(f"{e.get('nombre_display', cod)} · efectivo hoy: lista **{e.get('lista_precios')}** "
-                   f"({e.get('lista_origen')}) · desc **{e.get('descuento', 0):g}%** ({e.get('descuento_origen')})")
+        st.markdown(f"<p class='muted'>{e.get('nombre_display', cod)} · efectivo hoy: lista "
+                    f"<b>{e.get('lista_precios')}</b> ({e.get('lista_origen')}) · desc "
+                    f"<b>{e.get('descuento', 0):g}%</b> ({e.get('descuento_origen')})</p>",
+                    unsafe_allow_html=True)
         o = overrides.get_clientes_overrides().get(int(cod), {})
         with st.form(f"cli_{cod}"):
             usar_desc = st.checkbox("Override de descuento", value=o.get("descuento_pct") is not None)
@@ -380,24 +464,24 @@ def _editar_cliente(email: str) -> None:
             usar_lista = st.checkbox("Override de lista", value=bool(o.get("lista_precios")))
             lista = st.number_input("Lista de precios", 1, 10, int(o.get("lista_precios") or e.get("lista_precios") or 1))
             notas = st.text_input("Notas", value=o.get("notas") or "")
-            if st.form_submit_button("💾 Guardar", type="primary", use_container_width=True):
+            if st.form_submit_button("Guardar", type="primary", use_container_width=True):
                 overrides.set_cliente_override(int(cod), {
                     "descuento_pct": float(desc) if usar_desc else None,
                     "lista_precios": int(lista) if usar_lista else None,
                     "notas": notas.strip(),
                 }, _admin_email())
-                st.toast("Cliente guardado", icon="💾")
+                st.toast("Cliente guardado")
                 st.rerun()
     else:
-        st.info("Usuario sin cliente asociado (admin puro).")
+        st.markdown("<p class='muted'>Usuario sin cliente asociado (admin puro).</p>", unsafe_allow_html=True)
     b1, b2 = st.columns(2)
-    if b1.button("🔑 Resetear password", use_container_width=True):
+    if b1.button("Resetear password", use_container_width=True):
         pwd = auth.generar_password()
         auth.cambiar_password(email, pwd)
         auth.guardar_password_en_secret(email, pwd)
         st.session_state.adm_pwd_msg = (email, pwd)
         st.rerun()
-    if b2.button("⛔ Desactivar" if u.get("activo", True) else "✅ Activar", use_container_width=True):
+    if b2.button("Desactivar" if u.get("activo", True) else "Activar", use_container_width=True):
         db.usuario_ref(email).update({"activo": not u.get("activo", True)})
         st.rerun()
 
@@ -432,7 +516,7 @@ def _sec_pedidos() -> None:
     with st.spinner("Buscando pedidos..."):
         lista = pedidos.listar_pedidos(None)
     if not lista:
-        st.info("No hay pedidos todavía.")
+        st.markdown("<p class='muted'>No hay pedidos todavía.</p>", unsafe_allow_html=True)
         return
     counts = {"Todos": len(lista)}
     for e in ("confirmado", "procesado", "cancelado"):
@@ -443,7 +527,7 @@ def _sec_pedidos() -> None:
                     format_func=lambda p: f"{p} ({counts[p]})", default="Todos") or "Todos"
     c1, c2 = st.columns([2, 1])
     clientes = c1.multiselect("Cliente", sorted({f"{p['cliente_cod']} · {p['cliente_nombre']}" for p in lista}),
-                              key="adm_ped_cli")
+                              key="adm_ped_cli", placeholder="Todos")
     desde = c2.date_input("Desde", value=None, key="adm_ped_desde")
     filt = [p for p in lista
             if (pill == "Todos" or p["estado"] == pill.lower())
@@ -452,26 +536,26 @@ def _sec_pedidos() -> None:
     tabla = pd.DataFrame([{
         "N°": p["numero"], "Fecha": p.get("fecha_str", ""),
         "Cliente": f"{p['cliente_cod']} · {p['cliente_nombre'][:40]}",
-        "Unidades": p["unidades"], "Total": p["total"],
-        "Estado": f"{ESTADO_BADGE.get(p['estado'], ('⚪',))[0]} {p['estado']}",
-        "Email": "✅" if (p.get("email") or {}).get("enviado") else "—",
+        "Unidades": p["unidades"], "Total": p["total"], "Estado": p["estado"],
+        "Email": "sí" if (p.get("email") or {}).get("enviado") else "—",
     } for p in filt])
     ev = st.dataframe(tabla, hide_index=True, use_container_width=True, key="adm_ped_tabla",
                       on_select="rerun", selection_mode="single-row",
                       column_config={"Total": st.column_config.NumberColumn(format="$ %.0f")})
     if not ev.selection.rows:
-        st.caption("Click en una fila para ver el detalle.")
+        st.markdown("<p class='muted'>Click en una fila para ver el detalle.</p>", unsafe_allow_html=True)
         return
     p = filt[ev.selection.rows[0]]
 
-    st.markdown(f"### Pedido N° {p['numero']} &nbsp; {_badge_estado(p['estado'])}", unsafe_allow_html=True)
-    st.markdown(f"{p['fecha_str']} · **{p['cliente_nombre']}** (cliente {p['cliente_cod']}) · "
-                f"{p['usuario_email']} · {p['unidades']} u. · **$ {p['total']:,.0f}** "
-                f"(desc. {p['descuento_pct']:g}%)".replace(",", "."))
+    st.markdown(f"### Pedido N° {p['numero']} &nbsp; {_tag(p['estado'])}", unsafe_allow_html=True)
+    st.markdown(f"<p class='muted'>{p['fecha_str']} · <b>{p['cliente_nombre']}</b> (cliente {p['cliente_cod']}) · "
+                f"{p['usuario_email']} · {p['unidades']} u. · <b>{_fmt(p['total'])}</b> "
+                f"(desc. {p['descuento_pct']:g}%)</p>", unsafe_allow_html=True)
     if p.get("observaciones"):
-        st.caption(f"Obs: {p['observaciones']}")
+        st.markdown(f"<p class='muted'>Obs: {p['observaciones']}</p>", unsafe_allow_html=True)
     for h in p.get("historial", []):
-        st.caption(f"🕘 {h['en'].astimezone(TZ):%d/%m %H:%M} — **{h['estado']}** por {h['por']}")
+        st.markdown(f"<p class='muted'>{h['en'].astimezone(TZ):%d/%m %H:%M} — <b>{h['estado']}</b> "
+                    f"por {h['por']}</p>", unsafe_allow_html=True)
 
     items = pd.DataFrame(p["items"])
     items["foto"] = items["producto_cod"].map(lambda c: fotos.foto_principal(c) if fotos.tiene_fotos(c) else "")
@@ -486,17 +570,17 @@ def _sec_pedidos() -> None:
         if cols[i].button(f"Marcar {nuevo}", key=f"est_{p['numero']}_{nuevo}",
                           type="primary" if nuevo == "procesado" else "secondary", use_container_width=True):
             pedidos.cambiar_estado(p["numero"], nuevo, _admin_email())
-            st.toast(f"Pedido {p['numero']} → {nuevo}", icon="✅")
+            st.toast(f"Pedido {p['numero']} → {nuevo}")
             st.rerun()
-    if cols[2].button("📧 Reenviar email", key=f"mail_{p['numero']}", use_container_width=True):
+    if cols[2].button("Reenviar email", key=f"mail_{p['numero']}", use_container_width=True):
         try:
             data = pedidos.descargar_backup(p["xlsx_gcs_path"]) if p.get("xlsx_gcs_path") else pedidos.generar_excel(p)
             res = email_notif.enviar_confirmacion(p, data, p["xlsx_filename"])
             st.success(f"Reenviado a {', '.join(res['destinatarios'])}") if res["enviado"] else st.error(res["error"])
         except Exception as e:  # noqa: BLE001
             st.error(str(e))
-    cols[3].download_button("⬇️ Excel", data=(pedidos.descargar_backup(p["xlsx_gcs_path"])
-                                              if p.get("xlsx_gcs_path") else pedidos.generar_excel(p)),
+    cols[3].download_button("Excel", data=(pedidos.descargar_backup(p["xlsx_gcs_path"])
+                                           if p.get("xlsx_gcs_path") else pedidos.generar_excel(p)),
                             file_name=p["xlsx_filename"], key=f"dl_{p['numero']}", use_container_width=True)
 
 
@@ -506,17 +590,18 @@ def _sec_pedidos() -> None:
 def _sec_config() -> None:
     cfg = overrides.get_config()
     with st.form("config_global"):
-        email_to = st.text_input("Email(s) de Chimola que reciben pedidos (coma; vacío = default del deploy)",
+        email_to = st.text_input("Email(s) de Lautin que reciben pedidos (coma; vacío = default del deploy)",
                                  value=cfg.get("pedidos_email_to") or "")
-        banner = st.text_area("Banner para clientes (vacío = no se muestra)", value=cfg.get("banner_texto") or "", height=80)
+        banner = st.text_area("Banner para clientes (vacío = no se muestra)", value=cfg.get("banner_texto") or "",
+                              height=80)
         c1, c2, c3 = st.columns(3)
         descvta = c1.checkbox("Aplicar descvta de Aleph (como el Woo)", value=bool(cfg.get("aplicar_descvta")))
         minimo = c2.number_input("Mínimo de unidades por pedido (0 = sin mínimo)", min_value=0, step=1,
                                  value=int(cfg.get("minimo_pedido_unidades") or 0))
         iva = c3.number_input("IVA % informativo (0 = ocultar)", min_value=0.0, max_value=30.0, step=0.5,
                               value=float(cfg.get("iva_pct") or 0),
-                              help="Las listas de Aleph son sin IVA. Se muestra como línea aparte en carrito/Excel/email.")
-        if st.form_submit_button("💾 Guardar configuración", type="primary"):
+                              help="Las listas de Aleph son sin IVA. Se muestra como línea aparte.")
+        if st.form_submit_button("Guardar configuración", type="primary"):
             overrides.set_config({
                 "pedidos_email_to": email_to.strip() or None,
                 "banner_texto": banner.strip(),
@@ -524,7 +609,16 @@ def _sec_config() -> None:
                 "minimo_pedido_unidades": int(minimo) or None,
                 "iva_pct": float(iva),
             }, _admin_email())
-            st.toast("Configuración guardada", icon="💾")
+            st.toast("Configuración guardada")
             st.rerun()
+    st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:.8rem 0 .6rem'></div>",
+                unsafe_allow_html=True)
+    if st.button("Actualizar catálogo ahora (BQ + fotos)"):
+        with st.spinner("Refrescando catálogo e índice de fotos..."):
+            catalog.load_variantes(force=True)
+            fotos.indice_fotos(force=True)
+            overrides.invalidar()
+        st.toast("Catálogo actualizado")
     if appconfig.EMAIL_OVERRIDE_TO:
-        st.caption(f"⚠ DEV: todos los emails se redirigen a {appconfig.EMAIL_OVERRIDE_TO}.")
+        st.markdown(f"<p class='muted'>DEV: todos los emails se redirigen a {appconfig.EMAIL_OVERRIDE_TO}.</p>",
+                    unsafe_allow_html=True)

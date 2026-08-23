@@ -84,10 +84,18 @@ def set_catalogo_override(producto_cod: str, campos: dict, por: str) -> None:
                 limpio[sku] = v
         campos["variantes"] = limpio
     ref = db.catalogo_overrides_col().document(str(producto_cod))
+    # `precios` y `variantes` se REEMPLAZAN completos (merge fusionaría por clave
+    # y no se podría quitar un override de una lista/variante).
     variantes = campos.pop("variantes", None)
+    precios = campos.pop("precios", None) if "precios" in campos else "__keep__"
     ref.set(_audit(campos, por), merge=True)
+    reemplazos = {}
     if variantes is not None:
-        ref.update({"variantes": variantes})   # update reemplaza el map completo (merge lo fusionaría)
+        reemplazos["variantes"] = variantes
+    if precios != "__keep__":
+        reemplazos["precios"] = precios or {}
+    if reemplazos:
+        ref.update(reemplazos)
     invalidar("catalogo")
     log.info("Override catálogo %s por %s: %s variantes=%s", producto_cod, por, campos,
              list(variantes) if variantes else None)

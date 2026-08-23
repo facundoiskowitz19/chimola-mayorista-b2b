@@ -138,12 +138,25 @@ Navegador ──cookie JWT (24h)──▶ Streamlit (Cloud Run, --session-affini
   custom, backorders forzados (stock no bloquea), pedidos partidos en paquetes
   (Order Splitter) — esto último queda como candidato de fase futura.
 
-### Branding (impronta Lautin, tomada de lautin.com.ar)
+### Identidad visual — Broadsheet (handoff Claude Design, 2026-08-23)
 
-- Tokens del WP (Elementor global): fuente **Lato**, negro cálido `#1C1C1A`,
-  taupe `#AC9B91`, gris fondo `#F2F2F2`, gris texto `#7A7A7A`. Botones pill
-  negros en mayúscula ("INGRESAR AHORA"). Top bar negra "Venta exclusiva
-  mayorista + WhatsApp", header con logo + tabs CHIMOLA/LIMA, footer negro.
+- **Reemplazó a la identidad Lautin/Lato** (decisión del usuario). Fuente única
+  del look: `design_handoff_mayorista_ux/` (mocks `Cliente.dc.html` /
+  `Admin.dc.html`, README con los 15 cambios, tokens en `_ds/.../styles.css`).
+- Tokens: **Source Serif 4**, papel `#f3f2f2`, texto `#201e1d`, cian `#0088b0`
+  interactivo (pressed `#006786`, tinte `#e9f8ff`), magenta `#d6006c` SOLO
+  errores/cancelado, radio 2px, kickers uppercase 12px ls .14em. Sin emojis.
+- Estructura: **sin sidebar** (nav horizontal `st.container(key="lt_nav")` con
+  subrayado cian por CSS dinámico), facetas + chips, panel de carga en línea
+  en el catálogo, matriz color×talle (`matriz_variantes`), carrito con filas
+  `st.columns` + callbacks, admin con editor de producto como pantalla
+  (`adm_prod` en session_state, ya NO es `st.dialog`).
+- Gotchas nuevos: los chips mutan keys de widgets SOLO vía `on_click` callbacks
+  (correr antes del script); `st.dataframe` single-row → abrir el editor
+  requiere bump de la key de la tabla para limpiar la selección al volver;
+  `st.number_input(value=None, placeholder=...)` es el patrón "vacío = usa
+  Aleph" (se eliminó el convenio del 0); en `set_catalogo_override` los maps
+  `precios` y `variantes` se REEMPLAZAN completos (update, no merge).
 - Assets en `static/` bajados del sitio público (no hizo falta SFTP):
   `logo_lautin.png`, `banner_1.jpg` (Chimola "ØN THE GO_"), `banner_2.jpg`
   (Lima AW26). Si Lautin cambia el slider, reemplazar los jpg (máx 1600px).
