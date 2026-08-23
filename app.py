@@ -979,6 +979,11 @@ def main() -> None:
     tok = st.session_state.pop("pending_cookie", None)
     if tok:
         set_cookie(tok)
+    # Deep-link al editor de producto del admin (columna "Editar →" / URL compartible)
+    if "prod" in st.query_params and st.session_state.user.get("rol") == "admin":
+        st.session_state.adm_prod = st.query_params["prod"]
+        st.session_state.page = "admin"
+        st.query_params.clear()
     header()
     nav()
     page = st.session_state.get("page", "catalogo")

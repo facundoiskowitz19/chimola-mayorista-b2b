@@ -1,0 +1,139 @@
+- generic [ref=e1]:
+  - banner [ref=e2]
+  - generic [ref=e9]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: Venta exclusiva mayorista
+      - generic [ref=e15]:
+        - text: WhatsApp
+        - link "+54 9 11 3680 8217" [ref=e16] [cursor=pointer]:
+          - /url: https://wa.me/5491136808217
+    - generic [ref=e17]:
+      - img "Lautin" [ref=e26]
+      - radiogroup "button group" [ref=e33]:
+        - button [ref=e34] [cursor=pointer]:
+          - paragraph [ref=e36]: Todo
+        - button [ref=e37] [cursor=pointer]:
+          - paragraph [ref=e39]: Chimola
+        - button [ref=e40] [cursor=pointer]:
+          - paragraph [ref=e42]: Lima
+      - generic [ref=e43]: Admin (sin cliente)Rol admin · sin cliente
+    - generic [ref=e54]:
+      - button [ref=e61] [cursor=pointer]:
+        - paragraph [ref=e63]: Catálogo
+      - button [ref=e70] [cursor=pointer]:
+        - paragraph [ref=e72]: Carrito · 0 u.
+      - button [ref=e79] [cursor=pointer]:
+        - paragraph [ref=e81]: Mis pedidos
+      - button [ref=e88] [cursor=pointer]:
+        - paragraph [ref=e90]: Administración · 2 sin procesar
+      - generic [ref=e91]: Catálogo actualizado hace 0 min
+      - button [ref=e105] [cursor=pointer]:
+        - paragraph [ref=e107]: Salir
+    - button [ref=e110] [cursor=pointer]:
+      - paragraph [ref=e112]: ← Catálogo
+    - heading "Mochila Soft Rainbow" [level=2] [ref=e117]
+    - generic [ref=e119]: M211 · Chimola · DDN25 · Mochilas · 16 foto(s)
+    - generic [ref=e123]:
+      - generic [ref=e127]:
+        - generic [ref=e130]:
+          - button "Fullscreen" [ref=e135] [cursor=pointer]
+          - img "0" [ref=e141]
+        - generic [ref=e143]:
+          - paragraph [ref=e146]: Publicación
+          - radiogroup "Publicación" [ref=e147] [cursor=pointer]:
+            - generic [ref=e148]:
+              - radio "Automático Visible si tiene stock (lo decide Aleph)" [checked]
+              - generic [ref=e151]:
+                - paragraph [ref=e153]: Automático
+                - paragraph [ref=e155]: Visible si tiene stock (lo decide Aleph)
+            - generic [ref=e156]:
+              - radio "Publicado Visible — igual exige stock > 0, nunca se vende sin stock"
+              - generic [ref=e159]:
+                - paragraph [ref=e161]: Publicado
+                - paragraph [ref=e163]: Visible — igual exige stock > 0, nunca se vende sin stock
+            - generic [ref=e164]:
+              - radio "Oculto Nunca visible para clientes"
+              - generic [ref=e167]:
+                - paragraph [ref=e169]: Oculto
+                - paragraph [ref=e171]: Nunca visible para clientes
+        - generic [ref=e174] [cursor=pointer]:
+          - checkbox "Destacado (primero en el catálogo)"
+          - paragraph [ref=e179]: Destacado (primero en el catálogo)
+        - generic [ref=e181]:
+          - paragraph [ref=e184]: Múltiplo de compra (U.B.)
+          - generic [ref=e191]:
+            - spinbutton "Múltiplo de compra (U.B.)" [ref=e194]: "0"
+            - generic [ref=e195]:
+              - button [disabled] [ref=e196]
+              - button [ref=e199] [cursor=pointer]
+      - generic [ref=e205]:
+        - generic [ref=e207]:
+          - paragraph [ref=e210]: Nombre
+          - textbox "Nombre" [ref=e213]:
+            - /placeholder: Mochila Soft Rainbow
+        - paragraph [ref=e217]: "Aleph: Mochila Soft Rainbow · vacío = usa Aleph"
+        - generic [ref=e219]:
+          - paragraph [ref=e222]: Descripción
+          - textbox "Descripción" [ref=e225]:
+            - /placeholder: "Nuestra mochila Soft Rainbow está confeccionada en un material milky súper canchero (¡e Impermeable!) que te va a encantar. Además, sus manijas de arcoíris y detalles de nubes le dan el toque chimola que buscabas.\nEncontrála en todas sus variantes. \nAncho: 23 cm\nAlto: 27 cm \nProfundidad: 10 cm"
+        - generic [ref=e226]: Precios por lista — manual pisa a Aleph solo en esa lista
+        - generic [ref=e230]:
+          - paragraph [ref=e238]: "Lista 1Aleph: $ 32.900"
+          - generic [ref=e245]:
+            - spinbutton "Manual L1" [ref=e248]
+            - generic [ref=e249]:
+              - button [disabled] [ref=e250]
+              - button [disabled] [ref=e253]
+          - paragraph [ref=e263]: Usa Aleph
+        - generic [ref=e264]:
+          - paragraph [ref=e272]: "Lista 2Aleph: $ 36.190"
+          - generic [ref=e279]:
+            - spinbutton "Manual L2" [ref=e282]
+            - generic [ref=e283]:
+              - button [disabled] [ref=e284]
+              - button [disabled] [ref=e287]
+          - paragraph [ref=e297]: Usa Aleph
+        - generic [ref=e298]:
+          - paragraph [ref=e306]: "Lista 3Aleph: —"
+          - generic [ref=e313]:
+            - spinbutton "Manual L3" [ref=e316]
+            - generic [ref=e317]:
+              - button [disabled] [ref=e318]
+              - button [disabled] [ref=e321]
+          - paragraph [ref=e331]: Usa Aleph
+        - generic [ref=e332]:
+          - paragraph [ref=e340]: "Lista 4Aleph: $ 65.800"
+          - generic [ref=e347]:
+            - spinbutton "Manual L4" [ref=e350]
+            - generic [ref=e351]:
+              - button [disabled] [ref=e352]
+              - button [disabled] [ref=e355]
+          - paragraph [ref=e365]: Usa Aleph
+    - generic [ref=e366]: Variantes — stock y precio manual pisan a Aleph (vacío = automático)
+    - generic [ref=e374]:
+      - button "Download as CSV" [ref=e377] [cursor=pointer]
+      - button "Search" [ref=e383] [cursor=pointer]
+      - button "Fullscreen" [ref=e389] [cursor=pointer]
+    - generic [ref=e405]:
+      - button [ref=e412] [cursor=pointer]:
+        - paragraph [ref=e414]: Guardar
+      - button [ref=e421] [cursor=pointer]:
+        - paragraph [ref=e423]: Descartar
+      - button [ref=e430] [cursor=pointer]:
+        - paragraph [ref=e432]: Quitar TODOS los overrides
+    - generic [ref=e437]:
+      - generic [ref=e438]:
+        - heading "Nuestras marcas" [level=5] [ref=e440]
+        - text: ChimolaLima
+      - generic [ref=e442]:
+        - heading "Contacto" [level=5] [ref=e444]
+        - text: +54 9 11 3680 8217
+        - link "@chimolaoficial" [ref=e446] [cursor=pointer]:
+          - /url: https://instagram.com/chimolaoficial
+        - text: ·
+        - link "@lima.oficial" [ref=e447] [cursor=pointer]:
+          - /url: https://instagram.com/lima.oficial
+      - generic [ref=e448]:
+        - heading "Información" [level=5] [ref=e450]
+        - text: "Los pedidos se confirman por email con el Excel adjunto. Sin pago online: Lautin coordina entrega y facturación."
+      - generic [ref=e452]: © 2026 Lautin Accesorios. Todos los derechos reservados. · Ambiente DEV

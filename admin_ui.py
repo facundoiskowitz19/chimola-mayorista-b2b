@@ -147,8 +147,9 @@ def _sec_inicio() -> None:
 def _sec_catalogo() -> None:
     df = catalog.variantes_admin()
     ov = overrides.get_catalogo_overrides()
-    st.markdown("<p class='muted'>Click en un producto para editarlo. Activá «Selección múltiple» "
-                "para las acciones en lote.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='muted'>Abrí un producto con <b>Editar →</b> (o seleccionando la fila con el "
+                "círculo de la izquierda). Activá «Selección múltiple» para las acciones en lote.</p>",
+                unsafe_allow_html=True)
 
     c1, c2, c3, c4, c5 = st.columns([2, 1.1, 1.1, 1.1, 1])
     busq = c1.text_input("Buscar", key="adm_busq", placeholder="código o nombre")
@@ -198,11 +199,12 @@ def _sec_catalogo() -> None:
     page_df["pub"] = page_df["publicado"].map(PUB_LABELS.get)
     page_df["dest"] = page_df["destacado"].map(lambda v: "★" if v else "")
     page_df["ovr"] = page_df["editado"].map(lambda v: "editado" if v else "")
+    page_df["editar"] = "?prod=" + page_df["producto_cod"]   # deep-link al editor (abre en otra pestaña)
 
     ver = st.session_state.get("adm_tabla_ver", 0)
     ev = st.dataframe(
         page_df[["foto", "producto_cod", "nombre", "marca", "temporada", "pub", "dest", "stock",
-                 "variantes", "precio1", "ovr"]],
+                 "variantes", "precio1", "ovr", "editar"]],
         hide_index=True, use_container_width=True, key=f"adm_tabla_{'m' if multi else 's'}_{ver}",
         on_select="rerun", selection_mode="multi-row" if multi else "single-row",
         column_config={
@@ -212,6 +214,7 @@ def _sec_catalogo() -> None:
             "stock": st.column_config.NumberColumn("Stock", format="%d"),
             "variantes": st.column_config.NumberColumn("Var.", format="%d"),
             "precio1": st.column_config.NumberColumn("Precio L1", format="$ %.0f"),
+            "editar": st.column_config.LinkColumn("", display_text="Editar →", width="small"),
         })
     sel_cods = [page_df.iloc[i]["producto_cod"] for i in ev.selection.rows]
 
@@ -223,18 +226,22 @@ def _sec_catalogo() -> None:
 
     if multi and sel_cods:
         with st.container(border=True, key="adm_lote"):
-            b = st.columns([1.6, 1, 1.2, 1, 1.4, 1.2])
+            b = st.columns([1.6, 0.9, 1, 1.2, 1, 1.4, 1.2])
             b[0].markdown(f"<b style='color:#006786'>{len(sel_cods)} producto(s) seleccionados</b>",
                           unsafe_allow_html=True)
-            if b[1].button("Ocultar", use_container_width=True):
+            if b[1].button("Editar", disabled=len(sel_cods) != 1, use_container_width=True):
+                st.session_state.adm_prod = sel_cods[0]
+                st.session_state.adm_tabla_ver = ver + 1
+                st.rerun()
+            if b[2].button("Ocultar", use_container_width=True):
                 _aplicar_lote(sel_cods, {"publicado": False})
-            if b[2].button("Volver a automático", use_container_width=True):
+            if b[3].button("Volver a automático", use_container_width=True):
                 _aplicar_lote(sel_cods, {"publicado": None})
-            if b[3].button("Destacar", use_container_width=True):
+            if b[4].button("Destacar", use_container_width=True):
                 _aplicar_lote(sel_cods, {"destacado": True})
-            if b[4].button("Quitar destacado", use_container_width=True):
+            if b[5].button("Quitar destacado", use_container_width=True):
                 _aplicar_lote(sel_cods, {"destacado": False})
-            if b[5].button("Deseleccionar", use_container_width=True):
+            if b[6].button("Deseleccionar", use_container_width=True):
                 st.session_state.adm_tabla_ver = ver + 1
                 st.rerun()
 
