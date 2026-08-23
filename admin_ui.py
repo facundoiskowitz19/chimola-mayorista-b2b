@@ -59,13 +59,19 @@ def page_admin() -> None:
     t1.markdown("## Administración")
     t2.markdown("<p class='muted' style='text-align:right'>BigQuery es de solo lectura · "
                 "lo que edites vive en Firestore y pisa a Aleph</p>", unsafe_allow_html=True)
+    # Volver del editor debe caer en Catálogo (adm_nav es widget: si no se
+    # renderizó en el run anterior, Streamlit lo resetea → lo fijamos acá).
+    if "adm_nav_forzar" in st.session_state:
+        st.session_state.adm_nav = st.session_state.pop("adm_nav_forzar")
     conteo = pedidos.contar_por_estado()
     sin_procesar = conteo.get("confirmado", 0)
     labels = {"inicio": "Inicio", "catalogo": "Catálogo", "clientes": "Clientes",
               "pedidos": "Pedidos" + (f" · {sin_procesar} sin procesar" if sin_procesar else ""),
               "config": "Config"}
+    if "adm_nav" not in st.session_state:
+        st.session_state.adm_nav = "inicio"
     sec = st.segmented_control("Sección", SECCIONES, format_func=lambda s: labels[s],
-                               key="adm_nav", label_visibility="collapsed", default="inicio")
+                               key="adm_nav", label_visibility="collapsed")
     st.markdown("")
     {"inicio": _sec_inicio, "catalogo": _sec_catalogo, "clientes": _sec_clientes,
      "pedidos": _sec_pedidos, "config": _sec_config}.get(sec or "inicio", _sec_inicio)()
@@ -169,8 +175,10 @@ def _sec_catalogo() -> None:
         "Sin foto": int(prods["sin_foto"].sum()),
         "Con override": int(prods["editado"].sum()),
     }
+    if "adm_pill" not in st.session_state:
+        st.session_state.adm_pill = "Todos"
     pill = st.pills("Filtro rápido", list(counts), key="adm_pill", label_visibility="collapsed",
-                    format_func=lambda p: f"{p} ({counts[p]})", default="Todos") or "Todos"
+                    format_func=lambda p: f"{p} ({counts[p]})") or "Todos"
     if pill == "Publicados":
         prods = prods[prods["publicado"].map(lambda v: v is not False)]
     elif pill == "Ocultos":
@@ -282,6 +290,7 @@ def _confirmar_lote(cods: list[str], campos: dict) -> None:
 def _editar_producto(cod: str) -> None:
     if st.button("← Catálogo"):
         st.session_state.adm_prod = None
+        st.session_state.adm_nav_forzar = "catalogo"
         st.rerun()
     df = catalog.variantes_admin()
     filas = df[df["producto_cod"] == cod].sort_values(["color", "talle"])
@@ -391,6 +400,7 @@ def _editar_producto(cod: str) -> None:
         st.rerun()
     if g2.button("Descartar", use_container_width=True):
         st.session_state.adm_prod = None
+        st.session_state.adm_nav_forzar = "catalogo"
         st.rerun()
     if g3.button("Quitar TODOS los overrides", use_container_width=True):
         overrides.quitar_catalogo_override(cod)
