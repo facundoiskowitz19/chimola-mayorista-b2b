@@ -34,11 +34,14 @@ def cuerpo_pedido(pedido: dict) -> str:
         f"Usuario: {pedido['usuario_email']}",
         "",
         f"Unidades: {pedido['unidades']}",
-        f"Subtotal (lista {pedido['lista_precios']}): {_fmt(pedido['subtotal'])}",
+        f"Subtotal (lista {pedido['lista_precios']}, sin IVA): {_fmt(pedido['subtotal'])}",
         f"Descuento cabecera {pedido['descuento_pct']:g}%: -{_fmt(pedido['descuento_monto'])}",
         f"TOTAL: {_fmt(pedido['total'])}",
-        "",
     ]
+    if float(pedido.get("iva_pct") or 0) > 0:
+        lineas += [f"IVA {pedido['iva_pct']:g}%: {_fmt(pedido.get('iva_monto', 0))}",
+                   f"TOTAL c/IVA: {_fmt(pedido.get('total_con_iva', 0))}"]
+    lineas.append("")
     if pedido.get("observaciones"):
         lineas += ["Observaciones:", pedido["observaciones"], ""]
     lineas.append("Detalle:")

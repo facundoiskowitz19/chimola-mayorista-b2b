@@ -87,7 +87,7 @@ Navegador ──cookie JWT (24h)──▶ Streamlit (Cloud Run, --session-affini
 | `pedidos.py` | Carrito persistido en `carritos/{email}`; `confirmar_pedido()` = validar stock → numerador (`contadores/pedidos`, transacción) → Excel → GCS → Firestore → email → vaciar carrito. |
 | `auth.py` | bcrypt, JWT HS256, rate limit 5 intentos/15 min por email (`login_attempts`). |
 | `overrides.py` | **Fase 2.** Capa administrable en Firestore que PISA lo de BQ: `catalogo_overrides` (publicado/destacado/nombre/descripcion/precios por lista), `clientes_overrides` (descuento/lista), `config/global`. Cache 60 s, auditoría `updated_by`. Specs en `SPECS.md`. |
-| `admin_ui.py` | **Fase 2.** Sección Administración (rol admin): Catálogo / Clientes / Pedidos (estados+historial, reenviar email) / Config. Solo escribe overrides, nunca BQ. |
+| `admin_ui.py` | **Fase 3.** Administración estilo wp-admin: nav con contadores, Inicio (KPIs `_kpis`), Catálogo (pills + selección multi-fila + lote + modal de producto con variantes editables: stock manual/oculta/precio por variante + U.B.), Clientes (efectivos batch + modales), Pedidos (click en fila, badges, timeline), Config (+IVA %). Solo escribe overrides, nunca BQ. Gotcha: los `st.dialog` se abren SOLO desde botones (no desde on_select, se reabrirían en cada rerun). |
 | `compra_rapida.py` | **Fase 2.** Helpers puros de compra rápida: parser de códigos pegados (SKU/EAN,cant) y armado de items. La página vive en `app.py`. |
 | `scripts/seed_usuarios.py` | Crea usuarios de prueba; passwords en Secret Manager `mayorista-seed-passwords`. |
 | `deploy/setup_infra.sh <env>` | Infra idempotente (SA, grants, bucket, Firestore + índice, secrets). |
@@ -124,6 +124,19 @@ Navegador ──cookie JWT (24h)──▶ Streamlit (Cloud Run, --session-affini
 - **Firestore `listar_pedidos`** (where cliente_cod + order by confirmed_at)
   necesita índice compuesto (lo crea `setup_infra.sh`).
 - Cloud Run necesita `--session-affinity` (websockets de Streamlit).
+- **Las listas mayoristas de Aleph son SIN IVA**: la NP del ERP suma 21%
+  (verificado: NP Kinderland = subtotal − desc + 21%). El sitio lo muestra como
+  líneas informativas (config `iva_pct`, default 21) en carrito/Excel/email.
+- **Overrides por variante** (`catalogo_overrides.{prod}.variantes.{sku}`):
+  stock manual REEMPLAZA al neto BQ (y `stock.py` lo respeta al confirmar —
+  el sitio deja de proteger contra oversell en esa variante), `oculta` la saca
+  del catálogo, `precios{lista}` pisa al producto. `ub` (producto) = múltiplo
+  mínimo de compra, como el ACF `u.b` del Woo.
+- Del relevamiento del Woo actual (2026-08-23): los mayoristas compran por
+  **curva completa** (variación `curva-completa` con mínimos `u.b`), descuento
+  % por cliente como fee negativo, checkout sin pago, sin estados de pedido
+  custom, backorders forzados (stock no bloquea), pedidos partidos en paquetes
+  (Order Splitter) — esto último queda como candidato de fase futura.
 
 ### Branding (impronta Lautin, tomada de lautin.com.ar)
 

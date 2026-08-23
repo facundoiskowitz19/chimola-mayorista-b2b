@@ -334,9 +334,15 @@ def sidebar() -> None:
         if st.button("📦 Mis pedidos", use_container_width=True,
                      type="primary" if page == "pedidos" else "secondary"):
             ir("pedidos")
-        if user.get("rol") == "admin" and st.button("🛠 Administración", use_container_width=True,
-                                                    type="primary" if page == "admin" else "secondary"):
-            ir("admin")
+        if user.get("rol") == "admin":
+            try:
+                sin_procesar = pedidos.contar_por_estado().get("confirmado", 0)
+            except Exception:  # noqa: BLE001
+                sin_procesar = 0
+            label_admin = "🛠 Administración" + (f" ({sin_procesar})" if sin_procesar else "")
+            if st.button(label_admin, use_container_width=True,
+                         type="primary" if page == "admin" else "secondary"):
+                ir("admin")
         st.divider()
         if st.button("Cerrar sesión", use_container_width=True):
             logout()
@@ -469,7 +475,8 @@ def page_producto() -> None:
             st.error(f"Este producto no tiene precio cargado en la lista {cli['lista_precios']}. "
                      "No se puede pedir — consultá a Chimola.")
         else:
-            st.markdown(f"### {fmt_money(prod['precio'])} <span class='muted'>precio lista {cli['lista_precios']}</span>",
+            iva_tag = " + IVA" if float(overrides.get_config().get("iva_pct") or 0) > 0 else ""
+            st.markdown(f"### {fmt_money(prod['precio'])} <span class='muted'>precio lista {cli['lista_precios']}{iva_tag}</span>",
                         unsafe_allow_html=True)
             if cli.get("descuento"):
                 st.caption(f"Con tu descuento cabecera ({cli['descuento']:g}%): "
@@ -478,6 +485,9 @@ def page_producto() -> None:
             st.markdown(f"<p class='muted'>{prod['descripcion']}</p>", unsafe_allow_html=True)
 
         st.markdown("#### Variantes y cantidades")
+        ub = int(prod.get("ub") or 0)   # múltiplo/mínimo por variante (U.B. del admin)
+        if ub > 1:
+            st.caption(f"📦 Este producto se vende en múltiplos de **{ub} unidades** por variante.")
         ver = st.session_state.get("qty_ver", 0)
         seleccion = []
         por_color: dict[str, list[dict]] = {}
@@ -490,9 +500,12 @@ def page_producto() -> None:
                 cc = st.columns(4)
                 for k, v in enumerate(fila):
                     with cc[k]:
+                        paso = ub if ub > 1 else 1
+                        tope = (int(v["stock"]) // paso) * paso
                         q = st.number_input(f"T {v['talle']} · stock {int(v['stock'])}", min_value=0,
-                                            max_value=int(v["stock"]), value=0, step=1,
-                                            key=f"qty_{ver}_{v['sku']}", disabled=prod["precio"] is None)
+                                            max_value=max(tope, 0), value=0, step=paso,
+                                            key=f"qty_{ver}_{v['sku']}",
+                                            disabled=prod["precio"] is None or tope <= 0)
                         if q > 0:
                             seleccion.append((v, int(q)))
         total_sel = sum(q for _, q in seleccion)
@@ -579,14 +592,20 @@ def page_carrito() -> None:
         guardar_cart(nuevos)
         st.rerun()
 
-    tot = pedidos.calcular_totales([dict(i) for i in items], cli.get("descuento", 0))
+    iva_pct = float(overrides.get_config().get("iva_pct") or 0)
+    tot = pedidos.calcular_totales([dict(i) for i in items], cli.get("descuento", 0), iva_pct=iva_pct)
+    iva_html = ""
+    if iva_pct > 0:
+        iva_html = (f"<div class='muted'>IVA {tot['iva_pct']:g}%: {fmt_money(tot['iva_monto'])}</div>"
+                    f"<div class='muted'>Total c/IVA: <b>{fmt_money(tot['total_con_iva'])}</b></div>")
     c1, c2 = st.columns([2, 1])
     with c2:
         st.markdown(f"""<div class='total-box'>
           <div>Unidades: <b>{tot['unidades']}</b></div>
-          <div>Subtotal (lista {cli['lista_precios']}): <b>{fmt_money(tot['subtotal'])}</b></div>
+          <div>Subtotal (lista {cli['lista_precios']}{', sin IVA' if iva_pct > 0 else ''}): <b>{fmt_money(tot['subtotal'])}</b></div>
           <div>Descuento cabecera {tot['descuento_pct']:g}%: <b>-{fmt_money(tot['descuento_monto'])}</b></div>
           <div style='font-size:1.3rem;margin-top:.4rem'>TOTAL: <b>{fmt_money(tot['total'])}</b></div>
+          {iva_html}
           </div>""", unsafe_allow_html=True)
     with c1:
         if not puede_pedir():
@@ -756,7 +775,20 @@ def page_compra_rapida() -> None:
         seleccion = [(v, int(q)) for (_, v), q in zip(page_df.iterrows(), edited["cantidad"])
                      if int(q or 0) > 0]
         if st.button("🛒 Agregar al carrito", type="primary", disabled=not seleccion, key="cr_add"):
-            items = [cr.item_desde_variante(v, min(q, int(v["stock"]))) for v, q in seleccion]
+            items, ajustes = [], []
+            for v, q in seleccion:
+                q = min(q, int(v["stock"]))
+                ub = int(v["ub"]) if ("ub" in v and pd.notna(v["ub"]) and v["ub"]) else 0
+                if ub > 1 and q % ub:
+                    q = (q // ub) * ub   # múltiplo U.B. (como el Woo)
+                    ajustes.append(f"{v['sku']}: ajustado a múltiplo de {ub} → {q}")
+                if q > 0:
+                    items.append(cr.item_desde_variante(v, q))
+            for a in ajustes:
+                st.warning(a)
+            if not items:
+                st.warning("Las cantidades quedaron en 0 tras aplicar los múltiplos.")
+                st.stop()
             total = _agregar_items(items)
             st.session_state.cr_ver = ver + 1
             st.toast(f"{total} unidades agregadas al carrito", icon="✅")

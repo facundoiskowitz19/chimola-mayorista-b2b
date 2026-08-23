@@ -19,12 +19,26 @@ SELECT sku, stock FROM variantes WHERE sku IN UNNEST(@skus)
 
 
 def stock_actual(skus: list[str]) -> dict[str, int]:
-    """Stock neto actual por SKU (sin cache). SKUs que no aparecen → 0."""
+    """Stock efectivo actual por SKU (sin cache). SKUs que no aparecen → 0.
+    Aplica los overrides de variante del admin (SPECS §3): stock manual
+    REEMPLAZA al neto de BQ y una variante oculta vale 0 — así la validación
+    al confirmar es consistente con lo que ve el cliente."""
     if not skus:
         return {}
+    import overrides
+
     df = bq_client.query(SQL_STOCK_SKUS, [bigquery.ArrayQueryParameter("skus", "STRING", list(skus))])
     actual = {r["sku"]: int(r["stock"]) for _, r in df.iterrows()}
-    return {s: actual.get(s, 0) for s in skus}
+    stock_map, ocultas, _ = overrides.variantes_overrides()
+    out = {}
+    for s in skus:
+        if s in ocultas:
+            out[s] = 0
+        elif s in stock_map:
+            out[s] = stock_map[s]
+        else:
+            out[s] = actual.get(s, 0)
+    return out
 
 
 def validar_stock(items: list[dict]) -> list[dict]:

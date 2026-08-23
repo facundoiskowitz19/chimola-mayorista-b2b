@@ -60,28 +60,60 @@ def get_catalogo_overrides() -> dict[str, dict]:
 
 
 def set_catalogo_override(producto_cod: str, campos: dict, por: str) -> None:
-    """Merge de campos {publicado, destacado, nombre, descripcion, precios}."""
-    permitidos = {"publicado", "destacado", "nombre", "descripcion", "precios"}
+    """Merge de campos de producto {publicado, destacado, nombre, descripcion,
+    precios, ub} y de variante `variantes: {sku: {stock, oculta, precios}}`.
+    ub = múltiplo/mínimo de compra (unidad de bulto). Ver SPECS §3."""
+    permitidos = {"publicado", "destacado", "nombre", "descripcion", "precios", "ub", "variantes"}
     campos = {k: v for k, v in campos.items() if k in permitidos}
     if "precios" in campos and campos["precios"]:
         campos["precios"] = {str(k): float(v) for k, v in campos["precios"].items() if v and float(v) > 0}
-    db.catalogo_overrides_col().document(str(producto_cod)).set(_audit(campos, por), merge=True)
+    if "ub" in campos:
+        campos["ub"] = int(campos["ub"]) if campos["ub"] and int(campos["ub"]) > 1 else None
+    if "variantes" in campos:
+        limpio = {}
+        for sku, vo in (campos["variantes"] or {}).items():
+            v = {}
+            if vo.get("stock") is not None:
+                v["stock"] = max(0, int(vo["stock"]))
+            if vo.get("oculta"):
+                v["oculta"] = True
+            precios = {str(k): float(p) for k, p in (vo.get("precios") or {}).items() if p and float(p) > 0}
+            if precios:
+                v["precios"] = precios
+            if v:
+                limpio[sku] = v
+        campos["variantes"] = limpio
+    ref = db.catalogo_overrides_col().document(str(producto_cod))
+    variantes = campos.pop("variantes", None)
+    ref.set(_audit(campos, por), merge=True)
+    if variantes is not None:
+        ref.update({"variantes": variantes})   # update reemplaza el map completo (merge lo fusionaría)
     invalidar("catalogo")
-    log.info("Override catálogo %s por %s: %s", producto_cod, por, campos)
+    log.info("Override catálogo %s por %s: %s variantes=%s", producto_cod, por, campos,
+             list(variantes) if variantes else None)
+
+
+def quitar_catalogo_override(producto_cod: str) -> None:
+    db.catalogo_overrides_col().document(str(producto_cod)).delete()
+    invalidar("catalogo")
 
 
 def aplicar_overrides(df: pd.DataFrame, incluir_ocultos: bool = False) -> pd.DataFrame:
-    """Pisa nombre/descripcion/precios, agrega `destacado` y `publicado`, y
-    filtra los ocultos (salvo incluir_ocultos=True, para la vista admin)."""
+    """Pisa nombre/descripcion/precios (producto), stock/oculta/precios (variante),
+    agrega `destacado`, `publicado`, `ub`, `stock_manual`, `var_oculta` y filtra
+    ocultos y variantes sin stock (salvo incluir_ocultos=True, vista admin)."""
     out = df.copy()
     out["destacado"] = False
     out["publicado"] = None
+    out["ub"] = None
+    out["stock_manual"] = False
+    out["var_oculta"] = False
     ov = get_catalogo_overrides()
     if ov:
         idx = out["producto_cod"]
-        pub = idx.map(lambda p: ov.get(p, {}).get("publicado"))
-        out["publicado"] = pub
+        out["publicado"] = idx.map(lambda p: ov.get(p, {}).get("publicado"))
         out["destacado"] = idx.map(lambda p: bool(ov.get(p, {}).get("destacado"))).astype(bool)
+        out["ub"] = idx.map(lambda p: ov.get(p, {}).get("ub"))
         nombres = {p: o["nombre"] for p, o in ov.items() if o.get("nombre")}
         descrs = {p: o["descripcion"] for p, o in ov.items() if o.get("descripcion")}
         if nombres:
@@ -93,9 +125,38 @@ def aplicar_overrides(df: pd.DataFrame, incluir_ocultos: bool = False) -> pd.Dat
                 col = f"precio{int(lista)}"
                 if col in out.columns:
                     out.loc[out["producto_cod"] == p, col] = float(precio)
+        # Overrides por VARIANTE (SPECS §3): stock manual reemplaza, oculta excluye,
+        # precio por variante pisa al del producto.
+        stock_map, ocultas, var_precios = variantes_overrides()
+        if stock_map:
+            manual = out["sku"].map(stock_map)
+            out["stock_manual"] = manual.notna()
+            out["stock"] = manual.fillna(out["stock"]).astype(int)
+        if ocultas:
+            out["var_oculta"] = out["sku"].isin(ocultas)
+        for sku, precios in var_precios.items():
+            for lista, precio in precios.items():
+                col = f"precio{int(lista)}"
+                if col in out.columns:
+                    out.loc[out["sku"] == sku, col] = float(precio)
         if not incluir_ocultos:
             out = out[out["publicado"].map(lambda v: v is not False)]
+            out = out[~out["var_oculta"] & (out["stock"] > 0)]
     return out
+
+
+def variantes_overrides() -> tuple[dict, set, dict]:
+    """(stock_map {sku: int}, ocultas {sku}, var_precios {sku: {lista: precio}})."""
+    stock_map, ocultas, var_precios = {}, set(), {}
+    for _, o in get_catalogo_overrides().items():
+        for sku, vo in (o.get("variantes") or {}).items():
+            if vo.get("stock") is not None:
+                stock_map[sku] = int(vo["stock"])
+            if vo.get("oculta"):
+                ocultas.add(sku)
+            if vo.get("precios"):
+                var_precios[sku] = vo["precios"]
+    return stock_map, ocultas, var_precios
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +201,9 @@ DEFAULTS_CONFIG = {
     "banner_texto": "",
     "aplicar_descvta": False,
     "minimo_pedido_unidades": None,
+    # Las listas mayoristas de Aleph son SIN IVA (el Woo muestra "+IVA" y la NP
+    # suma 21%). Se muestra como línea informativa en carrito/Excel. 0 = ocultar.
+    "iva_pct": 21.0,
 }
 
 

@@ -78,6 +78,13 @@ FROM {config.T_DIM_CLIENTE}
 WHERE cliente_cod = @cliente_cod
 """
 
+SQL_CLIENTES = f"""
+SELECT cliente_cod, nombre, fantasia, email, lista_precios, descuento,
+       localidad, provincia_desc, direccion, cuit
+FROM {config.T_DIM_CLIENTE}
+WHERE cliente_cod IN UNNEST(@cods)
+"""
+
 
 # ---------------------------------------------------------------------------
 # Cache simple con TTL (process-wide, thread-safe). Independiente de Streamlit.
@@ -141,6 +148,22 @@ def get_cliente(cliente_cod: int) -> dict | None:
     # Razón social como display (la fantasía en Aleph suele ser un apodo interno, ej: "GENTILE").
     r["nombre_display"] = (r.get("nombre") or r.get("fantasia") or f"Cliente {cliente_cod}").strip()
     return overrides.aplicar_override_cliente(r)
+
+
+def get_clientes(cods: list[int]) -> dict[int, dict]:
+    """Batch: {cliente_cod: dict efectivo (con overrides)} en 1 sola query BQ."""
+    if not cods:
+        return {}
+    df = bq_client.query(SQL_CLIENTES, [bigquery.ArrayQueryParameter("cods", "INT64", [int(c) for c in cods])])
+    out = {}
+    for _, row in df.iterrows():
+        r = row.to_dict()
+        r["lista_precios"] = int(r.get("lista_precios") or 1)
+        r["descuento"] = float(r.get("descuento") or 0)
+        r["cliente_cod"] = int(r["cliente_cod"])
+        r["nombre_display"] = (r.get("nombre") or r.get("fantasia") or f"Cliente {r['cliente_cod']}").strip()
+        out[r["cliente_cod"]] = overrides.aplicar_override_cliente(r)
+    return out
 
 
 def columna_precio(lista_precios: int) -> str:
@@ -253,12 +276,14 @@ def get_producto(df: pd.DataFrame, producto_cod: str) -> dict | None:
     if sub.empty:
         return None
     first = sub.iloc[0]
+    ub = first.get("ub") if "ub" in sub.columns else None
     return {
         "producto_cod": producto_cod,
         "producto_nombre": first["producto_nombre"],
         "marca": first["marca"], "temporada": first["temporada"],
         "rubro": first["rubro"], "subrubro": first["subrubro"],
         "descripcion": first.get("descripcion", ""),
+        "ub": int(ub) if pd.notna(ub) and ub else None,
         "precio": float(first["precio"]) if pd.notna(first["precio"]) else None,
         "variantes": sub[["sku", "ean", "color_cod", "color", "talle", "stock", "precio"]].to_dict("records"),
         "colores": sorted(sub["color"].unique()),

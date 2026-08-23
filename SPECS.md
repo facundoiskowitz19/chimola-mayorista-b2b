@@ -43,9 +43,22 @@ existe (o es null), vale Aleph. Ningún override crea productos ni stock.
   lista. Ej: `{"1": 30000}` pisa lista 1; las demás listas siguen de Aleph.
   Precio override ≤ 0 no está permitido (la UI lo valida).
 - `destacado`: los destacados aparecen primero en el grid del catálogo.
+- `ub` (unidad de bulto, como el ACF `u.b` del Woo): cantidad mínima y múltiplo
+  de compra por variante. La página de producto y la compra rápida fuerzan
+  múltiplos de `ub`; null = libre.
 - Auditoría: todo override guarda `updated_at` + `updated_by` (email admin).
 
-### 3.3 Criterios de aceptación
+### 3.3 Overrides por VARIANTE (`variantes: {sku: {...}}`)
+- `stock`: **reemplaza** al stock neto de BQ (0 = no se vende). ⚠ Con stock
+  manual el sitio deja de validar contra el stock real de Ezeiza — es
+  responsabilidad del admin hasta quitar el override. La validación al
+  confirmar (`stock.py`) usa el MISMO valor manual (consistencia).
+- `oculta`: saca solo esa variante del catálogo (el producto sigue).
+- `precios: {lista → precio}`: precio propio de la variante, pisa al del
+  producto para esa lista.
+- Todo editable desde el modal "Editar producto" del admin (tabla de variantes).
+
+### 3.4 Criterios de aceptación
 - Ocultar producto → desaparece del catálogo/compra rápida del cliente en ≤ 60 s
   (TTL del cache de overrides) sin redeploy.
 - Editar precio lista 1 → el cliente con lista 1 ve el nuevo precio; un pedido
@@ -79,6 +92,7 @@ existe (o es null), vale Aleph. Ningún override crea productos ni stock.
 | `banner_texto` | aviso arriba del catálogo (ej: "Cierre de temporada 20/9") | vacío = no se muestra |
 | `aplicar_descvta` | aplicar además el desc. por artículo de Aleph (`descvta`) como en el Woo | `false` |
 | `minimo_pedido_unidades` | mínimo de unidades para confirmar | null = sin mínimo |
+| `iva_pct` | % de IVA informativo: las listas de Aleph son SIN IVA (la NP del ERP lo suma; verificado con Kinderland: subtotal −desc +21% = total NP). Se muestra como líneas "IVA" y "Total c/IVA" en carrito, Excel y email. 0 = ocultar. | `21` |
 
 `EMAIL_OVERRIDE_TO` (redirección DEV) sigue siendo env-only, no administrable.
 

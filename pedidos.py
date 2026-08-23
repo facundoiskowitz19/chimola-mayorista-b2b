@@ -72,19 +72,26 @@ def agregar_al_carrito(items: list[dict], nuevo: dict) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Totales
 # ---------------------------------------------------------------------------
-def calcular_totales(items: list[dict], descuento_pct: float) -> dict:
+def calcular_totales(items: list[dict], descuento_pct: float, iva_pct: float = 0) -> dict:
+    """Totales del pedido. Los precios de lista son SIN IVA (como en Aleph);
+    `iva_pct` > 0 agrega las líneas informativas IVA y total con IVA
+    (así el Excel cierra contra la NP del ERP)."""
     for it in items:
         it["cantidad"] = int(it["cantidad"])
         it["precio_unit"] = round(float(it["precio_unit"]), 2)
         it["subtotal"] = round(it["cantidad"] * it["precio_unit"], 2)
     subtotal = round(sum(i["subtotal"] for i in items), 2)
     total = aplicar_descuento(subtotal, descuento_pct)
+    iva_pct = float(iva_pct or 0)
     return {
         "unidades": sum(i["cantidad"] for i in items),
         "subtotal": subtotal,
         "descuento_pct": float(descuento_pct or 0),
         "descuento_monto": round(subtotal - total, 2),
         "total": total,
+        "iva_pct": iva_pct,
+        "iva_monto": round(total * iva_pct / 100, 2),
+        "total_con_iva": round(total * (1 + iva_pct / 100), 2),
     }
 
 
@@ -130,6 +137,10 @@ def generar_excel(pedido: dict) -> bytes:
     ws.write(r, 0, "Descuento cabecera %", bold); ws.write(r, 1, pedido["descuento_pct"], pct); r += 1
     ws.write(r, 0, "Descuento $", bold); ws.write(r, 1, pedido["descuento_monto"], money); r += 1
     ws.write(r, 0, "TOTAL", bold); ws.write(r, 1, pedido["total"], money_b); r += 1
+    iva = float(pedido.get("iva_pct") or 0)
+    if iva > 0:
+        ws.write(r, 0, f"IVA {iva:g}%", bold); ws.write(r, 1, pedido.get("iva_monto", 0), money); r += 1
+        ws.write(r, 0, "TOTAL c/IVA", bold); ws.write(r, 1, pedido.get("total_con_iva", 0), money_b); r += 1
 
     # --- Detalle ---
     wd = wb.add_worksheet("Detalle")
@@ -157,6 +168,11 @@ def generar_excel(pedido: dict) -> bytes:
     wd.write(n + 3, 9, -pedido["descuento_monto"], money)
     wd.write(n + 4, 6, "TOTAL", bold)
     wd.write(n + 4, 9, pedido["total"], money_b)
+    if float(pedido.get("iva_pct") or 0) > 0:
+        wd.write(n + 5, 6, f"IVA {pedido['iva_pct']:g}%", bold)
+        wd.write(n + 5, 9, pedido.get("iva_monto", 0), money)
+        wd.write(n + 6, 6, "TOTAL c/IVA", bold)
+        wd.write(n + 6, 9, pedido.get("total_con_iva", 0), money_b)
     wd.freeze_panes(1, 0)
     wd.autofilter(0, 0, max(n, 1), len(cols) - 1)
 
@@ -211,7 +227,7 @@ def confirmar_pedido(usuario: dict, cliente: dict, items: list[dict], observacio
 
     ahora = dt.datetime.now(dt.timezone.utc)
     numero = db.proximo_numero_pedido()
-    tot = calcular_totales(items, cliente.get("descuento", 0))
+    tot = calcular_totales(items, cliente.get("descuento", 0), iva_pct=overrides.get_config().get("iva_pct") or 0)
     pedido = {
         "numero": numero,
         "cliente_cod": int(cliente["cliente_cod"]),
@@ -312,6 +328,22 @@ def listar_pedidos(cliente_cod: int | None = None, limit: int = 200) -> list[dic
         q = q.where(filter=firestore.FieldFilter("cliente_cod", "==", int(cliente_cod)))
     q = q.order_by("confirmed_at", direction=firestore.Query.DESCENDING).limit(limit)
     return [d.to_dict() for d in q.stream()]
+
+
+_conteo_cache: dict = {"data": None, "ts": 0.0}
+
+
+def contar_por_estado(force: bool = False) -> dict[str, int]:
+    """{estado: cantidad} vía agregación count() de Firestore (barato), cache 60 s."""
+    import time
+    if not force and _conteo_cache["data"] is not None and time.time() - _conteo_cache["ts"] < 60:
+        return _conteo_cache["data"]
+    out = {}
+    for estado in ESTADOS:
+        agg = db.pedidos_col().where(filter=firestore.FieldFilter("estado", "==", estado)).count()
+        out[estado] = int(agg.get()[0][0].value)
+    _conteo_cache.update(data=out, ts=time.time())
+    return out
 
 
 def get_pedido(numero: int) -> dict | None:

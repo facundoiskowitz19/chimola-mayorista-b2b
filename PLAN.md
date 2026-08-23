@@ -5,6 +5,30 @@ completos y validados end-to-end en DEV
 (https://mayorista-b2b-dev-vhnuyigzqa-uc.a.run.app). Specs funcionales en
 `SPECS.md`. Falta definir cosas con Chimola (§8) y promover a PROD (§7).
 
+## Fase 3 — Admin UX estilo wp-admin/Woo (2026-08-23) ✅
+
+- [x] Nav del admin con contadores (`st.segmented_control`): Inicio · Catálogo ·
+      Clientes · Pedidos (n sin procesar) · Config. Badge también en el sidebar.
+- [x] **Inicio**: KPIs (sin procesar, pedidos/$/unidades/clientes del mes),
+      salud del catálogo, top productos del mes.
+- [x] **Catálogo**: pills con contadores (Todos/Publicados/Ocultos/Destacados/
+      Sin foto/Con override), tabla con selección multi-fila + acciones en lote
+      (ocultar/auto/destacar, confirmación modal si >10), paginación ‹ › y
+      **editor de producto en modal**: nombre/descr/precios L1-4/publicación/
+      destacado/**múltiplo U.B.** + tabla de **variantes editable** (stock
+      manual, oculta, precio manual por variante).
+- [x] Overrides por variante en `overrides.py` + `stock.py` (la validación al
+      confirmar respeta el stock manual). U.B. forzado en producto y compra rápida.
+- [x] **Pedidos**: pills por estado, click en fila abre detalle con badge de
+      color, timeline del historial e items con miniaturas.
+- [x] **Clientes**: tabla con valores efectivos (desc/lista + origen) vía
+      `catalog.get_clientes()` batch; edición y alta en modales.
+- [x] **IVA informativo** (hallazgo del relevamiento Woo: listas sin IVA; la NP
+      suma 21% — verificado con Kinderland): config `iva_pct` (default 21),
+      líneas IVA/Total c/IVA en carrito, Excel y email.
+- [x] Tests 20/20. Relevamiento del Woo documentado (curva completa/u.b.,
+      descuento por cliente, sin estados custom, backorders).
+
 ## Fase 2 (2026-08-23) ✅
 
 - [x] `overrides.py` + Firestore: `catalogo_overrides` (publicar/ocultar/

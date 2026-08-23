@@ -107,5 +107,89 @@ def test_estados_validos():
     assert pedidos.ESTADOS_SIGUIENTES["cancelado"] == []
 
 
+# ---------------------------------------------------------------------------
+# Fase 3: overrides por variante, U.B., IVA, KPIs
+# ---------------------------------------------------------------------------
+def test_overrides_por_variante(monkeypatch):
+    ov = {"M211": {"ub": 6, "variantes": {
+        "M211_U_2059": {"stock": 10, "precios": {"1": 29000}},
+        "M211_U_2058": {"oculta": True},
+    }}}
+    monkeypatch.setattr(overrides, "get_catalogo_overrides", lambda: ov)
+    out = overrides.aplicar_overrides(_df())
+    m59 = out[out.sku == "M211_U_2059"].iloc[0]
+    assert m59["stock"] == 10 and m59["stock_manual"]            # stock manual reemplaza
+    assert m59["precio1"] == 29000                                # precio por variante pisa
+    assert m59["ub"] == 6
+    assert "M211_U_2058" not in set(out["sku"])                  # variante oculta excluida
+    adm = overrides.aplicar_overrides(_df(), incluir_ocultos=True)
+    assert adm[adm.sku == "M211_U_2058"]["var_oculta"].iloc[0]   # admin la ve marcada
+    # stock manual 0 → excluida para clientes
+    ov["M211"]["variantes"]["M211_U_2059"]["stock"] = 0
+    assert "M211_U_2059" not in set(overrides.aplicar_overrides(_df())["sku"])
+
+
+def test_stock_actual_respeta_overrides(monkeypatch):
+    import stock as stock_mod
+
+    monkeypatch.setattr(stock_mod.bq_client, "query",
+                        lambda sql, params=None: pd.DataFrame([{"sku": "A", "stock": 100},
+                                                               {"sku": "B", "stock": 100}]))
+    monkeypatch.setattr(overrides, "get_catalogo_overrides",
+                        lambda: {"P": {"variantes": {"A": {"stock": 7}, "B": {"oculta": True}}}})
+    assert stock_mod.stock_actual(["A", "B", "C"]) == {"A": 7, "B": 0, "C": 0}
+
+
+def test_totales_con_iva():
+    items = [{"sku": "A", "cantidad": 4, "precio_unit": 32900.0}]
+    tot = pedidos.calcular_totales(items, 25, iva_pct=21)
+    assert tot["total"] == 4 * 32900 * 0.75
+    assert tot["iva_monto"] == pytest.approx(tot["total"] * 0.21)
+    assert tot["total_con_iva"] == pytest.approx(tot["total"] * 1.21)
+    sin = pedidos.calcular_totales(items, 25)
+    assert sin["iva_pct"] == 0 and sin["total_con_iva"] == sin["total"]
+
+
+def test_excel_con_iva():
+    import datetime as dt
+    import io
+
+    import openpyxl
+    items = [{"sku": "M211_U_2059", "ean": "779", "producto_cod": "M211", "producto_nombre": "Mochila",
+              "color_cod": "2059", "color": "AQUA", "talle": "U", "cantidad": 3, "precio_unit": 32900.0}]
+    p = {"numero": 99, "cliente_cod": 2722, "cliente_nombre": "Test", "cliente_cuit": "30-1",
+         "usuario_email": "x@y.com", "lista_precios": 1, "items": items, "estado": "confirmado",
+         "observaciones": "", "confirmed_at": dt.datetime(2026, 8, 23, 15, tzinfo=dt.timezone.utc),
+         "fecha_str": "23/08/2026"}
+    p.update(pedidos.calcular_totales(items, 20, iva_pct=21))   # muta items (agrega subtotal)
+    p["xlsx_filename"] = pedidos.nombre_archivo(p)
+    data = pedidos.generar_excel(p)
+    ws = openpyxl.load_workbook(io.BytesIO(data))["Resumen"]
+    vals = {ws.cell(r, 1).value: ws.cell(r, 2).value for r in range(1, 30)}
+    assert vals["IVA 21%"] == pytest.approx(p["iva_monto"])
+    assert vals["TOTAL c/IVA"] == pytest.approx(p["total_con_iva"])
+
+
+def test_kpis():
+    import datetime as dt
+
+    import admin_ui
+    ahora = dt.datetime(2026, 8, 23, 12, 0, tzinfo=dt.timezone.utc)
+    mk = lambda n, est, dia, total, unid, items: {  # noqa: E731
+        "numero": n, "estado": est, "cliente_cod": 1, "total": total, "unidades": unid,
+        "confirmed_at": dt.datetime(2026, 8, dia, 12, tzinfo=dt.timezone.utc), "items": items}
+    lista = [
+        mk(1, "confirmado", 20, 100.0, 2, [{"producto_cod": "A", "producto_nombre": "a", "cantidad": 2}]),
+        mk(2, "procesado", 21, 200.0, 3, [{"producto_cod": "A", "producto_nombre": "a", "cantidad": 3}]),
+        mk(3, "cancelado", 21, 999.0, 9, [{"producto_cod": "B", "producto_nombre": "b", "cantidad": 9}]),
+        mk(4, "procesado", 1, 50.0, 1, [{"producto_cod": "C", "producto_nombre": "c", "cantidad": 1}]),
+    ]
+    k = admin_ui._kpis(lista, ahora)
+    assert k["sin_procesar"] == 1
+    assert k["pedidos_mes"] == 3 and k["monto_mes"] == 350.0 and k["unidades_mes"] == 6
+    assert k["top"][0] == ["A", "a", 5]                    # cancelado excluido de montos, no de nada más
+    assert all(row[0] != "B" for row in k["top"])
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
