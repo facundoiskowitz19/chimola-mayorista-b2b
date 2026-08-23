@@ -1,0 +1,319 @@
+"""Carrito, confirmación de pedido, Excel, backup GCS, historial.
+
+Pedido en Firestore `pedidos/{numero:06d}`:
+  {numero, cliente_cod, cliente_nombre, usuario_email, lista_precios, descuento_pct,
+   items: [{sku, ean, producto_cod, producto_nombre, color_cod, color, talle, cantidad,
+            precio_unit, subtotal}],
+   unidades, subtotal, descuento_monto, total, estado, observaciones,
+   xlsx_gcs_path, xlsx_filename, email: {...}, created_at, confirmed_at}
+
+`precio_unit` = precio de lista del cliente al momento del pedido (sin desc.
+cabecera). El descuento se aplica al total. Se guarda todo para no depender
+del catálogo actual.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import io
+import logging
+import zoneinfo
+from functools import lru_cache
+
+import pandas as pd
+import xlsxwriter
+from google.cloud import firestore, storage
+
+import config
+import db
+import email_notif
+import stock as stock_mod
+from catalog import aplicar_descuento
+
+log = logging.getLogger(__name__)
+TZ = zoneinfo.ZoneInfo(config.TZ)
+
+ESTADOS = ("confirmado", "procesado", "cancelado")
+
+
+@lru_cache(maxsize=1)
+def _storage() -> storage.Client:
+    return storage.Client(project=config.GCP_PROJECT)
+
+
+# ---------------------------------------------------------------------------
+# Carrito (persistido por usuario para sobrevivir refresh / cambio de device)
+# ---------------------------------------------------------------------------
+def cargar_carrito(email: str) -> list[dict]:
+    snap = db.carrito_ref(email).get()
+    return list((snap.to_dict() or {}).get("items", [])) if snap.exists else []
+
+
+def guardar_carrito(email: str, items: list[dict]) -> None:
+    db.carrito_ref(email).set({"items": items, "updated_at": dt.datetime.now(dt.timezone.utc)})
+
+
+def vaciar_carrito(email: str) -> None:
+    db.carrito_ref(email).delete()
+
+
+def agregar_al_carrito(items: list[dict], nuevo: dict) -> list[dict]:
+    """Suma cantidades si el SKU ya está. Devuelve la lista nueva (no muta)."""
+    out = [dict(i) for i in items]
+    for it in out:
+        if it["sku"] == nuevo["sku"]:
+            it["cantidad"] = int(it["cantidad"]) + int(nuevo["cantidad"])
+            it["stock"] = nuevo.get("stock", it.get("stock"))
+            it["precio_unit"] = nuevo["precio_unit"]
+            return out
+    out.append(dict(nuevo))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Totales
+# ---------------------------------------------------------------------------
+def calcular_totales(items: list[dict], descuento_pct: float) -> dict:
+    for it in items:
+        it["cantidad"] = int(it["cantidad"])
+        it["precio_unit"] = round(float(it["precio_unit"]), 2)
+        it["subtotal"] = round(it["cantidad"] * it["precio_unit"], 2)
+    subtotal = round(sum(i["subtotal"] for i in items), 2)
+    total = aplicar_descuento(subtotal, descuento_pct)
+    return {
+        "unidades": sum(i["cantidad"] for i in items),
+        "subtotal": subtotal,
+        "descuento_pct": float(descuento_pct or 0),
+        "descuento_monto": round(subtotal - total, 2),
+        "total": total,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Excel
+# ---------------------------------------------------------------------------
+def generar_excel(pedido: dict) -> bytes:
+    """Hoja Resumen (cabecera + totales) + hoja Detalle (1 fila por variante)."""
+    buf = io.BytesIO()
+    wb = xlsxwriter.Workbook(buf, {"in_memory": True})
+    bold = wb.add_format({"bold": True})
+    hdr = wb.add_format({"bold": True, "bg_color": "#222222", "font_color": "#FFFFFF", "border": 1})
+    money = wb.add_format({"num_format": "$ #,##0.00"})
+    money_b = wb.add_format({"num_format": "$ #,##0.00", "bold": True})
+    pct = wb.add_format({"num_format": "0.00\"%\""})
+    intf = wb.add_format({"num_format": "0"})
+    title = wb.add_format({"bold": True, "font_size": 14})
+
+    # --- Resumen ---
+    ws = wb.add_worksheet("Resumen")
+    ws.set_column(0, 0, 26)
+    ws.set_column(1, 1, 48)
+    ws.write(0, 0, f"Pedido mayorista N° {pedido['numero']}", title)
+    filas = [
+        ("Número de pedido", pedido["numero"]),
+        ("Fecha", pedido["fecha_str"]),
+        ("Código de cliente", pedido["cliente_cod"]),
+        ("Cliente", pedido["cliente_nombre"]),
+        ("CUIT", pedido.get("cliente_cuit") or ""),
+        ("Usuario", pedido["usuario_email"]),
+        ("Lista de precios", pedido["lista_precios"]),
+        ("Estado", pedido["estado"]),
+        ("Observaciones", pedido.get("observaciones") or ""),
+    ]
+    r = 2
+    for k, v in filas:
+        ws.write(r, 0, k, bold)
+        ws.write(r, 1, v)
+        r += 1
+    r += 1
+    ws.write(r, 0, "Unidades", bold); ws.write(r, 1, pedido["unidades"], intf); r += 1
+    ws.write(r, 0, "Subtotal (precio de lista)", bold); ws.write(r, 1, pedido["subtotal"], money); r += 1
+    ws.write(r, 0, "Descuento cabecera %", bold); ws.write(r, 1, pedido["descuento_pct"], pct); r += 1
+    ws.write(r, 0, "Descuento $", bold); ws.write(r, 1, pedido["descuento_monto"], money); r += 1
+    ws.write(r, 0, "TOTAL", bold); ws.write(r, 1, pedido["total"], money_b); r += 1
+
+    # --- Detalle ---
+    wd = wb.add_worksheet("Detalle")
+    cols = [("Producto", 12), ("Descripción", 36), ("Color", 16), ("Cód. color", 10), ("Talle", 8),
+            ("SKU", 20), ("EAN", 16), ("Cantidad", 10), ("Precio unit. lista", 16), ("Subtotal", 16)]
+    for c, (name, w) in enumerate(cols):
+        wd.set_column(c, c, w)
+        wd.write(0, c, name, hdr)
+    for i, it in enumerate(pedido["items"], start=1):
+        wd.write(i, 0, it["producto_cod"])
+        wd.write(i, 1, it["producto_nombre"])
+        wd.write(i, 2, it["color"])
+        wd.write(i, 3, str(it["color_cod"]))
+        wd.write(i, 4, it["talle"])
+        wd.write(i, 5, it["sku"])
+        wd.write(i, 6, it.get("ean") or "")
+        wd.write(i, 7, it["cantidad"], intf)
+        wd.write(i, 8, it["precio_unit"], money)
+        wd.write_formula(i, 9, f"=H{i + 1}*I{i + 1}", money, it["subtotal"])
+    n = len(pedido["items"])
+    wd.write(n + 2, 6, "Totales", bold)
+    wd.write_formula(n + 2, 7, f"=SUM(H2:H{n + 1})", intf, pedido["unidades"])
+    wd.write_formula(n + 2, 9, f"=SUM(J2:J{n + 1})", money_b, pedido["subtotal"])
+    wd.write(n + 3, 6, f"Desc. {pedido['descuento_pct']:g}%", bold)
+    wd.write(n + 3, 9, -pedido["descuento_monto"], money)
+    wd.write(n + 4, 6, "TOTAL", bold)
+    wd.write(n + 4, 9, pedido["total"], money_b)
+    wd.freeze_panes(1, 0)
+    wd.autofilter(0, 0, max(n, 1), len(cols) - 1)
+
+    wb.close()
+    return buf.getvalue()
+
+
+def nombre_archivo(pedido: dict) -> str:
+    ts = pedido["confirmed_at"].astimezone(TZ).strftime("%Y%m%d_%H%M%S")
+    return f"pedido_{pedido['cliente_cod']}_{pedido['numero']}_{ts}.xlsx"
+
+
+def gcs_path(pedido: dict) -> str:
+    return f"{pedido['confirmed_at'].astimezone(TZ):%Y-%m}/{pedido['xlsx_filename']}"
+
+
+def subir_backup(path: str, data: bytes) -> str:
+    blob = _storage().bucket(config.BUCKET_PEDIDOS).blob(path)
+    blob.upload_from_string(data, content_type=email_notif.XLSX_MIME[0] + "/" + email_notif.XLSX_MIME[1])
+    return f"gs://{config.BUCKET_PEDIDOS}/{path}"
+
+
+def descargar_backup(gcs_uri: str) -> bytes:
+    assert gcs_uri.startswith("gs://")
+    bucket, _, path = gcs_uri[5:].partition("/")
+    return _storage().bucket(bucket).blob(path).download_as_bytes()
+
+
+# ---------------------------------------------------------------------------
+# Confirmar
+# ---------------------------------------------------------------------------
+class StockInsuficiente(Exception):
+    def __init__(self, problemas: list[dict]):
+        super().__init__("Stock insuficiente")
+        self.problemas = problemas
+
+
+def confirmar_pedido(usuario: dict, cliente: dict, items: list[dict], observaciones: str = "") -> tuple[dict, bytes]:
+    """Valida stock en vivo → numera → Excel → backup GCS → Firestore → email.
+    Devuelve (pedido, xlsx_bytes). Levanta StockInsuficiente si no alcanza."""
+    if not items:
+        raise ValueError("El carrito está vacío")
+    items = [dict(i) for i in items if int(i.get("cantidad", 0)) > 0]
+    import overrides
+    minimo = overrides.get_config().get("minimo_pedido_unidades")
+    unidades = sum(int(i["cantidad"]) for i in items)
+    if minimo and unidades < int(minimo):
+        raise MinimoNoAlcanzado(int(minimo), unidades)
+    problemas = stock_mod.validar_stock(items)
+    if problemas:
+        raise StockInsuficiente(problemas)
+
+    ahora = dt.datetime.now(dt.timezone.utc)
+    numero = db.proximo_numero_pedido()
+    tot = calcular_totales(items, cliente.get("descuento", 0))
+    pedido = {
+        "numero": numero,
+        "cliente_cod": int(cliente["cliente_cod"]),
+        "cliente_nombre": cliente.get("nombre_display") or cliente.get("nombre") or "",
+        "cliente_cuit": cliente.get("cuit") or "",
+        "usuario_email": usuario["email"],
+        "lista_precios": int(cliente.get("lista_precios") or 1),
+        "items": [{k: it.get(k) for k in ("sku", "ean", "producto_cod", "producto_nombre", "color_cod",
+                                          "color", "talle", "cantidad", "precio_unit", "subtotal")}
+                  for it in items],
+        **tot,
+        "estado": "confirmado",
+        "observaciones": (observaciones or "").strip(),
+        "created_at": ahora,
+        "confirmed_at": ahora,
+        "fecha_str": ahora.astimezone(TZ).strftime("%d/%m/%Y %H:%M"),
+        "env": config.APP_ENV,
+    }
+    pedido["xlsx_filename"] = nombre_archivo(pedido)
+    xlsx = generar_excel(pedido)
+    try:
+        pedido["xlsx_gcs_path"] = subir_backup(gcs_path(pedido), xlsx)
+    except Exception as e:  # noqa: BLE001 — el pedido vale igual; se loguea
+        log.exception("Fallo backup GCS del pedido %s", numero)
+        pedido["xlsx_gcs_path"] = None
+        pedido["backup_error"] = str(e)
+
+    db.pedidos_col().document(f"{numero:06d}").set(pedido)
+    log.info("Pedido %s confirmado: cliente=%s total=%s items=%d", numero, pedido["cliente_cod"],
+             pedido["total"], len(items))
+
+    pedido["email"] = email_notif.enviar_confirmacion(pedido, xlsx, pedido["xlsx_filename"])
+    db.pedidos_col().document(f"{numero:06d}").update({"email": pedido["email"]})
+    vaciar_carrito(usuario["email"])
+    return pedido, xlsx
+
+
+class MinimoNoAlcanzado(Exception):
+    def __init__(self, minimo: int, unidades: int):
+        super().__init__(f"Mínimo {minimo} unidades (tenés {unidades})")
+        self.minimo, self.unidades = minimo, unidades
+
+
+# ---------------------------------------------------------------------------
+# Repetir pedido / estados (SPECS §5 y §7.2)
+# ---------------------------------------------------------------------------
+def repetir_pedido(pedido: dict, df_publicadas) -> tuple[list[dict], list[str]]:
+    """Items para el carrito a partir de un pedido viejo, con precio ACTUAL y
+    recortado al stock disponible. → (items, avisos)."""
+    por_sku = {r["sku"]: r for _, r in df_publicadas.iterrows()}
+    items, avisos = [], []
+    for it in pedido["items"]:
+        v = por_sku.get(it["sku"])
+        if v is None:
+            avisos.append(f"{it['sku']} ({it['producto_nombre']} {it['color']} T{it['talle']}): ya no está disponible")
+            continue
+        if pd.isna(v["precio"]):
+            avisos.append(f"{it['sku']}: sin precio en tu lista, consultá a Chimola")
+            continue
+        cant = min(int(it["cantidad"]), int(v["stock"]))
+        if cant <= 0:
+            avisos.append(f"{it['sku']}: sin stock")
+            continue
+        if cant < int(it["cantidad"]):
+            avisos.append(f"{it['sku']}: solo quedan {cant} u. (pediste {it['cantidad']})")
+        items.append({"sku": v["sku"], "ean": v["ean"], "producto_cod": v["producto_cod"],
+                      "producto_nombre": v["producto_nombre"], "color_cod": str(v["color_cod"]),
+                      "color": v["color"], "talle": v["talle"], "cantidad": cant,
+                      "precio_unit": float(v["precio"]), "stock": int(v["stock"])})
+    return items, avisos
+
+
+ESTADOS_SIGUIENTES = {"confirmado": ["procesado", "cancelado"], "procesado": ["cancelado"], "cancelado": []}
+
+
+def cambiar_estado(numero: int, nuevo: str, por: str) -> dict:
+    """Cambia el estado (solo transiciones válidas) y registra historial."""
+    ref = db.pedidos_col().document(f"{int(numero):06d}")
+    snap = ref.get()
+    if not snap.exists:
+        raise ValueError(f"Pedido {numero} no existe")
+    actual = snap.get("estado")
+    if nuevo not in ESTADOS_SIGUIENTES.get(actual, []):
+        raise ValueError(f"Transición inválida: {actual} → {nuevo}")
+    evento = {"estado": nuevo, "por": por, "en": dt.datetime.now(dt.timezone.utc)}
+    ref.update({"estado": nuevo, "historial": firestore.ArrayUnion([evento])})
+    log.info("Pedido %s: %s → %s por %s", numero, actual, nuevo, por)
+    return {**snap.to_dict(), "estado": nuevo}
+
+
+# ---------------------------------------------------------------------------
+# Historial
+# ---------------------------------------------------------------------------
+def listar_pedidos(cliente_cod: int | None = None, limit: int = 200) -> list[dict]:
+    """Pedidos del cliente (o todos si cliente_cod=None → admin), más recientes primero."""
+    q = db.pedidos_col()
+    if cliente_cod is not None:
+        q = q.where(filter=firestore.FieldFilter("cliente_cod", "==", int(cliente_cod)))
+    q = q.order_by("confirmed_at", direction=firestore.Query.DESCENDING).limit(limit)
+    return [d.to_dict() for d in q.stream()]
+
+
+def get_pedido(numero: int) -> dict | None:
+    snap = db.pedidos_col().document(f"{int(numero):06d}").get()
+    return snap.to_dict() if snap.exists else None

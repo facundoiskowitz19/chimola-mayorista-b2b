@@ -24,7 +24,7 @@ tables:
       - color_cod
       - talle
     columns:
-      sku:              "PK. Formato: {producto_cod}_{talle}_{color_cod}. Ej: VEST2_8_2018."
+      sku:              "⚠ Es el EAN (código de barras) de dim_variante, NO el SKU del sitio. El SKU {producto_cod}_{talle}_{color_cod} se ARMA en catalog.py (misma convención que el Woo)."
       producto_cod:     "Código del producto (padre de las variantes). Ej: M211."
       producto_nombre:  "Nombre humano del producto. Ej: Mochila Soft Rainbow."
       marca:            "Nombre marca. Ej: Chimola, Lima."
@@ -114,19 +114,20 @@ tables:
       - cliente_cod
     columns:
       cliente_cod:     "PK."
-      razon_social:    "Nombre fiscal."
-      nombre_fantasia: "Nombre para mostrar."
-      email:           "Email registrado en el ERP."
-      lista_precios:   "Número de lista de precios (1|2|3|4). Determina qué campo de dim_producto usar."
-      descuento:       "% descuento cabecera aplicado a todos los pedidos del cliente. Refleja el pordscto que va a la NP."
-      provincia:       "Provincia."
-      ciudad:          "Ciudad."
-      activo:          "Flag activo."
+      nombre:          "Razón social. Ej: 'AMINTA S.R.L - FRANQUICIA JUJUY CHIMOLA'. Es lo que mostramos."
+      fantasia:        "Apodo interno (ej: 'GENTILE'). NO usar para display."
+      cuit:            "CUIT (va al Excel)."
+      email:           "Email en el ERP (NULL para las franquicias → el email de login vive en Firestore)."
+      lista_precios:   "Lista de precios (1..10). Franquicias = 1. Define qué raw.articulosol.precio{N} usar."
+      descuento:       "% descuento cabecera. Reales hoy: Jujuy 20, Mendoza 30, Santa Fe 20, Corrientes 20, Nine 20, Villa María 28."
+      localidad:       "Ciudad."
+      provincia_desc:  "Provincia (texto)."
+      activo:          "⚠ FALSE para las franquicias (baja='1900-01-01', artefacto Aleph). No filtrar por esto."
     business_rules:
-      - "Precio del pedido: (dim_producto.precio_listaN según cliente.lista_precios) × (1 - cliente.descuento/100)."
+      - "Precio del pedido: (raw.articulosol.precio{N} según cliente.lista_precios) × (1 - cliente.descuento/100)."
       - "Un usuario del sitio conoce su cliente_cod desde la colección usuarios en Firestore."
     example_query: |
-      SELECT cliente_cod, razon_social, lista_precios, descuento, provincia
+      SELECT cliente_cod, nombre, lista_precios, descuento, provincia_desc
       FROM `chimola-490015.franquicias_dwh.dim_cliente`
       WHERE cliente_cod = 2722  -- ejemplo: franquicia Jujuy
 
@@ -156,14 +157,15 @@ tables:
     key_columns:
       - sku
     columns:
-      sku:               "PK."
-      producto_cod:      "FK."
-      color_cod, talle:  "Coordenadas variante."
-      stock_ezeiza:      "Físico + comprometido. ⚠ Incluye OC pendiente."
-      oc_pendiente:      "OC de proveedor pendiente de recibir (depósito 1)."
-      stock_ezeiza_neto: "stock_ezeiza - oc_pendiente. ESTO es lo que se puede vender B2B."
+      fecha_snapshot:    "Día del snapshot publicado. Se usa para anclar la resta de OC."
+      deposito_cod:      "6=Ezeiza, 2=Web."
+      deposito_nombre:   "'Ezeiza' | 'Web'."
+      producto_cod, color_cod, talle: "Coordenadas variante."
+      cantidad:          "Disponible (quiebre + oc). ⚠ Incluye OC pendiente."
+      agotado:           "cantidad <= 0."
     business_rules:
-      - "Para B2B usar stock_ezeiza_neto (sin OC)."
+      - "NO tiene columna oc_pendiente ni stock_ezeiza_neto (estaban mal documentadas)."
+      - "Stock neto B2B = cantidad - SUM(raw.stock.oc WHERE deposito=1 AND DATE(_ingested_at)=fecha_snapshot). Ver CTE en catalog.py (copiada del Woo)."
 
   # ============================================================================
   # PARA VERIFICACIÓN / HISTORIAL DE PEDIDOS DEL CLIENTE
@@ -220,13 +222,26 @@ conventions:
 
 seed_data:
   clientes_de_prueba:
+    # lista/descuento NO se configuran acá: salen en vivo de dim_cliente al loguear.
     - cliente_cod: 2722
       nombre: "Franquicia Jujuy (test)"
       email: "franquicia_jujuy_test@lautin.com.ar"
-      lista_precios: 4
-      descuento: 30
+      lista_precios_real: 1
+      descuento_real: 20
     - cliente_cod: 2723
       nombre: "Franquicia Mendoza (test)"
       email: "franquicia_mendoza_test@lautin.com.ar"
-      lista_precios: 4
-      descuento: 30
+      lista_precios_real: 1
+      descuento_real: 30
+    - cliente_cod: null
+      nombre: "Admin Chimola"
+      email: "admin@lautin.com.ar"
+      rol: admin   # ve todos los pedidos, no puede pedir
+  producto_de_prueba:
+    producto_cod: M211
+    nombre: "Mochila Soft Rainbow"
+    temporada: DDN25        # (no AW26 como decía el README original)
+    colores: [AQUA, LIGHT PINK, LIGHT PURPLE, RAINBOW]   # no existe BEIGE
+    talle: U
+    precio1: 32900
+    precio4: 65800

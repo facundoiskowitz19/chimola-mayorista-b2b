@@ -1,67 +1,71 @@
 # mayorista-b2b — MVP
 
-Sitio mayorista propio de Chimola/Lautin. Catálogo + carrito + export Excel
-del pedido. Reemplaza al WooCommerce actual.
+Sitio mayorista propio de Chimola/Lautin. Catálogo con fotos + carrito +
+confirmación con **Excel del pedido** (email + backup GCS). Reemplaza al
+WooCommerce actual.
 
-**Stack propuesto (MVP)**: Streamlit + FastAPI (opcional) + BigQuery + GCS +
-Cloud Run.
+**Stack**: Streamlit 1.41 + BigQuery (readonly) + Firestore + GCS + SMTP,
+desplegado en Cloud Run.
+
+| Ambiente | URL | Proyecto | Estado |
+|---|---|---|---|
+| DEV | https://mayorista-b2b-dev-vhnuyigzqa-uc.a.run.app | `chimola-deteccion` | ✅ vivo (2026-08-21) |
+| PROD | — | `chimola-490015` | pendiente (ver PLAN.md §7) |
 
 ---
 
-## Arquitectura MVP
+## Arquitectura
 
 ```
 Cliente B2B (browser)
-    ↓  Auth (email + password)
-Streamlit App (Cloud Run)
-    ↓
-    ├─ BigQuery (catálogo + stock + precios + dim_cliente)
-    ├─ GCS bucket ecommerce-b2b-imagenes (signed URLs para fotos)
-    ├─ Firestore (pedidos + sesiones + credenciales usuarios)
-    └─ SMTP (email confirmación)
+    ↓  login email+password → cookie JWT 24h
+Streamlit (Cloud Run, session-affinity)
+    ├─ BigQuery  franquicias_marts.v_stock_omnicanal + raw.stock (OC) + raw.articulosol (precios) + dwh.dim_cliente
+    ├─ GCS       ecommerce-b2b-imagenes (fotos, signed URLs 1h)  /  chimola-mayorista-pedidos[-dev] (backup xlsx)
+    ├─ Firestore usuarios · pedidos · carritos · login_attempts · contadores
+    └─ SMTP      Gmail Workspace (secret email-smtp-credentials de chimola-490015)
 ```
+
+Detalle de módulos y gotchas: **`CLAUDE.md`**.
 
 ---
 
-## Flujo del MVP
+## Flujo
 
-1. **Login**: usuario ingresa email + password. Backend valida contra la
-   colección `usuarios` (Firestore), que tiene `cliente_cod` asociado.
-2. **Home**: catálogo browseable con filtros (marca, temporada, rubro,
-   subrubro, texto libre). Cards con foto + nombre + precio + stock indicativo.
-3. **Producto**: detalle con galería de fotos, dropdown para elegir color +
-   talle. Muestra stock por variante. Botón "agregar al carrito" con cantidad.
-4. **Carrito**: lista de items con imagen chica, precio unit, cantidad
-   editable, subtotal. Total del pedido con descuento cabecera del cliente
-   aplicado. Botón "confirmar pedido".
-5. **Confirmación**: valida stock en vivo antes de confirmar. Genera Excel
-   con formato acordado. Guarda backup en GCS
-   (`gs://chimola-mayorista-pedidos/YYYY-MM/pedido_<cliente>_<timestamp>.xlsx`).
-   Envía email a cliente + a `pedidos@lautin.com.ar` (o a definir).
-6. **Historial**: pantalla "mis pedidos" — lista fecha + total + botón
-   descargar Excel.
+1. **Login**: `usuarios/{email}` en Firestore (bcrypt). Al entrar se lee
+   `dim_cliente` (razón social, lista de precios, descuento cabecera, CUIT).
+2. **Catálogo**: solo variantes con stock **neto** en Ezeiza (restando OC).
+   Filtros marca / temporada / rubro / subrubro (facetados), búsqueda por
+   código / nombre / EAN / color, "solo con foto", 24 por página.
+3. **Producto**: galería por color, precio de lista del cliente + precio con
+   descuento, cantidades por variante (tope = stock).
+4. **Carrito**: persistido por usuario; editable (`st.data_editor`);
+   subtotal, descuento cabecera, total.
+5. **Confirmar**: re-valida stock en BQ → numera (`contadores/pedidos`) →
+   Excel (Resumen + Detalle) → `gs://<bucket>/YYYY-MM/pedido_<cliente>_<n>_<ts>.xlsx`
+   → `pedidos/{n}` → email al cliente + a Chimola con el Excel adjunto.
+6. **Mis pedidos**: historial + descarga del Excel (admin ve todos).
 
 ---
 
-## Estructura sugerida
+## Estructura
 
 ```
-mayorista-b2b/
-├── CLAUDE.md            contexto para el próximo agente
-├── README.md            (este archivo)
-├── PLAN.md              checklist ordenado del MVP
-├── data_catalog.yaml    diccionario de datos con foco en catálogo B2B
-├── app.py               Streamlit UI + routing (login, catálogo, prod, carrito, historial)
-├── auth.py              login, hash password, sesión
-├── catalog.py           queries BQ para catálogo (con filtros + cache)
-├── stock.py             validador de stock al confirmar (para evitar oversell)
-├── fotos.py             signed URLs de GCS + fallback
-├── pedidos.py           lógica de armar pedido, generar Excel, guardar en Firestore
-├── email_notif.py       envío SMTP al confirmar
-├── requirements.txt
-├── Dockerfile
-└── .streamlit/
-    └── config.toml
+app.py               UI + router (login, catálogo, producto, carrito, mis pedidos)
+config.py            env vars + Secret Manager
+bq_client.py         cliente BQ con maximum_bytes_billed=1GB
+catalog.py           query base + cache 30 min + precios por lista + filtros
+stock.py             validación de stock en vivo
+fotos.py             índice del bucket + parsing de nombres + signed URLs
+db.py                Firestore (colecciones, numerador transaccional)
+auth.py              bcrypt, JWT, rate limit, usuarios
+pedidos.py           carrito, confirmar, Excel, backup, historial
+email_notif.py       SMTP
+static/              branding Lautin: logo + 2 banners del slider de lautin.com.ar (optimizados a 1600px)
+scripts/seed_usuarios.py   usuarios de prueba → passwords en Secret Manager
+deploy/setup_infra.sh      infra idempotente por env
+deploy/deploy.sh           gcloud run deploy --source
+tests/test_pure.py         lógica pura (sin GCP)
 ```
 
 ---
@@ -69,77 +73,78 @@ mayorista-b2b/
 ## Setup local
 
 ```bash
-python -m venv venv && source venv/bin/activate
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-gcloud auth application-default login
-
-# secrets de dev (crear archivo local, gitignoreado)
-cp .env.example .env
-# editar .env con SMTP_USER, SMTP_PASS, JWT_SECRET, FIRESTORE_PROJECT
-
+gcloud auth application-default login      # cuenta con acceso a chimola-deteccion
+cp .env.example .env                       # defaults DEV; opcional JWT_KEY local
 streamlit run app.py
+python -m pytest tests -q
 ```
+
+Local con usuario ADC: BQ/Firestore/GCS funcionan; las fotos salen con URL
+pública (no se pueden firmar sin SA) — en Cloud Run se firman.
 
 ---
 
 ## Deploy
 
-**DEV primero.** Ver `CLAUDE.md` sección "Ambientes: DEV primero, siempre".
+**DEV primero, siempre.**
 
 ```bash
-# One-time setup DEV
-gcloud iam service-accounts create sa-mayorista-dev --project=chimola-deteccion
-# grants BQ (readonly), GCS (read fotos, write pedidos), Firestore, Secret Manager
-
-# Guardar secrets
-echo -n "..." | gcloud secrets create mayorista-smtp-creds --data-file=- --project=chimola-deteccion
-echo -n "..." | gcloud secrets create mayorista-jwt-key --data-file=- --project=chimola-deteccion
-
-# Deploy DEV
-gcloud run deploy mayorista-b2b-dev \
-  --project=chimola-deteccion --region=us-central1 \
-  --source=. --allow-unauthenticated \
-  --service-account=sa-mayorista-dev@chimola-deteccion.iam.gserviceaccount.com \
-  --set-secrets=SMTP_CREDS=mayorista-smtp-creds:latest,JWT_KEY=mayorista-jwt-key:latest \
-  --memory=1Gi --max-instances=5
-
-# Después de validar DEV → replicar en PROD (chimola-490015).
+./deploy/setup_infra.sh dev    # una vez: SA, grants, bucket, Firestore+índice, secrets
+./venv/bin/python scripts/seed_usuarios.py    # usuarios de prueba (passwords → Secret Manager)
+./deploy/deploy.sh dev         # Cloud Run mayorista-b2b-dev
 ```
 
+Para PROD: `./deploy/setup_infra.sh prod` y `PEDIDOS_EMAIL_TO=pedidos@lautin.com.ar ./deploy/deploy.sh prod`
+(recién cuando DEV esté validado con una franquicia piloto — ver PLAN.md §7).
+
+Usuarios de prueba DEV (passwords en `mayorista-seed-passwords` de `chimola-deteccion`):
+
+```bash
+gcloud secrets versions access latest --secret=mayorista-seed-passwords --project=chimola-deteccion
+```
+
+| Email | cliente_cod | Rol |
+|---|---|---|
+| franquicia_jujuy_test@lautin.com.ar | 2722 (lista 1, 20%) | cliente |
+| franquicia_mendoza_test@lautin.com.ar | 2723 (lista 1, 30%) | cliente |
+| admin@lautin.com.ar | — | admin (ve todos los pedidos) |
+
+En DEV **todos los emails** van a `EMAIL_OVERRIDE_TO` (fiskowitz@lautin.com.ar).
+
 ---
 
-## Verificación MVP
+## Verificación MVP (hecha en DEV el 2026-08-21)
 
-1. Login con usuario de prueba `franquicia_jujuy_test@lautin.com.ar` (cliente_cod 2722).
-2. Catálogo carga con al menos 500 productos y sus fotos (via signed URL).
-3. Filtrar por temporada AW26 → resultados correctos.
-4. Buscar "M211" → aparece Mochila Soft Rainbow con fotos.
-5. Agregar 3 uds del M211 talle U color BEIGE al carrito.
-6. Precio en carrito respeta la lista del cliente (lista 4 default).
-7. Descuento cabecera del cliente (30% para Jujuy) se aplica al total.
-8. Confirmar pedido → Excel se genera → email llega → backup queda en GCS.
-9. Pantalla "mis pedidos" muestra el pedido recién confirmado.
+1. ✅ Login con usuario de prueba (cliente 2722) → sidebar muestra razón social, lista 1, 20%.
+2. ✅ Catálogo: 1.285 productos / 4.974 variantes con stock neto; 1.214 con foto.
+3. ✅ Filtro por temporada (AW26 tiene 124 Chimola + 89 Lima con stock).
+4. ✅ Buscar "M211" → Mochila Soft Rainbow (DDN25) con 16 fotos agrupadas por color.
+5. ✅ Agregar unidades de M211 talle U (colores AQUA / LIGHT PINK / LIGHT PURPLE / RAINBOW — **no existe BEIGE**).
+6. ✅ Precio unitario = `precio1` ($32.900; `precio_lista4` = $65.800 es PVP).
+7. ✅ Descuento cabecera del cliente (20% Jujuy, no 30%) aplicado al total.
+8. ✅ Confirmar → Excel generado, email enviado, backup en `gs://chimola-mayorista-pedidos-dev/2026-08/`.
+9. ✅ "Mis pedidos" lista el pedido y permite re-descargar el Excel.
 
 ---
 
-## Costos estimados MVP
+## Costos estimados
 
 | Componente | Estimado |
 |---|---|
-| Cloud Run (min=0, max=5, 1 GiB) | $10-30/mes |
-| BigQuery | centavos/mes con cache |
-| GCS (signed URLs + backups pedidos) | $1-5/mes |
-| Firestore (pedidos + usuarios) | $0-5/mes |
-| SMTP (Gmail Workspace, uso existente) | $0 |
+| Cloud Run (min=0, max=3/5, 1 GiB) | $10-30/mes |
+| BigQuery (1 query catálogo / 30 min + validaciones) | centavos/mes |
+| GCS (listado fotos 1/h + backups) | $1-5/mes |
+| Firestore | $0-5/mes |
 | **Total** | **~$15-40/mes** |
 
 ---
 
-## Fases siguientes (post-MVP)
+## Fases siguientes
 
-- **Fase 2**: integración automática con Aleph — el pedido se convierte en NP
-  directamente en el ERP (evita procesamiento manual).
-- **Fase 3**: cuentas gestionadas desde el sitio (alta, cambio password, etc.).
-- **Fase 4**: notificaciones push, historial rico con seguimiento de estado.
-- **Fase 5**: migrar frontend a Next.js si el uso amerita mejor UX.
+- **Fase 2**: integración con Aleph (pedido → NP automática).
+- **Fase 3**: gestión de cuentas desde el sitio (alta, cambio de password).
+- **Fase 4**: estados de pedido (procesado / enviado) + notificaciones.
+- **Fase 5**: frontend Next.js si el uso lo amerita.
 - **Fase 6**: pagos online.

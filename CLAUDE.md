@@ -58,33 +58,91 @@ Ya existen 3 proyectos hermanos que este consume:
 
 ---
 
-## Arquitectura (propuesta a validar con el próximo agente)
+## Arquitectura (implementada — MVP vivo en DEV desde 2026-08-21)
+
+Decisión tomada: **Streamlit** (monolito UI + backend en el mismo proceso).
+Migrable a Next.js después reusando los módulos Python como API.
 
 ```
-Navegador
-   ↓  Auth: email + password (o Google OAuth si es email @lautin.com.ar interno)
-Frontend (Next.js o Streamlit según decisión)
-   ↓
-Backend API (Python: FastAPI o mismo Streamlit)
-   ↓  ├─ BQ readonly (catálogo, stock, precios, cliente)
-   ↓  ├─ GCS signed URLs (fotos, expiración corta)
-   ↓  ├─ Firestore o Postgres chico (pedidos, sesiones)
-   ↓  └─ SMTP (emails de confirmación)
-Cloud Run (chimola-490015)
+Navegador ──cookie JWT (24h)──▶ Streamlit (Cloud Run, --session-affinity)
+                                  │
+   app.py (UI + router)           ├─ catalog.py  → BQ readonly: v_stock_omnicanal + raw.stock (OC) + raw.articulosol (precio1..10)
+   auth.py (bcrypt + JWT + rate   ├─ stock.py    → re-consulta BQ al confirmar (anti oversell)
+            limit en Firestore)   ├─ fotos.py    → GCS ecommerce-b2b-imagenes (índice 1 list/h + signed URLs V4 via signBlob)
+   db.py (Firestore)              ├─ pedidos.py  → Firestore `pedidos` + Excel (xlsxwriter) + backup GCS
+   config.py (env + secrets)      └─ email_notif.py → SMTP Gmail (secret `email-smtp-credentials` de chimola-490015)
 ```
 
-### Decisión pendiente: Streamlit vs Next.js
+**DEV vivo**: https://mayorista-b2b-dev-vhnuyigzqa-uc.a.run.app
+(`chimola-deteccion`, service `mayorista-b2b-dev`, SA `sa-mayorista-dev@`).
 
-| | Streamlit | Next.js + shadcn/ui |
-|---|---|---|
-| Tiempo MVP | 2 semanas | 4-6 semanas |
-| Feel | App interna | Sitio comercial |
-| Carrito UX | Funciona pero limitado | Fluido, tipo shopping habitual |
-| Deploy | Cloud Run simple | Cloud Run OK, un poco más laburo |
-| Recomendado si | El uso lo hacen internos, prioridad velocidad | El sitio es para franquicias/clientes con expectativa de "sitio comercial" |
+### Módulos
 
-**Recomendación inicial**: Streamlit para el MVP. Si funciona y el equipo lo
-adopta, se puede migrar a Next.js después con la misma API/BD.
+| Archivo | Qué hace |
+|---|---|
+| `app.py` | Páginas login / catálogo / producto / carrito / mis pedidos. Sesión en `st.session_state` + cookie JWT (`st.context.cookies` para leer, JS via `components.html` para escribir). |
+| `catalog.py` | Query base (1 fila/variante con stock neto Ezeiza). Cache process-wide TTL 30 min. Precio = `precio{N}` de `raw.articulosol` según `dim_cliente.lista_precios`. Filtros/facetas/búsqueda en pandas. |
+| `stock.py` | `validar_stock(items)` → misma CTE sin cache. |
+| `fotos.py` | Índice de todo el prefijo del bucket (1 listado, cache 1h), parsing de nombres `"M211 AQUA (1).jpg"` → agrupado por color (misma convención que Woo), signed URLs cacheadas 50 min. Fallback a URL pública si no puede firmar (local). |
+| `pedidos.py` | Carrito persistido en `carritos/{email}`; `confirmar_pedido()` = validar stock → numerador (`contadores/pedidos`, transacción) → Excel → GCS → Firestore → email → vaciar carrito. |
+| `auth.py` | bcrypt, JWT HS256, rate limit 5 intentos/15 min por email (`login_attempts`). |
+| `overrides.py` | **Fase 2.** Capa administrable en Firestore que PISA lo de BQ: `catalogo_overrides` (publicado/destacado/nombre/descripcion/precios por lista), `clientes_overrides` (descuento/lista), `config/global`. Cache 60 s, auditoría `updated_by`. Specs en `SPECS.md`. |
+| `admin_ui.py` | **Fase 2.** Sección Administración (rol admin): Catálogo / Clientes / Pedidos (estados+historial, reenviar email) / Config. Solo escribe overrides, nunca BQ. |
+| `compra_rapida.py` | **Fase 2.** Helpers puros de compra rápida: parser de códigos pegados (SKU/EAN,cant) y armado de items. La página vive en `app.py`. |
+| `scripts/seed_usuarios.py` | Crea usuarios de prueba; passwords en Secret Manager `mayorista-seed-passwords`. |
+| `deploy/setup_infra.sh <env>` | Infra idempotente (SA, grants, bucket, Firestore + índice, secrets). |
+| `deploy/deploy.sh <env>` | `gcloud run deploy --source=.` con env vars + secret JWT. |
+
+### Gotchas aprendidos (leer antes de tocar)
+
+- **`v_stock_omnicanal.sku` es el EAN**, no el SKU del sitio. El SKU
+  `{producto_cod}_{TALLE}_{color_cod}` se arma en la query (`catalog.py`).
+- **Franquicias usan lista 1, no 4** (`dim_cliente.lista_precios=1` para
+  2720/2721/2722/2723/2735/2739). `precio_lista4` es el precio de venta al
+  público del POS. `dim_producto` solo expone la 4 → por eso la query va a
+  `raw.articulosol.precio1..precio10`. Descuentos reales hoy: Jujuy 20%,
+  Mendoza 30%, Santa Fe 20%, Corrientes 20%, Nine 20%, Villa María 28%.
+- **`dim_cliente.activo` es FALSE para las franquicias** (tienen
+  `baja='1900-01-01'`, artefacto de Aleph). No filtrar por `activo`.
+- **`articulosol.descvta`** (desc. por artículo, ej. 10% en M211) NO se
+  aplica en el sitio — pendiente de definir con Chimola (el Woo lo usa como
+  `sale_price`).
+- **Stock neto**: 1.572 productos con `stock_ezeiza>0` → 1.285 con stock
+  neto tras restar OC (`raw.stock` deposito=1, anclado a `fecha_snapshot`
+  de `v_stock_central_actual`). `v_stock_central_actual` NO tiene columna
+  `oc_pendiente` (el data_catalog original estaba equivocado).
+- **Fotos**: 1.911 carpetas en el bucket; 1.214 de los 1.285 productos con
+  stock tienen foto. El bucket hoy es **público** (`allUsers` objectViewer,
+  lo usa el Woo) — igual firmamos URLs para no depender de eso.
+- **Streamlit interrumpe el script** cuando llega otro evento de widget en
+  medio de un run largo. Por eso la confirmación va en `st.form` y el estado
+  se guarda en `session_state` ANTES de cerrar el spinner.
+- **`st.context.cookies` es del handshake del websocket**: borrar la cookie
+  por JS no la saca de ahí hasta el refresh → flag `logged_out` en sesión.
+- **`bq add-iam-policy-binding` requiere allowlist** → los grants de dataset
+  se hacen por API (`access_entries` READER) en `setup_infra.sh`.
+- **Firestore `listar_pedidos`** (where cliente_cod + order by confirmed_at)
+  necesita índice compuesto (lo crea `setup_infra.sh`).
+- Cloud Run necesita `--session-affinity` (websockets de Streamlit).
+
+### Branding (impronta Lautin, tomada de lautin.com.ar)
+
+- Tokens del WP (Elementor global): fuente **Lato**, negro cálido `#1C1C1A`,
+  taupe `#AC9B91`, gris fondo `#F2F2F2`, gris texto `#7A7A7A`. Botones pill
+  negros en mayúscula ("INGRESAR AHORA"). Top bar negra "Venta exclusiva
+  mayorista + WhatsApp", header con logo + tabs CHIMOLA/LIMA, footer negro.
+- Assets en `static/` bajados del sitio público (no hizo falta SFTP):
+  `logo_lautin.png`, `banner_1.jpg` (Chimola "ØN THE GO_"), `banner_2.jpg`
+  (Lima AW26). Si Lautin cambia el slider, reemplazar los jpg (máx 1600px).
+- El selector de marca del header (`st.segmented_control`, key `hdr_marca`) se
+  sincroniza con el filtro `f_marca` del sidebar vía callback, y elige el banner.
+- **CSS scoping en Streamlit 1.41**: TODO bloque vertical lleva
+  `stVerticalBlockBorderWrapper`, no solo los `border=True` → para estilar
+  las cards se usa `st.container(key="card_<cod>")` (clase `st-key-card_<cod>`)
+  y el selector `div[class*="st-key-card_"]`. No usar reglas genéricas sobre
+  el wrapper (pintan el sidebar).
+- `st.image(path)` para banners (media server eficiente); base64 solo para el
+  logo en HTML.
 
 ---
 
@@ -92,9 +150,11 @@ adopta, se puede migrar a Next.js después con la misma API/BD.
 
 Las mismas del ecosistema — copiadas de `sql-to-bq-franquicias/CLAUDE.md`:
 
-1. **Precios**: cada cliente tiene `dim_cliente.lista_precios` (mayoría usa
-   lista 4). Precios de esa lista se traen de `dim_producto.precio_lista4`
-   (para la 4) o campos análogos.
+1. **Precios**: cada cliente tiene `dim_cliente.lista_precios` (las
+   franquicias usan **lista 1**; la 4 es precio al público del POS). El
+   precio de esa lista se trae de `raw.articulosol.precio{N}` (N = 1..10).
+   Si la lista del cliente tiene precio 0 para un producto → "sin precio",
+   no se puede pedir. El `precio_unit` queda guardado en el pedido.
 2. **Descuento cabecera**: `dim_cliente.descuento` (%) se aplica al total
    del pedido. Es la negociación por cliente. Refleja el `pordscto` que después
    va a la NP en Aleph.
@@ -156,3 +216,12 @@ promover a PROD.
 - `B2B - woocommerce/generacion_de_catalogo_woocommerce/CLAUDE.md` — cómo se
   arma el catálogo hoy y cómo viven las fotos en el bucket.
 - `jarvis/data_catalog.yaml` — diccionario de datos ya curado (reutilizable).
+
+---
+
+## Referencias al ecosistema
+
+- **Mapa maestro**: `~/Desktop/Projects/Chimola/CLAUDE.md` — inventario de todos los proyectos hermanos.
+- **Inventario detallado**: `~/Desktop/Projects/Chimola/ECOSYSTEM.md`.
+- **Convenciones compartidas** (DEV first, secrets, region, git): `~/Desktop/Projects/Chimola/CONVENTIONS.md`.
+- **Skills operativas** desde la carpeta padre: `/status`, `/deploy`, `/logs`, `/costos`, `/git-status`.

@@ -1,144 +1,111 @@
-# PLAN.md — checklist MVP mayorista-b2b
+# PLAN.md — checklist mayorista-b2b
 
-Orden sugerido de implementación. Todo en DEV primero, después PROD.
+Estado al **2026-08-23**: MVP + **Fase 2 (admin total + compra rápida)**
+completos y validados end-to-end en DEV
+(https://mayorista-b2b-dev-vhnuyigzqa-uc.a.run.app). Specs funcionales en
+`SPECS.md`. Falta definir cosas con Chimola (§8) y promover a PROD (§7).
 
-## 0. Setup infra (una vez en DEV)
+## Fase 2 (2026-08-23) ✅
 
-- [ ] Crear SA `sa-mayorista-dev@chimola-deteccion.iam.gserviceaccount.com`.
-- [ ] Grants:
-    - `roles/bigquery.jobUser` a nivel proyecto.
-    - `roles/bigquery.dataViewer` en datasets `franquicias_marts`, `franquicias_dwh`.
-    - `roles/storage.objectViewer` en bucket `ecommerce-b2b-imagenes`.
-    - `roles/storage.objectAdmin` en bucket nuevo `chimola-mayorista-pedidos-dev`.
-    - `roles/datastore.user` (Firestore) — o si prefieren, Postgres en Cloud SQL.
-- [ ] Crear bucket `gs://chimola-mayorista-pedidos-dev/` para backup pedidos.
-- [ ] Habilitar Firestore Native mode en `chimola-deteccion`.
-- [ ] Secret Manager: `mayorista-smtp-creds`, `mayorista-jwt-key`, `mayorista-admin-password`.
-- [ ] Definir dominio (opcional): `mayorista-dev.lautin.com.ar` con custom domain.
+- [x] `overrides.py` + Firestore: `catalogo_overrides` (publicar/ocultar/
+      destacar + nombre/descripcion/precios por lista), `clientes_overrides`
+      (descuento %/lista con fallback a Aleph), `config/global` (email
+      pedidos, banner, descvta, mínimo). Cache 60 s + auditoría updated_by.
+- [x] Admin UI (`admin_ui.py`, tabs): Catálogo (tabla editable con miniaturas
+      + lote + edición fina), Clientes (overrides, alta, reset password,
+      activar/desactivar), Pedidos (filtros, estados con historial, reenviar
+      email), Config.
+- [x] Compra rápida (`compra_rapida.py` + página): tabla editable con
+      miniaturas y cantidades, pegar códigos SKU/EAN, repetir pedido.
+- [x] Miniaturas en el carrito. Banner administrable. Mínimo de pedido.
+- [x] Tests 15/15 (`tests/test_fase2.py`) + e2e local (cliente y admin).
 
-## 1. Modelo de datos Firestore
+## 0. Setup infra DEV ✅
 
-Colecciones a crear:
+- [x] SA `sa-mayorista-dev@chimola-deteccion.iam.gserviceaccount.com`.
+- [x] `roles/bigquery.jobUser` + `roles/bigquery.readSessionUser` (BQ Storage
+      API para `to_dataframe`) a nivel proyecto + READER (access entry) en
+      `franquicias_marts`, `franquicias_dwh`, `franquicias_raw`, `central_raw`
+      (`bq add-iam-policy-binding` requiere allowlist → se hace por API).
+- [x] `roles/storage.objectViewer` en `gs://ecommerce-b2b-imagenes` (PROD).
+- [x] Bucket `gs://chimola-mayorista-pedidos-dev` + `objectAdmin`.
+- [x] Firestore Native `(default)` en us-central1 + índice compuesto
+      `pedidos(cliente_cod ASC, confirmed_at DESC)`.
+- [x] `roles/iam.serviceAccountTokenCreator` sobre sí misma (signed URLs).
+- [x] Secrets: `mayorista-jwt-key` (DEV), accessor a `email-smtp-credentials`
+      (PROD), `mayorista-seed-passwords` (DEV).
+- [ ] Dominio custom (opcional, post-MVP).
 
-- **`usuarios`**: `{email, password_hash, cliente_cod, nombre_display, rol, activo, created_at}`.
-    - `rol`: 'cliente' o 'admin' (Chimola).
-    - Índice único en `email`.
-- **`pedidos`**: `{id, cliente_cod, usuario_email, items: [{sku, producto_cod, talle, color_cod, cantidad, precio_unit, subtotal}], subtotal, desc_cabecera_pct, total, estado, xlsx_gcs_path, created_at, confirmed_at}`.
-    - `estado`: 'carrito', 'confirmado', 'procesado', 'cancelado'.
-    - Índice por `cliente_cod` + `created_at DESC`.
+Todo reproducible con `./deploy/setup_infra.sh dev`.
 
-## 2. Backend Python
+## 1. Modelo Firestore ✅
 
-### 2.1 `auth.py`
-- [ ] `hash_password(pwd) -> str` (bcrypt).
-- [ ] `verify_password(pwd, hash) -> bool`.
-- [ ] `create_jwt(user_dict, ttl_hours=24) -> str`.
-- [ ] `verify_jwt(token) -> dict|None`.
-- [ ] `login(email, password) -> jwt|None` con rate limit básico.
+- `usuarios/{email}`: `{email, password_hash, cliente_cod, nombre_display, rol, activo, created_at, last_login_at}`.
+- `pedidos/{numero:06d}`: cabecera + `items[]` + totales + `estado` +
+  `xlsx_gcs_path` + `email{enviado,destinatarios,error}` + `observaciones`.
+- `carritos/{email}`: `{items[], updated_at}`.
+- `login_attempts/{email}`: `{ventana_desde, intentos}`.
+- `contadores/pedidos`: `{valor}` (numerador transaccional).
 
-### 2.2 `catalog.py`
-- [ ] Query BQ base: 1 fila por variante con producto/color/talle/stock/precio.
-    - Fuente: `franquicias_marts.v_stock_omnicanal` filtrado por `stock_ezeiza > 0`.
-    - Ver `data_catalog.yaml` para el SQL sugerido.
-- [ ] `list_productos(filtros: dict, cliente_cod: int) -> list` con paginación.
-- [ ] `get_producto(producto_cod: str, cliente_cod: int) -> dict` con variantes + fotos.
-- [ ] Cache de catálogo (TTL 30 min).
+## 2. Backend Python ✅
 
-### 2.3 `stock.py`
-- [ ] `validar_stock(items: list) -> dict` que re-consulta BQ al momento de
-      confirmar (evita oversell entre login y confirm).
+- [x] `auth.py`: bcrypt, JWT 24h, rate limit 5/15min, login con error genérico.
+- [x] `catalog.py`: query base con stock neto (OC) + precios `precio1..10`,
+      cache 30 min, filtros facetados, búsqueda, agregación por producto.
+- [x] `stock.py`: `validar_stock()` en vivo al confirmar.
+- [x] `fotos.py`: índice del bucket (1 listado/h), parsing por color, signed
+      URLs V4 (signBlob) con fallback a URL pública, placeholder.
+- [x] `pedidos.py`: carrito persistido, numerador, Excel (Resumen + Detalle
+      con fórmulas), backup GCS, Firestore, historial.
+- [x] `email_notif.py`: 1 mail al cliente + 1 a Chimola, Excel adjunto,
+      `EMAIL_OVERRIDE_TO` para DEV. Nunca rompe el pedido si falla.
 
-### 2.4 `fotos.py`
-- [ ] `listar_fotos_producto(producto_cod) -> list[signed_url]` desde
-      `gs://ecommerce-b2b-imagenes/catalogo/fotos_productos/<PROD>/`.
-- [ ] Signed URLs con TTL 1 hora, generar on-demand.
-- [ ] Fallback a placeholder si el producto no tiene fotos.
+## 3. UI Streamlit ✅
 
-### 2.5 `pedidos.py`
-- [ ] `crear_pedido(cliente_cod, items) -> pedido_id` (estado='carrito').
-- [ ] `actualizar_carrito(pedido_id, items)`.
-- [ ] `confirmar_pedido(pedido_id) -> {pedido, xlsx_bytes, xlsx_path}` con
-      validación de stock previa.
-- [ ] `listar_pedidos(cliente_cod) -> list`.
-- [ ] Excel generator: hoja Resumen (cliente, fecha, total) + hoja Detalle
-      (1 fila por variante) con formato tipo el de reintegros.
+- [x] Login, Catálogo (grid 4 col, paginado 24), Producto (galería por color,
+      cantidades por variante), Carrito (`data_editor`, totales, confirmar en
+      `st.form`), Mis pedidos (tabla + detalle + descarga), sidebar con
+      usuario/cliente/nav/logout. Admin: "Refrescar catálogo".
+- [x] Impronta Lautin (Lato, paleta del WP, top bar, header con logo + tabs
+      Chimola/Lima, hero del slider, login con banner, footer) — assets en `static/`.
+- [ ] Favicon/ícono propio (hoy emoji 🛍️) y logos de marca Chimola/Lima en SVG.
 
-### 2.6 `email_notif.py`
-- [ ] `enviar_confirmacion(pedido, xlsx_bytes)` — 1 email al cliente + 1 a
-      `pedidos@lautin.com.ar` (o a definir), con Excel adjunto.
-- [ ] Reusar el mismo secret SMTP del pipeline (`email-smtp-credentials`).
+## 4. Docker + deploy ✅
 
-## 3. UI Streamlit
+- [x] `requirements.txt`, `Dockerfile`, `.streamlit/config.toml`, `.env.example`.
+- [x] `./deploy/deploy.sh dev` → `mayorista-b2b-dev` (session-affinity, 1Gi, max 3).
 
-- [ ] `app.py` con routing por `st.session_state.page` o `streamlit-option-menu`.
-- [ ] Página **Login**: form email + password, mensaje de error genérico.
-- [ ] Página **Catálogo**: sidebar con filtros (marca, temporada, rubro,
-      subrubro, buscar), grid de cards con foto + nombre + precio + stock.
-      Paginación (30 por página).
-- [ ] Página **Producto**: galería de fotos (`st.image` con carrusel), variantes
-      en tabla (color x talle) con stock, input cantidad, botón agregar.
-- [ ] Página **Carrito**: tabla editable con `st.data_editor`, subtotales por
-      línea, total con desc cabecera del cliente. Botón confirmar.
-- [ ] Página **Mis pedidos**: tabla con fecha, total, botón download Excel.
-- [ ] Header con logo + email logueado + botón logout.
-- [ ] Footer con contacto.
+## 5. Semillas ✅
 
-## 4. Docker + deploy
+- [x] `franquicia_jujuy_test@` (2722), `franquicia_mendoza_test@` (2723),
+      `admin@lautin.com.ar` (admin). Passwords en `mayorista-seed-passwords`.
 
-- [ ] `requirements.txt`:
-    ```
-    streamlit==1.38.0
-    google-cloud-bigquery==3.25.0
-    google-cloud-storage==2.18.2
-    google-cloud-firestore==2.16.0
-    google-cloud-secret-manager==2.20.0
-    bcrypt==4.2.0
-    pyjwt==2.9.0
-    xlsxwriter==3.2.0
-    pandas==2.2.3
-    ```
-- [ ] `Dockerfile` python:3.11-slim + gunicorn/streamlit.
-- [ ] `.streamlit/config.toml` con tema + `[server] port = $PORT`.
-- [ ] `.env.example` con las vars públicas de referencia.
-- [ ] Deploy DEV: `gcloud run deploy mayorista-b2b-dev ...`.
+## 6. Verificación end-to-end ✅ (local contra DEV + Cloud Run DEV)
 
-## 5. Datos iniciales (semillas)
+- [x] Login OK → razón social, lista 1, desc 20%.
+- [x] Catálogo 1.285 productos con fotos (signed URLs en Cloud Run).
+- [x] Filtros y búsqueda "M211".
+- [x] Agregar M211 U AQUA ×3 → carrito → total con 20%.
+- [x] Confirmar → Excel + email + backup GCS + Firestore + historial.
+- [x] Tests unitarios `pytest tests` (8 passed).
 
-- [ ] Crear 3 usuarios de prueba en Firestore (uno por franquicia grande):
-    - `franquicia_jujuy_test@lautin.com.ar` → cliente_cod=2722
-    - `franquicia_mendoza_test@lautin.com.ar` → cliente_cod=2723
-    - `admin@lautin.com.ar` (rol admin, ve todos los pedidos)
-- [ ] Passwords iniciales generadas + guardadas en Secret Manager para dar
-      al equipo de prueba.
+## 7. Promoción a PROD (pendiente)
 
-## 6. Verificación end-to-end
+- [ ] Validar DEV con el equipo de Chimola (1 semana, usuarios de prueba).
+- [ ] `./deploy/setup_infra.sh prod` (SA `sa-mayorista@chimola-490015`, bucket
+      `chimola-mayorista-pedidos`, Firestore Native en 490015, índice, secret JWT).
+- [ ] `PEDIDOS_EMAIL_TO=<definir> ./deploy/deploy.sh prod`.
+- [ ] Sembrar usuarios reales (1 por franquicia → `dim_pv.cliente_cod_titular`).
+- [ ] Piloto con 1 franquicia (ej. Jujuy) antes de abrir al resto.
+- [ ] Deprecar el pipeline Woo cuando el sitio esté adoptado.
 
-- [ ] Login con `franquicia_jujuy_test` → ok.
-- [ ] Catálogo carga 500+ productos con fotos.
-- [ ] Filtrar por temporada 'AW26' → resultados correctos.
-- [ ] Buscar 'M211' → aparece con fotos.
-- [ ] Agregar 3 uds M211 talle U color BEIGE → carrito lo refleja.
-- [ ] Precio unitario = precio_lista4 del producto.
-- [ ] Descuento cabecera 30% (Jujuy) aplicado al total.
-- [ ] Confirmar → Excel generado y descargable.
-- [ ] Email llega a `franquicia_jujuy_test@lautin.com.ar` y a `pedidos@...`.
-- [ ] Backup GCS: `gs://chimola-mayorista-pedidos-dev/2026-08/pedido_2722_<ts>.xlsx`.
-- [ ] Pantalla "mis pedidos" lista el pedido recién creado.
+## 8. Definiciones con Chimola (pendiente)
 
-## 7. Promoción a PROD
-
-- [ ] Replicar toda la infra en `chimola-490015` con SA `sa-mayorista@...`.
-- [ ] Bucket `chimola-mayorista-pedidos` (sin `-dev`).
-- [ ] Firestore Native en `chimola-490015`.
-- [ ] Deploy `mayorista-b2b`.
-- [ ] Compartir URL con 1 franquicia piloto (ej: Jujuy) para 1 semana de
-      testing real antes de abrir al resto.
-
-## 8. Comunicación al equipo Chimola
-
-- [ ] Definir email `pedidos@lautin.com.ar` (o el que corresponda) para
-      recibir Excels.
-- [ ] Definir formato exacto del Excel con Chimola (columnas, totales, etc.).
-- [ ] Documentar cómo se procesa un pedido en Aleph (paso a paso).
-- [ ] Definir política de precios y descuentos por cliente (validar con
-      cliente_cod correctos en dim_cliente).
+- [ ] Email destino de pedidos (`pedidos@lautin.com.ar`?). Hoy DEV → fiskowitz.
+- [ ] Formato exacto del Excel (hoy: Resumen + Detalle con SKU/EAN/cantidad/precio lista/subtotal).
+- [ ] ¿Aplicar `articulosol.descvta` (desc. por artículo, ej. 10% M211) además
+      del descuento cabecera? Hoy NO se aplica (el Woo sí lo usa como sale_price).
+- [ ] Confirmar listas/descuentos por cliente en `dim_cliente` (franquicias =
+      lista 1; Jujuy 20%, Mendoza 30%, Villa María 28%, resto 20%).
+- [ ] ¿Mínimo de compra / múltiplos por bulto (`articulosol.bulto`)?
+- [ ] Proceso manual Excel → NP en Aleph (documentar paso a paso).
