@@ -25,3 +25,7 @@ key.json
 *.tfstate.*
 *.tfplan
 crash.log
+
+# Artefactos de testing con browser
+.playwright-mcp/
+/*.png
