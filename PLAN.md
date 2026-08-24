@@ -5,6 +5,16 @@ completos y validados end-to-end en DEV
 (https://mayorista-b2b-dev-vhnuyigzqa-uc.a.run.app). Specs funcionales en
 `SPECS.md`. Falta definir cosas con Chimola (§8) y promover a PROD (§7).
 
+## Fase 5 — Notificaciones y cancelación (2026-08-24) ✅
+
+- [x] Emails por cambio de estado (procesado/cancelado) al cliente + Lautin,
+      con toggle `notificar_estados` en Admin → Config y auditoría en
+      `pedidos/{n}.email_{estado}`.
+- [x] Cancelación por el cliente mientras el pedido esté `confirmado` (botón
+      con confirmación en Mis pedidos; guardas en `pedidos.puede_cancelar`).
+- [x] Fix pestaña Clientes (NUMERIC vs ARRAY<INT64>) y columna "Editar →" con
+      deep-link `?prod=COD` en el catálogo del admin. Tests 22/22.
+
 ## Fase 4 — Rediseño Broadsheet (handoff Claude Design, 2026-08-23) ✅
 
 - [x] Identidad nueva (decisión del usuario): Source Serif 4 + papel + cian
