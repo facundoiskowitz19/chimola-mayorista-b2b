@@ -295,10 +295,18 @@ def _confirmar_lote(cods: list[str], campos: dict) -> None:
 # Editor de producto como PANTALLA (handoff 10, 11, 12, 14)
 # ---------------------------------------------------------------------------
 def _editar_producto(cod: str) -> None:
+    """Ficha de producto: modo VISTA (default) ↔ modo EDICIÓN (handoff fase 6, E2)."""
     if st.button("← Catálogo"):
         st.session_state.adm_prod = None
+        st.session_state.adm_prod_edit = False
         st.session_state.adm_nav_forzar = "catalogo"
         st.rerun()
+    # Al cambiar de producto siempre se entra en modo vista
+    if st.session_state.get("adm_prod_edit_cod") != cod:
+        st.session_state.adm_prod_edit = False
+        st.session_state.adm_prod_edit_cod = cod
+    editando = st.session_state.get("adm_prod_edit", False)
+
     df = catalog.variantes_admin()
     filas = df[df["producto_cod"] == cod].sort_values(["color", "talle"])
     if filas.empty:
@@ -310,7 +318,11 @@ def _editar_producto(cod: str) -> None:
     raw_p = raw[raw["producto_cod"] == cod]
     stock_bq = {r["sku"]: int(r["stock"]) for _, r in raw_p.iterrows()}
 
-    st.markdown(f"## {f0['producto_nombre']}")
+    t1, t2 = st.columns([3, 1], vertical_alignment="center")
+    t1.markdown(f"## {f0['producto_nombre']}")
+    if not editando and t2.button("Editar", type="primary", use_container_width=True):
+        st.session_state.adm_prod_edit = True
+        st.rerun()
     n_fotos = len(fotos.indice_fotos().get(cod.upper(), []))
     st.markdown(f"<div class='card-sub'>{cod} · {f0['marca'] or ''} · {f0['temporada'] or ''} · "
                 f"{f0['rubro'] or ''} · {n_fotos} foto(s)"
@@ -318,6 +330,67 @@ def _editar_producto(cod: str) -> None:
                 + "</div>", unsafe_allow_html=True)
     st.markdown("")
 
+    if not editando:
+        _producto_vista(cod, f0, filas, o, raw_p, stock_bq)
+        return
+    _producto_edicion(cod, f0, filas, o, raw_p, stock_bq)
+
+
+def _producto_vista(cod, f0, filas, o, raw_p, stock_bq) -> None:
+    """Solo lectura: qué trae Aleph, qué está pisado y cómo queda efectivo."""
+    manual = "<span style='color:#006786'>(manual)</span>"
+    ci, cd = st.columns([1, 2.6], gap="large")
+    with ci:
+        st.image(fotos.foto_principal(cod), use_container_width=True)
+        pub = o.get("publicado") if o.get("publicado") in (True, False) else None
+        regla = {None: "Automático — visible si tiene stock", True: "Publicado — visible, exige stock > 0",
+                 False: "Oculto — nunca visible"}[pub]
+        st.markdown(f"<div class='kicker'>Publicación</div>{regla} "
+                    + (manual if pub is not None else "") + "<br>"
+                    f"<div class='kicker' style='margin-top:.5rem'>Destacado</div>{'Sí' if o.get('destacado') else 'No'}<br>"
+                    f"<div class='kicker' style='margin-top:.5rem'>Múltiplo (U.B.)</div>"
+                    f"{o.get('ub') or 'Libre'}", unsafe_allow_html=True)
+    with cd:
+        st.markdown(f"<div class='kicker'>Nombre</div>{f0['producto_nombre']} "
+                    + (manual if o.get("nombre") else "") + "<br>"
+                    f"<div class='kicker' style='margin-top:.5rem'>Descripción</div>"
+                    f"{(o.get('descripcion') or (raw_p.iloc[0].get('descripcion') if not raw_p.empty else '') or '—')} "
+                    + (manual if o.get("descripcion") else ""), unsafe_allow_html=True)
+        st.markdown("<div class='kicker' style='margin:.6rem 0 .2rem'>Precios por lista</div>", unsafe_allow_html=True)
+        ov_p = o.get("precios") or {}
+        pcols = st.columns(4)
+        for i, n in enumerate((1, 2, 3, 4)):
+            aleph = float(raw_p.iloc[0][f"precio{n}"]) if not raw_p.empty else 0
+            efectivo = float(ov_p.get(str(n)) or aleph)
+            origen = manual if ov_p.get(str(n)) else "<span class='muted'>Aleph</span>"
+            pcols[i].markdown(f"<b>L{n}</b><br>{_fmt(efectivo) if efectivo > 0 else '—'}<br>{origen}",
+                              unsafe_allow_html=True)
+
+    st.markdown("<div class='kicker' style='margin:.8rem 0 .2rem'>Variantes (efectivo hoy)</div>",
+                unsafe_allow_html=True)
+    vov = o.get("variantes") or {}
+    vdf = pd.DataFrame([{
+        "SKU": r["sku"], "Color": r["color"], "Talle": r["talle"], "EAN": r["ean"],
+        "Stock": int(r["stock"]), "Stock Aleph": stock_bq.get(r["sku"], 0),
+        "Precio L1": float(r["precio1"]),
+        "Overrides": " · ".join(filter(None, [
+            "stock manual" if vov.get(r["sku"], {}).get("stock") is not None else "",
+            "oculta" if vov.get(r["sku"], {}).get("oculta") else "",
+            "precio manual" if vov.get(r["sku"], {}).get("precios") else "",
+        ])),
+    } for _, r in filas.iterrows()])
+    st.dataframe(vdf, hide_index=True, use_container_width=True,
+                 column_config={"Stock": st.column_config.NumberColumn(format="%d"),
+                                "Stock Aleph": st.column_config.NumberColumn(format="%d"),
+                                "Precio L1": st.column_config.NumberColumn(format="$ %.0f")})
+    for sku, vo in vov.items():
+        if vo.get("stock") is not None:
+            st.markdown(f"<div class='aviso-stock'>{sku} tiene stock manual ({vo['stock']} u.) sobre un stock "
+                        f"real de {stock_bq.get(sku, 0)} — el sitio no valida contra Aleph mientras dure.</div>",
+                        unsafe_allow_html=True)
+
+
+def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
     ci, cd = st.columns([1, 2.6], gap="large")
     with ci:
         st.image(fotos.foto_principal(cod), use_container_width=True)
@@ -373,7 +446,6 @@ def _editar_producto(cod: str) -> None:
             "precio_manual_l1": st.column_config.NumberColumn("Precio manual L1", min_value=0.0, step=100.0,
                                                               format="$ %.0f"),
         })
-    # Advertencia por variante con stock manual, con los dos números (handoff 14)
     for _, r in ed.iterrows():
         if pd.notna(r["stock_manual"]):
             real = stock_bq.get(r["sku"], 0)
@@ -403,14 +475,15 @@ def _editar_producto(cod: str) -> None:
             "publicado": PUB_VALOR[pub], "destacado": bool(dest),
             "ub": int(ub) or None, "variantes": variantes,
         }, _admin_email())
+        st.session_state.adm_prod_edit = False   # guardar vuelve a modo vista
         st.toast(f"{cod} guardado")
         st.rerun()
     if g2.button("Descartar", use_container_width=True):
-        st.session_state.adm_prod = None
-        st.session_state.adm_nav_forzar = "catalogo"
+        st.session_state.adm_prod_edit = False
         st.rerun()
     if g3.button("Quitar TODOS los overrides", use_container_width=True):
         overrides.quitar_catalogo_override(cod)
+        st.session_state.adm_prod_edit = False
         st.toast(f"{cod} volvió 100% a Aleph")
         st.rerun()
 
