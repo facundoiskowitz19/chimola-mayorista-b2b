@@ -116,6 +116,8 @@ st.markdown("""
   .tag-proc { background:var(--n200); color:#444141; }
   .tag-canc { background:var(--alert-tint); color:var(--alert-text); }
   .aviso-stock { color:var(--alert-text); font-size:.86rem; }
+  .aviso-bloque { background:#fff1f4; border-left:3px solid #d6006c; color:#aa0b56;
+                  padding:.7rem .9rem; font-size:.9rem; margin:.4rem 0; }
   .total-box { background:transparent; border-top:2px solid var(--text); padding:.9rem .1rem 0; }
   .lt-footer { border-top:2px solid var(--text); margin-top:2.5rem; padding:1.3rem .1rem 0;
     display:grid; grid-template-columns:repeat(3, 1fr); gap:1rem; font-size:.9rem; color:var(--text); }

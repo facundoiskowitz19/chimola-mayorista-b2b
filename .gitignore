@@ -29,3 +29,7 @@ crash.log
 # Artefactos de testing con browser
 .playwright-mcp/
 /*.png
+
+# Handoffs de diseño (referencia local, no versionar)
+design_handoff_admin_v2/
+/*.zip

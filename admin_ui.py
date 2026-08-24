@@ -338,9 +338,9 @@ def _editar_producto(cod: str) -> None:
         st.session_state.adm_prod_edit = True
         _limpiar_edicion_producto(cod)   # arrancar la edición desde lo guardado
         st.rerun()
-    n_fotos = len(fotos.indice_fotos().get(cod.upper(), []))
+    rubros = " / ".join(filter(None, [str(f0["rubro"] or ""), str(f0.get("subrubro") or "")]))
     st.markdown(f"<div class='card-sub'>{cod} · {f0['marca'] or ''} · {f0['temporada'] or ''} · "
-                f"{f0['rubro'] or ''} · {n_fotos} foto(s)"
+                f"{rubros}"
                 + (f" · overrides por {o.get('updated_by')}" if o.get("updated_by") else "")
                 + "</div>", unsafe_allow_html=True)
     st.markdown("")
@@ -352,58 +352,96 @@ def _editar_producto(cod: str) -> None:
 
 
 def _producto_vista(cod, f0, filas, o, raw_p, stock_bq) -> None:
-    """Solo lectura: qué trae Aleph, qué está pisado y cómo queda efectivo."""
-    manual = "<span style='color:#006786'>(manual)</span>"
+    """Solo lectura (handoff v2 §B): qué ve el cliente hoy y de dónde sale cada valor."""
+    manual = "<span style='color:#006786'>manual</span>"
+
+    def _attr(kicker: str, valor: str, es_manual: bool, top: str = ".6rem") -> str:
+        return (f"<div class='kicker' style='margin-top:{top}'>{kicker}</div>{valor}"
+                + (f"<br>{manual}" if es_manual else ""))
+
     ci, cd = st.columns([1, 2.6], gap="large")
     with ci:
         st.image(fotos.foto_principal(cod), use_container_width=True)
         pub = o.get("publicado") if o.get("publicado") in (True, False) else None
         regla = {None: "Automático — visible si tiene stock", True: "Publicado — visible, exige stock > 0",
                  False: "Oculto — nunca visible"}[pub]
-        st.markdown(f"<div class='kicker'>Publicación</div>{regla} "
-                    + (manual if pub is not None else "") + "<br>"
-                    f"<div class='kicker' style='margin-top:.5rem'>Destacado</div>{'Sí' if o.get('destacado') else 'No'}<br>"
-                    f"<div class='kicker' style='margin-top:.5rem'>Múltiplo (U.B.)</div>"
-                    f"{o.get('ub') or 'Libre'}", unsafe_allow_html=True)
+        n_fotos = len(fotos.indice_fotos().get(cod.upper(), []))
+        st.markdown(
+            _attr("Publicación", regla, pub is not None, top=".2rem")
+            + _attr("Destacado", "Sí" if o.get("destacado") else "No", bool(o.get("destacado")))
+            + _attr("Múltiplo (U.B.)", f"{o.get('ub')} unidades" if o.get("ub") else "Libre", bool(o.get("ub")))
+            + _attr("Fotos", f"{n_fotos} cargada(s)" if n_fotos else "Sin foto", False),
+            unsafe_allow_html=True)
     with cd:
-        st.markdown(f"<div class='kicker'>Nombre</div>{f0['producto_nombre']} "
-                    + (manual if o.get("nombre") else "") + "<br>"
-                    f"<div class='kicker' style='margin-top:.5rem'>Descripción</div>"
-                    f"{(o.get('descripcion') or (raw_p.iloc[0].get('descripcion') if not raw_p.empty else '') or '—')} "
-                    + (manual if o.get("descripcion") else ""), unsafe_allow_html=True)
-        st.markdown("<div class='kicker' style='margin:.6rem 0 .2rem'>Precios por lista</div>", unsafe_allow_html=True)
+        aleph_nombre = str(raw_p.iloc[0]["producto_nombre"]) if not raw_p.empty else ""
+        aleph_descr = str(raw_p.iloc[0].get("descripcion") or "") if not raw_p.empty else ""
+        n1, n2 = st.columns(2)
+        n1.markdown(f"<div class='kicker'>Nombre</div>{f0['producto_nombre']} "
+                    + (manual if o.get("nombre") else "")
+                    + (f"<br><span class='muted'>Aleph: {aleph_nombre}</span>" if o.get("nombre") else ""),
+                    unsafe_allow_html=True)
+        n2.markdown(f"<div class='kicker'>Descripción</div>{o.get('descripcion') or aleph_descr or '—'} "
+                    + (manual if o.get("descripcion") else "")
+                    + (f"<br><span class='muted'>Aleph: {aleph_descr}</span>"
+                       if o.get("descripcion") and aleph_descr else ""),
+                    unsafe_allow_html=True)
+        st.markdown("<div class='kicker' style='margin:1rem 0 .3rem'>Precio efectivo por lista</div>",
+                    unsafe_allow_html=True)
         ov_p = o.get("precios") or {}
         pcols = st.columns(4)
         for i, n in enumerate((1, 2, 3, 4)):
             aleph = float(raw_p.iloc[0][f"precio{n}"]) if not raw_p.empty else 0
             efectivo = float(ov_p.get(str(n)) or aleph)
-            origen = manual if ov_p.get(str(n)) else "<span class='muted'>Aleph</span>"
-            pcols[i].markdown(f"<b>L{n}</b><br>{_fmt(efectivo) if efectivo > 0 else '—'}<br>{origen}",
-                              unsafe_allow_html=True)
-
-    st.markdown("<div class='kicker' style='margin:.8rem 0 .2rem'>Variantes (efectivo hoy)</div>",
+            origen = ("<span style='color:#006786'>Manual</span>" if ov_p.get(str(n))
+                      else "<span class='muted'>Aleph</span>")
+            pcols[i].markdown(
+                "<div style='border-top:1px solid rgba(32,30,29,.35); padding-top:.35rem'>"
+                f"Lista {n}<br><span style='font-size:1.35rem; font-weight:600'>"
+                f"{_fmt(efectivo) if efectivo > 0 else '—'}</span><br>{origen}</div>",
                 unsafe_allow_html=True)
+
+    st.markdown("<div class='kicker' style='margin:1rem 0 .3rem'>Variantes · efectivo hoy — "
+                "<span style='text-transform:none; letter-spacing:0'>lo que el cliente ve ahora, "
+                "con el origen de cada valor</span></div>", unsafe_allow_html=True)
     vov = o.get("variantes") or {}
+
+    def _origenes(r) -> str:
+        if r.get("es_manual"):
+            return "VARIANTE MANUAL"
+        vo = vov.get(r["sku"], {})
+        return " · ".join(filter(None, [
+            "stock manual" if vo.get("stock") is not None else "",
+            "oculta" if vo.get("oculta") else "",
+            "precio manual" if vo.get("precios") else "",
+        ]))
+
     vdf = pd.DataFrame([{
-        "SKU": r["sku"], "Color": r["color"], "Talle": r["talle"], "EAN": r["ean"],
-        "Stock": int(r["stock"]), "Stock Aleph": stock_bq.get(r["sku"], 0),
-        "Precio L1": float(r["precio1"]),
-        "Overrides": " · ".join(filter(None, [
-            "VARIANTE MANUAL" if r.get("es_manual") else "",
-            "stock manual" if vov.get(r["sku"], {}).get("stock") is not None else "",
-            "oculta" if vov.get(r["sku"], {}).get("oculta") else "",
-            "precio manual" if vov.get(r["sku"], {}).get("precios") else "",
-        ])),
+        "SKU": r["sku"], "Color": r["color"], "Talle": r["talle"],
+        "EAN": (str(r["ean"]) if r["ean"] else "—"),
+        "Stock": 0 if vov.get(r["sku"], {}).get("oculta") else int(r["stock"]),
+        "Aleph": "—" if r.get("es_manual") else str(stock_bq.get(r["sku"], 0)),
+        "Precio L1": _fmt(float(r["precio1"])),
+        "Overrides": _origenes(r),
     } for _, r in filas.iterrows()])
-    st.dataframe(vdf, hide_index=True, use_container_width=True,
-                 column_config={"Stock": st.column_config.NumberColumn(format="%d"),
-                                "Stock Aleph": st.column_config.NumberColumn(format="%d"),
-                                "Precio L1": st.column_config.NumberColumn(format="$ %.0f")})
-    for sku, vo in vov.items():
+
+    def _color_origen(v):
+        if v == "VARIANTE MANUAL":
+            return "color:#aa0b56; font-weight:600"
+        return "color:#006786" if v else ""
+
+    sty = (vdf.style.map(_color_origen, subset=["Overrides"]) if hasattr(vdf.style, "map")
+           else vdf.style.applymap(_color_origen, subset=["Overrides"]))
+    st.dataframe(sty, hide_index=True, use_container_width=True)
+
+    avisos = []
+    for sku, vo in sorted(vov.items()):
         if vo.get("stock") is not None:
-            st.markdown(f"<div class='aviso-stock'>{sku} tiene stock manual ({vo['stock']} u.) sobre un stock "
-                        f"real de {stock_bq.get(sku, 0)} — el sitio no valida contra Aleph mientras dure.</div>",
-                        unsafe_allow_html=True)
+            avisos.append(f"{sku} tiene stock manual ({vo['stock']} u.) sobre un stock real de "
+                          f"{stock_bq.get(sku, 0)} — el sitio no valida contra Aleph mientras dure.")
+    for sku in sorted(o.get("variantes_extra") or {}):
+        avisos.append(f"{sku} es una variante manual: no existe en Aleph y el Excel del pedido la marca.")
+    if avisos:
+        st.markdown("<div class='aviso-bloque'>" + " ".join(avisos) + "</div>", unsafe_allow_html=True)
 
 
 def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:

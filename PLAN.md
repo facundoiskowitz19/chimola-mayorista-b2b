@@ -187,3 +187,24 @@ Todo reproducible con `./deploy/setup_infra.sh dev`.
       lista 1; Jujuy 20%, Mendoza 30%, Villa María 28%, resto 20%).
 - [ ] ¿Mínimo de compra / múltiplos por bulto (`articulosol.bulto`)?
 - [ ] Proceso manual Excel → NP en Aleph (documentar paso a paso).
+
+## 9. Fase 7 — Handoff admin v2 (`design_handoff_admin_v2/`, no versionado)
+
+Referencia: README del handoff (orden sugerido B → A2 → E → D → C → F).
+
+- [x] **B** Producto en modo vista: origen de cada valor (Manual/Aleph) bajo
+      atributos, nombre/descr con valor Aleph en gris, "Precio efectivo por
+      lista" (Lista N + origen), tabla de variantes con Stock efectivo
+      (oculta→0) / Aleph / Overrides coloreada (cian; VARIANTE MANUAL en
+      magenta), avisos al pie en bloque tintado con SKU y números, Fotos como
+      atributo de ficha, subrubro en metadatos. ⏸ Pausa para revisión.
+- [ ] **A1** Click en producto abre la ficha (ya era así — nada que rehacer).
+- [ ] **A2** El nav marca la sección padre en fichas (Catálogo/Clientes).
+- [ ] **E** Config: regla de cada campo debajo, preview del banner,
+      consecuencia de los flags, "Actualizar catálogo" con última hora.
+- [ ] **D** Ficha de cliente: datos comerciales con origen, métricas como fila,
+      top productos + pedidos en 2 columnas, acciones instantáneas separadas.
+- [ ] **C** Variantes manuales: tabla con × (checkbox quitar), fila de alta al
+      pie, línea que explica alta instantánea vs Guardar.
+- [ ] **F** Emails: pills por evento, editor y preview lado a lado, preview
+      con forma de email (Para/CC/asunto/adjunto), chips de variables.
