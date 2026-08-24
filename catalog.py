@@ -82,7 +82,8 @@ SQL_CLIENTES = f"""
 SELECT cliente_cod, nombre, fantasia, email, lista_precios, descuento,
        localidad, provincia_desc, direccion, cuit
 FROM {config.T_DIM_CLIENTE}
-WHERE cliente_cod IN UNNEST(@cods)
+-- cliente_cod es NUMERIC en BQ: sin CAST, `IN UNNEST(ARRAY<INT64>)` da BadRequest
+WHERE CAST(cliente_cod AS INT64) IN UNNEST(@cods)
 """
 
 
