@@ -313,6 +313,29 @@ def reset_email_template(evento: str, por: str) -> None:
     invalidar("emails")
 
 
+def set_masivo(cods: list[str], campos: dict, por: str) -> int:
+    """Aplica el MISMO override simple (publicado/destacado) a muchos productos
+    con batched writes de Firestore (fase 8, T5). Solo campos escalares del
+    lote — nunca precios/variantes (esos van por set_catalogo_override)."""
+    permitidos = {"publicado", "destacado"}
+    campos = {k: v for k, v in campos.items() if k in permitidos}
+    if not campos or not cods:
+        return 0
+    cli = db.client()
+    batch = cli.batch()
+    n = 0
+    for cod in cods:
+        batch.set(db.catalogo_overrides_col().document(str(cod)), _audit(dict(campos), por), merge=True)
+        n += 1
+        if n % 400 == 0:   # límite de Firestore: 500 writes por batch
+            batch.commit()
+            batch = cli.batch()
+    batch.commit()
+    invalidar("catalogo")
+    log.info("Override masivo %s a %d productos por %s", campos, n, por)
+    return n
+
+
 def pedidos_email_to() -> list[str]:
     v = get_config().get("pedidos_email_to")
     if v:

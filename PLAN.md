@@ -208,3 +208,31 @@ Referencia: README del handoff (orden sugerido B → A2 → E → D → C → F)
       pie, línea que explica alta instantánea vs Guardar.
 - [x] **F** Emails: pills por evento, editor y preview lado a lado, preview
       con forma de email (Para/CC/asunto/adjunto), chips de variables.
+
+## 10. Fase 8 — Catálogo v2: taxonomía, rail de filtros, scroll y lote masivo
+
+Requerimientos del usuario (2026-08-24) transformados en tareas. Decisión de
+taxonomía (verificada contra BQ): el campo `rubro` de Aleph trae los TIPOS
+(Billeteras, Mochilas, Remeras...) y el campo `tipo_producto` trae las
+CATEGORÍAS (Marroquineria, Textil, Indumentaria, Librería, Bazar...);
+`subrubro` es siempre NULL. En el sitio: **Categoría** ← `tipo_producto` ·
+**Tipo de producto** ← `rubro`. Ambos se normalizan (mayúsculas/acentos
+duplican valores: "Bolsos y totes"/"Bolsos y Totes", "Librería"/"Libreria").
+
+- [x] **T1** Taxonomía en `catalog.py`: sumar `tipo_producto` a la query como
+      `categoria`, normalizar categoria/rubro (case+acentos), eliminar el
+      filtro `subrubro` (siempre NULL), facetas de color y talle. Tests.
+- [x] **T2** Catálogo cliente: rail IZQUIERDO de filtros — Categoría, Tipo de
+      producto, Color y Talle como opciones con conteos; buscador y chips
+      arriba. Color/talle filtran a nivel variante (el producto aparece si
+      alguna variante matchea).
+- [x] **T3** Click en la IMAGEN de la card → ficha del producto (`?p=COD` +
+      router; la foto se vuelve un link).
+- [x] **T4** Scroll infinito: se elimina el paginado ‹›; el grid acumula de a
+      24 con «Mostrar más» al pie (Streamlit no expone eventos de scroll:
+      es lo más cercano nativo; si se quiere scroll real evaluar componente
+      custom en una fase posterior).
+- [x] **T5** Admin: filtro Categoría + renombrar Rubro→Tipo de producto;
+      «Acciones sobre TODO lo filtrado» ampliado (destacar/quitar destacado)
+      y con confirmación mostrando el alcance; `overrides.set_masivo()` con
+      batched writes de Firestore para cientos de productos.

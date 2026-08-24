@@ -457,18 +457,29 @@ def page_catalogo() -> None:
     t2.markdown(f"<p class='muted'>Precios de lista {cli['lista_precios']}, sin descuento cabecera. "
                 "Solo variantes con stock neto en Ezeiza.</p>", unsafe_allow_html=True)
 
-    # Barra de facetas (handoff cambio 1)
+    # Fase 8: rail izquierdo de filtros (Categoría/Tipo/Marca/Temporada/Color/Talle)
+    LABELS_F = {"categoria": "Categoría", "rubro": "Tipo de producto", "marca": "Marca",
+                "temporada": "Temporada", "color": "Color", "talle": "Talle"}
     sel_prev = {f: st.session_state.get(f"f_{f}", []) for f in catalog.FILTROS}
     opciones = catalog.opciones_filtros(df, sel_prev)
-    labels = {"marca": "Marca", "temporada": "Temporada", "rubro": "Rubro", "subrubro": "Subrubro"}
-    fc = st.columns([2.4, 1, 1, 1, 1])
-    busqueda = fc[0].text_input("Buscar", key="f_busqueda", placeholder="código, nombre, EAN, color")
+    rail, main = st.columns([1, 3.4], gap="large")
     sel = {}
-    for f, col in zip(catalog.FILTROS, fc[1:]):
-        if not opciones[f] and not sel_prev[f]:
-            sel[f] = []
-            continue
-        sel[f] = col.multiselect(labels[f], opciones[f], key=f"f_{f}", placeholder="Todos")
+    with rail:
+        busqueda = st.text_input("Buscar", key="f_busqueda", placeholder="código, nombre, EAN, color")
+        for f in catalog.FILTROS:
+            if not opciones[f] and not sel_prev[f]:
+                sel[f] = []
+                continue
+            st.markdown(f"<div class='kicker' style='margin:.7rem 0 .1rem'>{LABELS_F[f]}</div>",
+                        unsafe_allow_html=True)
+            if f == "color":   # demasiados valores para pills
+                sel[f] = st.multiselect(LABELS_F[f], opciones[f], key=f"f_{f}", placeholder="Todos",
+                                        label_visibility="collapsed")
+            else:
+                sel[f] = st.pills(LABELS_F[f], opciones[f], selection_mode="multi",
+                                  key=f"f_{f}", label_visibility="collapsed") or []
+        st.markdown("")
+        st.checkbox("Solo con foto", value=True, key="f_fotos")
     solo_fotos = st.session_state.get("f_fotos", True)
 
     variantes = catalog.filtrar_variantes(df, sel, busqueda)
@@ -480,6 +491,11 @@ def page_catalogo() -> None:
         prods = prods.assign(_d=prods["producto_cod"].map(dest).fillna(False))
         prods = prods.sort_values(["_d", "producto_cod"], ascending=[False, True]).drop(columns="_d")
 
+    with main:
+        _grid_catalogo(df, prods, variantes, busqueda, sel, solo_fotos)
+
+
+def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: bool) -> None:
     # Chips de filtros activos (handoff cambio 2)
     chips = []
     if busqueda:
@@ -489,37 +505,39 @@ def page_catalogo() -> None:
             chips.append((f, v, str(v)))
     if solo_fotos:
         chips.append(("fotos", None, "Solo con foto"))
-    anchos = [max(len(c[2]) * 0.058 + 0.3, 0.6) for c in chips] + ([0.62] if chips else []) + [2.2, 0.8]
+    anchos = [max(len(c[2]) * 0.058 + 0.3, 0.6) for c in chips] + ([0.62] if chips else []) + [2.2]
     ccols = st.columns(anchos, vertical_alignment="center")
     for (campo, valor, label), col in zip(chips, ccols):
         col.button(f"{label} ×", key=f"chip_{campo}_{valor}", on_click=_quitar_filtro, args=(campo, valor))
     if chips:
         ccols[len(chips)].button("Limpiar", key="chip_todos_x", on_click=_quitar_filtro, args=("todos", None))
-    ccols[-2].markdown(f"<div class='muted' style='text-align:right'>{len(prods)} productos · "
+    ccols[-1].markdown(f"<div class='muted' style='text-align:right'>{len(prods)} productos · "
                        f"{len(variantes)} variantes con stock</div>", unsafe_allow_html=True)
-    with ccols[-1]:
-        st.checkbox("Con foto", value=True, key="f_fotos")
 
+    # Fase 8: sin paginado — el grid acumula de a tandas («Mostrar más»)
     firma = (busqueda, tuple(tuple(v) for v in sel.values()), solo_fotos)
     if st.session_state.get("cat_firma") != firma:
-        st.session_state.cat_firma, st.session_state.cat_pagina = firma, 1
+        st.session_state.cat_firma = firma
+        st.session_state.cat_n = config.ITEMS_POR_PAGINA
         st.session_state.card_abierta = None
-    por_pag = config.ITEMS_POR_PAGINA
-    n_pag = max(1, math.ceil(len(prods) / por_pag))
-    pag = min(st.session_state.get("cat_pagina", 1), n_pag)
     if len(prods) == 0:
         st.markdown("<p class='muted'>No hay productos con stock para esos filtros.</p>", unsafe_allow_html=True)
         return
 
-    sub = prods.iloc[(pag - 1) * por_pag: pag * por_pag]
+    n = st.session_state.get("cat_n", config.ITEMS_POR_PAGINA)
+    sub = prods.iloc[:n]
     abierta = st.session_state.get("card_abierta")
-    for k in range(0, len(sub), 4):
-        fila = sub.iloc[k:k + 4]
-        cols = st.columns(4)
+    for k in range(0, len(sub), 3):
+        fila = sub.iloc[k:k + 3]
+        cols = st.columns(3)
         for i, (_, p) in enumerate(fila.iterrows()):
             with cols[i]:
                 with st.container(key=f"card_{p['producto_cod']}"):
-                    st.image(fotos.foto_principal(p["producto_cod"]), use_container_width=True)
+                    # La imagen es un link a la ficha del producto (fase 8, T3)
+                    st.markdown(f"<a href='?p={p['producto_cod']}' target='_self'>"
+                                f"<img src='{fotos.foto_principal(p['producto_cod'])}' "
+                                "style='width:100%; display:block; border-radius:2px'></a>",
+                                unsafe_allow_html=True)
                     st.markdown(
                         f"<div class='card-title' title='{p['producto_nombre']}'>{p['producto_nombre']}</div>"
                         f"<div class='card-sub'>{p['producto_cod']} · {p['marca'] or ''} · {p['rubro'] or ''}</div>"
@@ -560,14 +578,15 @@ def page_catalogo() -> None:
                             st.session_state.card_abierta = None
                             st.rerun()
 
-    n1, n2, n3 = st.columns([4.4, 0.4, 0.4])
-    n1.markdown(f"<div class='muted'>{len(prods)} productos · página {pag} de {n_pag}</div>", unsafe_allow_html=True)
-    if n2.button("‹", key="cat_prev", disabled=pag <= 1):
-        st.session_state.cat_pagina = pag - 1
-        st.rerun()
-    if n3.button("›", key="cat_next", disabled=pag >= n_pag):
-        st.session_state.cat_pagina = pag + 1
-        st.rerun()
+    if len(prods) > len(sub):
+        m1, m2, m3 = st.columns([1, 2, 1])
+        if m2.button(f"Mostrar más — viste {len(sub)} de {len(prods)} productos",
+                     key="cat_mas", use_container_width=True):
+            st.session_state.cat_n = n + config.ITEMS_POR_PAGINA
+            st.rerun()
+    else:
+        st.markdown(f"<p class='muted' style='text-align:center'>Esos son los {len(prods)} productos "
+                    "del filtro.</p>", unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -609,7 +628,7 @@ def page_producto() -> None:
         st.markdown(f"## {prod['producto_nombre']}")
         st.markdown(f"<div class='card-sub'>{prod['producto_cod']} · {prod['marca'] or ''} · "
                     f"{prod['temporada'] or ''} · {prod['rubro'] or ''}"
-                    f"{(' / ' + prod['subrubro']) if prod.get('subrubro') else ''}</div>", unsafe_allow_html=True)
+                    f"{(' · ' + prod['categoria']) if prod.get('categoria') else ''}</div>", unsafe_allow_html=True)
         if prod["precio"] is None:
             st.error(f"Este producto no tiene precio cargado en la lista {cli['lista_precios']}. "
                      "No se puede pedir — consultá a Lautin.")
@@ -1013,6 +1032,11 @@ def main() -> None:
     if "prod" in st.query_params and st.session_state.user.get("rol") == "admin":
         st.session_state.adm_prod = st.query_params["prod"]
         st.session_state.page = "admin"
+        st.query_params.clear()
+    # Deep-link a la ficha de producto (click en la imagen de una card, fase 8)
+    if "p" in st.query_params:
+        st.session_state.producto_sel = st.query_params["p"]
+        st.session_state.page = "producto"
         st.query_params.clear()
     header()
     nav()

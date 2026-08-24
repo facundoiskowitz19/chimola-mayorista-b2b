@@ -35,6 +35,7 @@ def _df():
             df[c] = 0.0
     df["descvta"] = 0.0
     df["descripcion"] = ""
+    df["categoria"] = ["Marroquineria", "Marroquineria", "Indumentaria", "Indumentaria"]
     return df
 
 
@@ -148,3 +149,24 @@ def test_password_y_jwt():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+# --- Fase 8: taxonomía y facetas nuevas ---
+def test_normalizar_taxonomia():
+    s = pd.Series(["Bolsos y Totes", "Bolsos y totes", "Librería", "Libreria", None, "  "])
+    out = catalog.normalizar_taxonomia(s)
+    assert out.iloc[0] == out.iloc[1]          # mayúsculas unificadas
+    assert out.iloc[2] == out.iloc[3]          # acentos unificados
+    assert out.iloc[4] == "Otros" and out.iloc[5] == "Otros"
+    assert out.iloc[0][0].isupper()
+
+
+def test_facetas_categoria_color_talle():
+    df = catalog.con_precio(_df(), 1)
+    ops = catalog.opciones_filtros(df, {})
+    assert ops["categoria"] == ["Indumentaria", "Marroquineria"]
+    assert ops["color"] == ["AQUA", "GREEN", "RAINBOW"]
+    assert ops["talle"] == ["8", "10", "U"]    # orden natural de talles
+    assert len(catalog.filtrar_variantes(df, {"categoria": ["Indumentaria"]})) == 2
+    assert len(catalog.filtrar_variantes(df, {"color": ["AQUA"], "talle": ["U"]})) == 1
+    assert catalog.productos(df).set_index("producto_cod").loc["M211", "categoria"] == "Marroquineria"

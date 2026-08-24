@@ -185,14 +185,18 @@ def _sec_catalogo() -> None:
                 "círculo de la izquierda). Activá «Selección múltiple» para las acciones en lote.</p>",
                 unsafe_allow_html=True)
 
-    c1, c2, c3, c4, c5 = st.columns([2, 1.1, 1.1, 1.1, 1])
+    c1, c2, c3, c4, c5, c6 = st.columns([1.8, 0.9, 1, 1.1, 1.2, 1])
     busq = c1.text_input("Buscar", key="adm_busq", placeholder="código o nombre")
     marca = c2.multiselect("Marca", sorted(df["marca"].dropna().unique()), key="adm_marca", placeholder="Todas")
     temporada = c3.multiselect("Temporada", sorted(df["temporada"].dropna().unique()), key="adm_temp",
                                placeholder="Todas")
-    rubro = c4.multiselect("Rubro", sorted(df["rubro"].dropna().unique()), key="adm_rubro", placeholder="Todos")
-    multi = c5.toggle("Selección múltiple", key="adm_multi")
-    sub = catalog.filtrar_variantes(df, {"marca": marca, "temporada": temporada, "rubro": rubro}, busq)
+    categoria = c4.multiselect("Categoría", sorted(df["categoria"].dropna().unique()), key="adm_cat",
+                               placeholder="Todas")
+    rubro = c5.multiselect("Tipo de producto", sorted(df["rubro"].dropna().unique()), key="adm_rubro",
+                           placeholder="Todos")
+    multi = c6.toggle("Selección múltiple", key="adm_multi")
+    sub = catalog.filtrar_variantes(df, {"marca": marca, "temporada": temporada,
+                                         "categoria": categoria, "rubro": rubro}, busq)
 
     prods = sub.groupby("producto_cod", sort=True).agg(
         nombre=("producto_nombre", "first"), marca=("marca", "first"), temporada=("temporada", "first"),
@@ -290,23 +294,45 @@ def _sec_catalogo() -> None:
         st.session_state.adm_pag = pag + 1
         st.rerun()
 
-    if multi:
-        with st.expander("Acciones sobre TODO lo filtrado"):
-            st.markdown(f"<p class='muted'>Afecta a los {len(prods)} productos del filtro actual "
-                        "(todas las páginas).</p>", unsafe_allow_html=True)
-            f1, f2 = st.columns(2)
-            if f1.button("Ocultar todo lo filtrado", disabled=prods.empty):
-                _aplicar_lote(list(prods["producto_cod"]), {"publicado": False})
-            if f2.button("Todo lo filtrado a automático", disabled=prods.empty):
-                _aplicar_lote(list(prods["producto_cod"]), {"publicado": None})
+    # Fase 8 (T5): acciones masivas por alcance — el filtro de arriba (marca /
+    # temporada / categoría / tipo de producto / búsqueda / pill) define el conjunto.
+    filtros_desc = " · ".join(filter(None, [
+        f"búsqueda «{busq}»" if busq else "",
+        ("marca " + "/".join(marca)) if marca else "",
+        ("temporada " + "/".join(temporada)) if temporada else "",
+        ("categoría " + "/".join(categoria)) if categoria else "",
+        ("tipo " + "/".join(rubro)) if rubro else "",
+        f"pill «{pill}»" if pill != "Todos" else "",
+    ])) or "sin filtros: el catálogo COMPLETO"
+    with st.expander("Acciones masivas sobre todo lo filtrado"):
+        st.markdown(f"<p class='muted'>Afecta a los <b>{len(prods)} productos</b> del filtro actual "
+                    f"({filtros_desc}). Con más de 10 productos pide confirmación.</p>",
+                    unsafe_allow_html=True)
+        f1, f2, f3, f4 = st.columns(4)
+        if f1.button("Ocultar todo", key="masivo_ocultar", disabled=prods.empty, use_container_width=True):
+            _aplicar_lote(list(prods["producto_cod"]), {"publicado": False})
+        if f2.button("Volver a automático", key="masivo_auto", disabled=prods.empty, use_container_width=True):
+            _aplicar_lote(list(prods["producto_cod"]), {"publicado": None})
+        if f3.button("Destacar todo", key="masivo_dest", disabled=prods.empty, use_container_width=True):
+            _aplicar_lote(list(prods["producto_cod"]), {"destacado": True})
+        if f4.button("Quitar destacados", key="masivo_nodest", disabled=prods.empty, use_container_width=True):
+            _aplicar_lote(list(prods["producto_cod"]), {"destacado": False})
+
+
+LOTE_LABEL = {("publicado", False): "OCULTAR", ("publicado", None): "volver a publicación AUTOMÁTICA",
+              ("destacado", True): "DESTACAR", ("destacado", False): "quitar el destacado a"}
+
+
+def _lote_desc(campos: dict) -> str:
+    k, v = next(iter(campos.items()))
+    return LOTE_LABEL.get((k, v), str(campos))
 
 
 def _aplicar_lote(cods: list[str], campos: dict) -> None:
     if len(cods) > 10:
         _confirmar_lote(cods, campos)
         return
-    for cod in cods:
-        overrides.set_catalogo_override(cod, campos, _admin_email())
+    overrides.set_masivo(cods, campos, _admin_email())
     st.toast(f"{len(cods)} producto(s) actualizados")
     st.session_state.adm_tabla_ver = st.session_state.get("adm_tabla_ver", 0) + 1
     st.rerun()
@@ -314,11 +340,12 @@ def _aplicar_lote(cods: list[str], campos: dict) -> None:
 
 @st.dialog("Confirmar acción masiva")
 def _confirmar_lote(cods: list[str], campos: dict) -> None:
-    st.warning(f"Vas a aplicar **{campos}** a **{len(cods)} productos**. ¿Seguro?")
+    st.warning(f"Vas a **{_lote_desc(campos)}** **{len(cods)} productos**. "
+               "Se aplica al instante (sin Guardar). ¿Seguro?")
     c1, c2 = st.columns(2)
     if c1.button("Sí, aplicar", type="primary", use_container_width=True):
-        for cod in cods:
-            overrides.set_catalogo_override(cod, campos, _admin_email())
+        with st.spinner(f"Aplicando a {len(cods)} productos..."):
+            overrides.set_masivo(cods, campos, _admin_email())
         st.toast(f"{len(cods)} producto(s) actualizados")
         st.session_state.adm_tabla_ver = st.session_state.get("adm_tabla_ver", 0) + 1
         st.rerun()
@@ -368,7 +395,7 @@ def _editar_producto(cod: str) -> None:
         st.session_state.adm_prod_edit = True
         _limpiar_edicion_producto(cod)   # arrancar la edición desde lo guardado
         st.rerun()
-    rubros = " / ".join(filter(None, [str(f0["rubro"] or ""), str(f0.get("subrubro") or "")]))
+    rubros = " / ".join(filter(None, [str(f0.get("categoria") or ""), str(f0["rubro"] or "")]))
     st.markdown(f"<div class='card-sub'>{cod} · {f0['marca'] or ''} · {f0['temporada'] or ''} · "
                 f"{rubros}"
                 + (f" · overrides por {o.get('updated_by')}" if o.get("updated_by") else "")

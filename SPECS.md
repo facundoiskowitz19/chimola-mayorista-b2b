@@ -177,3 +177,29 @@ Rediseño aplicado desde `design_handoff_mayorista_ux/` (Claude Design):
   por variante con los dos números.
 - Los mocks (`Cliente.dc.html` / `Admin.dc.html`) y el README del handoff son
   la referencia de fidelidad; tokens en `_ds/broadsheet-*/styles.css`.
+
+## 11. Catálogo v2 y taxonomía (fase 8, 2026-08-24)
+
+- **Taxonomía** (nombres de Aleph invertidos respecto del uso): el campo
+  `rubro` trae los tipos (Billeteras, Mochilas...) y `tipo_producto` las
+  categorías (Marroquineria, Textil, Indumentaria...). En el sitio:
+  **Categoría** ← `tipo_producto` · **Tipo de producto** ← `rubro`;
+  `subrubro` (siempre NULL) se eliminó. Ambos se normalizan
+  (mayúsculas/acentos → un solo valor; vacío → "Otros").
+- **Catálogo cliente**: rail izquierdo de filtros (Categoría, Tipo de
+  producto, Marca, Temporada y Talle como pills multi; Color como
+  multiselect), buscador arriba del rail, chips de filtros activos sobre el
+  grid. Color/talle filtran a nivel VARIANTE (el producto aparece si alguna
+  variante matchea). Grid de 3 columnas.
+- **Click en la imagen** de una card → ficha del producto (link `?p=COD`;
+  navegación completa: la sesión se rearma por cookie y el carrito persiste
+  en Firestore).
+- **Sin paginado**: el grid acumula de a `ITEMS_POR_PAGINA` con «Mostrar
+  más — viste X de Y» (Streamlit no expone eventos de scroll; es el
+  equivalente nativo del scroll infinito).
+- **Admin — acciones masivas por alcance**: los filtros del catálogo admin
+  (búsqueda, marca, temporada, categoría, tipo de producto, pill) definen el
+  conjunto; el expander «Acciones masivas sobre todo lo filtrado» aplica
+  ocultar / automático / destacar / quitar destacado a TODO el conjunto, con
+  confirmación cuando son más de 10. `overrides.set_masivo()` escribe en
+  batches de 400 (límite Firestore 500) y solo acepta publicado/destacado.

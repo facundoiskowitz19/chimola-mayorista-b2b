@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+import unicodedata
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -39,7 +40,7 @@ variantes AS (
   SELECT
     s.producto_cod,
     TRIM(s.producto_nombre)                                   AS producto_nombre,
-    s.marca, s.temporada, s.rubro, s.subrubro,
+    s.marca, s.temporada, s.rubro, s.subrubro, s.tipo_producto,
     s.color_cod,
     UPPER(TRIM(s.color))                                      AS color,
     UPPER(REGEXP_REPLACE(TRIM(IFNULL(s.talle, '')), r'\\s+', '')) AS talle,
@@ -100,6 +101,26 @@ class _Cache:
 _cache = _Cache()
 
 
+def normalizar_taxonomia(s: pd.Series) -> pd.Series:
+    """Unifica valores que difieren solo en mayúsculas/acentos (en Aleph
+    conviven 'Bolsos y totes'/'Bolsos y Totes', 'Librería'/'Libreria').
+    Vacíos/NULL → 'Otros'. El display es la variante más frecuente,
+    con solo la primera letra en mayúscula."""
+    def _clave(v: str) -> str:
+        v = str(v or "").strip().lower()
+        return "".join(c for c in unicodedata.normalize("NFD", v)
+                       if unicodedata.category(c) != "Mn")
+
+    raw = s.fillna("").astype(str).str.strip()
+    claves = raw.map(_clave)
+    rep: dict[str, str] = {}
+    for k, grupo in raw.groupby(claves):
+        if k:
+            top = grupo.value_counts().idxmax()
+            rep[k] = top[:1].upper() + top[1:].lower()
+    return claves.map(lambda k: rep.get(k) or "Otros")
+
+
 def load_variantes(force: bool = False) -> pd.DataFrame:
     """Todas las variantes con stock B2B > 0 (cache TTL `CATALOGO_TTL_SEG`)."""
     with _cache.lock:
@@ -112,6 +133,10 @@ def load_variantes(force: bool = False) -> pd.DataFrame:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
         df["stock"] = df["stock"].astype(int)
         df["color_cod"] = df["color_cod"].astype(str)
+        # Taxonomía (fase 8): en Aleph `rubro` = tipo de producto (Billeteras,
+        # Mochilas...) y `tipo_producto` = categoría (Marroquineria, Textil...).
+        df["categoria"] = normalizar_taxonomia(df["tipo_producto"])
+        df["rubro"] = normalizar_taxonomia(df["rubro"])
         _cache.df, _cache.ts = df, time.time()
         log.info("Catálogo cargado: %d variantes / %d productos en %.1fs",
                  len(df), df["producto_cod"].nunique(), time.time() - t0)
@@ -200,7 +225,9 @@ def aplicar_descuento(monto: float, descuento_pct: float) -> float:
 # ---------------------------------------------------------------------------
 # Filtros y agregación a nivel producto
 # ---------------------------------------------------------------------------
-FILTROS = ["marca", "temporada", "rubro", "subrubro"]
+# Fase 8: categoria (tipo_producto Aleph) y rubro (= tipo de producto en la UI)
+# + color/talle a nivel variante. subrubro se eliminó (siempre NULL en Aleph).
+FILTROS = ["categoria", "rubro", "marca", "temporada", "color", "talle"]
 
 
 def opciones_filtros(df: pd.DataFrame, seleccion: dict | None = None) -> dict[str, list[str]]:
@@ -208,12 +235,15 @@ def opciones_filtros(df: pd.DataFrame, seleccion: dict | None = None) -> dict[st
     seleccion = seleccion or {}
     out = {}
     for f in FILTROS:
+        if f not in df.columns:
+            out[f] = []
+            continue
         sub = df
         for g, vals in seleccion.items():
-            if g != f and vals:
+            if g != f and vals and g in sub.columns:
                 sub = sub[sub[g].isin(vals)]
-        vals = sorted(v for v in sub[f].dropna().unique() if str(v).strip())
-        out[f] = vals
+        vals = [v for v in sub[f].dropna().unique() if str(v).strip()]
+        out[f] = sorted(vals, key=talle_key) if f == "talle" else sorted(vals)
     return out
 
 
@@ -242,14 +272,17 @@ def productos(df_variantes: pd.DataFrame) -> pd.DataFrame:
     """1 fila por producto: nombre, atributos, precio (min), stock total, colores."""
     if df_variantes.empty:
         return pd.DataFrame(columns=["producto_cod", "producto_nombre", "marca", "temporada", "rubro",
-                                     "subrubro", "precio", "stock", "n_variantes", "colores"])
+                                     "categoria", "precio", "stock", "n_variantes", "colores"])
     g = df_variantes.groupby("producto_cod", sort=True)
+    if "categoria" not in df_variantes.columns:
+        df_variantes = df_variantes.assign(categoria="Otros")
+        g = df_variantes.groupby("producto_cod", sort=True)
     out = g.agg(
         producto_nombre=("producto_nombre", "first"),
         marca=("marca", "first"),
         temporada=("temporada", "first"),
         rubro=("rubro", "first"),
-        subrubro=("subrubro", "first"),
+        categoria=("categoria", "first"),
         precio=("precio", "min"),
         stock=("stock", "sum"),
         n_variantes=("sku", "count"),
@@ -282,7 +315,7 @@ def get_producto(df: pd.DataFrame, producto_cod: str) -> dict | None:
         "producto_cod": producto_cod,
         "producto_nombre": first["producto_nombre"],
         "marca": first["marca"], "temporada": first["temporada"],
-        "rubro": first["rubro"], "subrubro": first["subrubro"],
+        "rubro": first["rubro"], "categoria": first.get("categoria", "Otros"),
         "descripcion": first.get("descripcion", ""),
         "ub": int(ub) if pd.notna(ub) and ub else None,
         "precio": float(first["precio"]) if pd.notna(first["precio"]) else None,
