@@ -777,6 +777,22 @@ def page_carrito() -> None:
 # ---------------------------------------------------------------------------
 # Mis pedidos
 # ---------------------------------------------------------------------------
+@st.dialog("Cancelar pedido")
+def _confirmar_cancelacion(numero: int) -> None:
+    st.warning(f"Vas a cancelar el pedido **N° {numero}**. Lautin recibe un aviso por email. ¿Seguro?")
+    c1, c2 = st.columns(2)
+    if c1.button("Sí, cancelar el pedido", type="primary", use_container_width=True):
+        try:
+            with st.spinner("Cancelando y avisando a Lautin..."):
+                pedidos.cancelar_por_cliente(numero, st.session_state.user)
+            st.toast(f"Pedido {numero} cancelado")
+            st.rerun()
+        except Exception as e:  # noqa: BLE001
+            st.error(str(e))
+    if c2.button("No, volver", use_container_width=True):
+        st.rerun()
+
+
 TAG_ESTADO = {"confirmado": "tag-conf", "procesado": "tag-proc", "cancelado": "tag-canc"}
 
 
@@ -825,7 +841,10 @@ def page_pedidos() -> None:
                                 "talle": "Talle", "cantidad": "Cant.",
                                 "precio_unit": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
                                 "subtotal": st.column_config.NumberColumn("Subtotal", format="$ %.0f")})
-    b1, b2, _ = st.columns([1.1, 1.1, 2.6])
+    b1, b2, b3, _ = st.columns([1.1, 1.1, 1.1, 1.5])
+    if pedidos.puede_cancelar(p, st.session_state.user) and \
+            b3.button("Cancelar pedido", key=f"cx_{p['numero']}", use_container_width=True):
+        _confirmar_cancelacion(p["numero"])
     if puede_pedir() and b1.button("Repetir pedido", type="primary", key=f"rep_{p['numero']}",
                                    use_container_width=True):
         with st.spinner("Cargando el pedido al carrito con stock y precios actuales..."):

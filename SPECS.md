@@ -76,10 +76,18 @@ existe (o es null), vale Aleph. Ningún override crea productos ni stock.
 - Reset password y activar/desactivar usuario desde la UI.
 - Criterio: override 25% para 2722 (Aleph=20) → carrito, Excel y email usan 25%.
 
-## 5. Pedidos (admin)
+## 5. Pedidos: estados, cancelación y notificaciones
 
-- Estados: `confirmado` → `procesado` | `cancelado` (solo admin cambia).
+- Estados: `confirmado` → `procesado` | `cancelado`; `procesado` → `cancelado`.
+- **Cancelación por el cliente**: puede cancelar SU pedido solo mientras esté
+  `confirmado` (el equipo aún no lo tomó). Botón "Cancelar pedido" en Mis
+  pedidos con confirmación. Un pedido `procesado` solo lo cancela el admin.
 - Cada cambio agrega a `historial: [{estado, por, en}]`.
+- **Emails por estado** (config `notificar_estados`, default ON): al pasar a
+  `procesado` o `cancelado` se avisa por email al cliente + Chimola (el de
+  cancelado dice si canceló el cliente o el equipo). El resultado queda en
+  `pedidos/{n}.email_{estado}`. Además del email original de confirmación con
+  el Excel adjunto. En DEV todo se redirige a `EMAIL_OVERRIDE_TO`.
 - Filtros del listado admin: estado, cliente, rango de fechas.
 - "Reenviar email" reenvía la confirmación con el Excel del backup GCS.
 - El cliente ve el estado actual de sus pedidos en "Mis pedidos".

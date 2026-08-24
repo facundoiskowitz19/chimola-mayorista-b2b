@@ -613,6 +613,8 @@ def _sec_config() -> None:
                               height=80)
         c1, c2, c3 = st.columns(3)
         descvta = c1.checkbox("Aplicar descvta de Aleph (como el Woo)", value=bool(cfg.get("aplicar_descvta")))
+        notificar = c1.checkbox("Email al cliente y a Lautin al cambiar el estado de un pedido",
+                                value=bool(cfg.get("notificar_estados", True)))
         minimo = c2.number_input("Mínimo de unidades por pedido (0 = sin mínimo)", min_value=0, step=1,
                                  value=int(cfg.get("minimo_pedido_unidades") or 0))
         iva = c3.number_input("IVA % informativo (0 = ocultar)", min_value=0.0, max_value=30.0, step=0.5,
@@ -625,6 +627,7 @@ def _sec_config() -> None:
                 "aplicar_descvta": bool(descvta),
                 "minimo_pedido_unidades": int(minimo) or None,
                 "iva_pct": float(iva),
+                "notificar_estados": bool(notificar),
             }, _admin_email())
             st.toast("Configuración guardada")
             st.rerun()

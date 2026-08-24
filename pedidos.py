@@ -303,8 +303,11 @@ def repetir_pedido(pedido: dict, df_publicadas) -> tuple[list[dict], list[str]]:
 ESTADOS_SIGUIENTES = {"confirmado": ["procesado", "cancelado"], "procesado": ["cancelado"], "cancelado": []}
 
 
-def cambiar_estado(numero: int, nuevo: str, por: str) -> dict:
-    """Cambia el estado (solo transiciones válidas) y registra historial."""
+def cambiar_estado(numero: int, nuevo: str, por: str, notificar: bool | None = None) -> dict:
+    """Cambia el estado (solo transiciones válidas), registra historial y
+    notifica por email al cliente + Chimola (config `notificar_estados`)."""
+    import overrides
+
     ref = db.pedidos_col().document(f"{int(numero):06d}")
     snap = ref.get()
     if not snap.exists:
@@ -315,7 +318,33 @@ def cambiar_estado(numero: int, nuevo: str, por: str) -> dict:
     evento = {"estado": nuevo, "por": por, "en": dt.datetime.now(dt.timezone.utc)}
     ref.update({"estado": nuevo, "historial": firestore.ArrayUnion([evento])})
     log.info("Pedido %s: %s → %s por %s", numero, actual, nuevo, por)
-    return {**snap.to_dict(), "estado": nuevo}
+    pedido = {**snap.to_dict(), "estado": nuevo}
+    if notificar is None:
+        notificar = bool(overrides.get_config().get("notificar_estados", True))
+    if notificar:
+        res = email_notif.enviar_cambio_estado(pedido, nuevo, por)
+        ref.update({f"email_{nuevo}": res})
+        pedido[f"email_{nuevo}"] = res
+    return pedido
+
+
+def puede_cancelar(pedido: dict, usuario: dict) -> bool:
+    """El cliente puede cancelar SU pedido solo mientras el equipo no lo procesó
+    (estado 'confirmado'). Los admin cancelan por su lado sin este límite."""
+    if not pedido or not usuario:
+        return False
+    if pedido.get("estado") != "confirmado":
+        return False
+    if usuario.get("rol") == "admin":
+        return False   # el admin usa la sección Administración
+    return int(pedido.get("cliente_cod", -1)) == int(usuario.get("cliente_cod") or -2)
+
+
+def cancelar_por_cliente(numero: int, usuario: dict) -> dict:
+    pedido = get_pedido(numero)
+    if not puede_cancelar(pedido, usuario):
+        raise ValueError("Este pedido ya fue tomado por Lautin y no se puede cancelar desde acá — contactalos por WhatsApp.")
+    return cambiar_estado(numero, "cancelado", usuario["email"])
 
 
 # ---------------------------------------------------------------------------

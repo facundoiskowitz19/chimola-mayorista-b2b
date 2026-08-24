@@ -212,6 +212,8 @@ DEFAULTS_CONFIG = {
     # Las listas mayoristas de Aleph son SIN IVA (el Woo muestra "+IVA" y la NP
     # suma 21%). Se muestra como línea informativa en carrito/Excel. 0 = ocultar.
     "iva_pct": 21.0,
+    # Mail al cliente + Chimola cuando un pedido cambia de estado (procesado/cancelado).
+    "notificar_estados": True,
 }
 
 

@@ -64,6 +64,57 @@ def _destinatarios(pedido: dict) -> tuple[list[str], list[str]]:
     return cliente, chimola
 
 
+ASUNTO_ESTADO = {
+    "procesado": "Tu pedido N° {n} fue procesado por Lautin",
+    "cancelado": "Pedido N° {n} cancelado",
+}
+
+
+def cuerpo_estado(pedido: dict, nuevo: str, por: str) -> str:
+    base = [f"Pedido N° {pedido['numero']} — {pedido['cliente_nombre']} (cliente {pedido['cliente_cod']})",
+            f"Fecha del pedido: {pedido['fecha_str']} · {pedido['unidades']} u. · total {_fmt(pedido['total'])}", ""]
+    if nuevo == "procesado":
+        base += ["El equipo de Lautin procesó tu pedido y ya está en preparación.",
+                 "El detalle está en el Excel que recibiste al confirmarlo."]
+    elif nuevo == "cancelado":
+        quien = "el cliente" if por == pedido.get("usuario_email") else "el equipo de Lautin"
+        base += [f"El pedido fue CANCELADO por {quien} ({por}).",
+                 "Si fue un error, respondé este mail o contactá a Lautin."]
+    else:
+        base += [f"El pedido pasó al estado: {nuevo}."]
+    base += ["", "— Mayorista Lautin"]
+    return "\n".join(base)
+
+
+def enviar_cambio_estado(pedido: dict, nuevo: str, por: str) -> dict:
+    """Notifica al cliente + Chimola el cambio de estado. Best-effort, nunca levanta."""
+    to, chimola = _destinatarios(pedido)
+    todos = to + chimola
+    if not config.EMAIL_ENABLED:
+        return {"enviado": False, "destinatarios": todos, "error": "deshabilitado"}
+    try:
+        user, password = _smtp_creds()
+        subject = "[Mayorista Lautin] " + ASUNTO_ESTADO.get(nuevo, f"Pedido N° {{n}} — {nuevo}").format(n=pedido["numero"])
+        body = cuerpo_estado(pedido, nuevo, por)
+        with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=30) as smtp:
+            smtp.starttls()
+            smtp.login(user, password)
+            for dest in (to, chimola):
+                if not dest:
+                    continue
+                msg = EmailMessage()
+                msg["From"] = user
+                msg["To"] = ", ".join(dest)
+                msg["Subject"] = subject
+                msg.set_content(body)
+                smtp.send_message(msg)
+        log.info("Email estado %s del pedido %s enviado a %s", nuevo, pedido["numero"], todos)
+        return {"enviado": True, "destinatarios": todos, "error": None}
+    except Exception as e:  # noqa: BLE001
+        log.exception("Fallo email de estado %s del pedido %s", nuevo, pedido.get("numero"))
+        return {"enviado": False, "destinatarios": todos, "error": str(e)}
+
+
 def enviar_confirmacion(pedido: dict, xlsx_bytes: bytes, filename: str) -> dict:
     """Envía 1 mail al cliente + 1 a Chimola con el Excel adjunto.
     Devuelve {enviado: bool, destinatarios: [...], error: str|None}. Nunca levanta."""

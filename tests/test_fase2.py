@@ -112,6 +112,28 @@ def test_estados_validos():
     assert pedidos.ESTADOS_SIGUIENTES["cancelado"] == []
 
 
+def test_puede_cancelar():
+    cli = {"rol": "cliente", "cliente_cod": 1026, "email": "f@k.com"}
+    ped = {"estado": "confirmado", "cliente_cod": 1026, "usuario_email": "f@k.com"}
+    assert pedidos.puede_cancelar(ped, cli)
+    assert not pedidos.puede_cancelar({**ped, "estado": "procesado"}, cli)      # ya lo tomó Lautin
+    assert not pedidos.puede_cancelar({**ped, "cliente_cod": 2722}, cli)        # pedido ajeno
+    assert not pedidos.puede_cancelar(ped, {**cli, "rol": "admin", "cliente_cod": None})
+    assert not pedidos.puede_cancelar(None, cli) and not pedidos.puede_cancelar(ped, None)
+
+
+def test_cuerpos_email_estado():
+    import email_notif
+    ped = {"numero": 7, "cliente_nombre": "Kinderland", "cliente_cod": 1026,
+           "fecha_str": "24/08/2026", "unidades": 10, "total": 1000.0, "usuario_email": "f@k.com"}
+    proc = email_notif.cuerpo_estado(ped, "procesado", "admin@lautin.com.ar")
+    assert "procesó tu pedido" in proc
+    canc_cli = email_notif.cuerpo_estado(ped, "cancelado", "f@k.com")
+    assert "CANCELADO por el cliente" in canc_cli
+    canc_adm = email_notif.cuerpo_estado(ped, "cancelado", "admin@lautin.com.ar")
+    assert "CANCELADO por el equipo de Lautin" in canc_adm
+
+
 # ---------------------------------------------------------------------------
 # Fase 3: overrides por variante, U.B., IVA, KPIs
 # ---------------------------------------------------------------------------
