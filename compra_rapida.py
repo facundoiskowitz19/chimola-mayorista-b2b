@@ -15,7 +15,8 @@ def item_desde_variante(v, cantidad: int) -> dict:
     return {"sku": v["sku"], "ean": v["ean"], "producto_cod": v["producto_cod"],
             "producto_nombre": v["producto_nombre"], "color_cod": str(v["color_cod"]),
             "color": v["color"], "talle": v["talle"], "cantidad": int(cantidad),
-            "precio_unit": float(v["precio"]), "stock": int(v["stock"])}
+            "precio_unit": float(v["precio"]), "stock": int(v["stock"]),
+            "manual": bool(v.get("es_manual", False))}
 
 
 def parsear_lineas(texto: str) -> list[tuple[str, int, int]]:

@@ -151,7 +151,11 @@ def generar_excel(pedido: dict) -> bytes:
         wd.write(0, c, name, hdr)
     for i, it in enumerate(pedido["items"], start=1):
         wd.write(i, 0, it["producto_cod"])
-        wd.write(i, 1, it["producto_nombre"])
+        # Las variantes manuales no existen en Aleph: marcarlas para que el
+        # equipo no las busque en el ERP al cargar la NP (SPECS §3).
+        nombre_linea = it["producto_nombre"] + (" (VARIANTE MANUAL — no existe en Aleph)"
+                                                if it.get("manual") else "")
+        wd.write(i, 1, nombre_linea)
         wd.write(i, 2, it["color"])
         wd.write(i, 3, str(it["color_cod"]))
         wd.write(i, 4, it["talle"])
@@ -236,7 +240,7 @@ def confirmar_pedido(usuario: dict, cliente: dict, items: list[dict], observacio
         "usuario_email": usuario["email"],
         "lista_precios": int(cliente.get("lista_precios") or 1),
         "items": [{k: it.get(k) for k in ("sku", "ean", "producto_cod", "producto_nombre", "color_cod",
-                                          "color", "talle", "cantidad", "precio_unit", "subtotal")}
+                                          "color", "talle", "cantidad", "precio_unit", "subtotal", "manual")}
                   for it in items],
         **tot,
         "estado": "confirmado",

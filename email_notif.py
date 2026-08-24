@@ -79,6 +79,7 @@ def variables_pedido(pedido: dict, por: str = "") -> dict:
     detalle = "\n".join(
         f"  - {it['producto_cod']} {it['producto_nombre']} | {it['color']} | T {it['talle']} "
         f"| {it['cantidad']} u × {_fmt(it['precio_unit'])} = {_fmt(it.get('subtotal', 0))}"
+        + (" [VARIANTE MANUAL — no existe en Aleph]" if it.get("manual") else "")
         for it in pedido.get("items", []))
     if por and por == pedido.get("usuario_email"):
         quien = f"el cliente ({por})"

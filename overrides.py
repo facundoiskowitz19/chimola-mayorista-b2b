@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import re
 import threading
 import time
 
@@ -63,8 +64,20 @@ def set_catalogo_override(producto_cod: str, campos: dict, por: str) -> None:
     """Merge de campos de producto {publicado, destacado, nombre, descripcion,
     precios, ub} y de variante `variantes: {sku: {stock, oculta, precios}}`.
     ub = múltiplo/mínimo de compra (unidad de bulto). Ver SPECS §3."""
-    permitidos = {"publicado", "destacado", "nombre", "descripcion", "precios", "ub", "variantes"}
+    permitidos = {"publicado", "destacado", "nombre", "descripcion", "precios", "ub", "variantes",
+                  "variantes_extra"}
     campos = {k: v for k, v in campos.items() if k in permitidos}
+    if "variantes_extra" in campos:
+        limpio = {}
+        for sku, vo in (campos["variantes_extra"] or {}).items():
+            precios_x = {str(k): float(p) for k, p in (vo.get("precios") or {}).items() if p and float(p) > 0}
+            if not precios_x.get("1") or vo.get("stock") is None:
+                continue   # stock y precio L1 son obligatorios (no hay Aleph de fallback)
+            limpio[sku] = {"color": str(vo.get("color") or "").strip().upper(),
+                           "talle": str(vo.get("talle") or "U").strip().upper().replace(" ", ""),
+                           "stock": max(0, int(vo["stock"])), "precios": precios_x,
+                           "ean": str(vo.get("ean") or "").strip()}
+        campos["variantes_extra"] = limpio
     if "precios" in campos and campos["precios"]:
         campos["precios"] = {str(k): float(v) for k, v in campos["precios"].items() if v and float(v) > 0}
     if "ub" in campos:
@@ -87,11 +100,14 @@ def set_catalogo_override(producto_cod: str, campos: dict, por: str) -> None:
     # `precios` y `variantes` se REEMPLAZAN completos (merge fusionaría por clave
     # y no se podría quitar un override de una lista/variante).
     variantes = campos.pop("variantes", None)
+    extras = campos.pop("variantes_extra", None)
     precios = campos.pop("precios", None) if "precios" in campos else "__keep__"
     ref.set(_audit(campos, por), merge=True)
     reemplazos = {}
     if variantes is not None:
         reemplazos["variantes"] = variantes
+    if extras is not None:
+        reemplazos["variantes_extra"] = extras
     if precios != "__keep__":
         reemplazos["precios"] = precios or {}
     if reemplazos:
@@ -116,6 +132,7 @@ def aplicar_overrides(df: pd.DataFrame, incluir_ocultos: bool = False) -> pd.Dat
     out["ub"] = None
     out["stock_manual"] = False
     out["var_oculta"] = False
+    out["es_manual"] = False
     ov = get_catalogo_overrides()
     if ov:
         idx = out["producto_cod"]
@@ -147,6 +164,35 @@ def aplicar_overrides(df: pd.DataFrame, incluir_ocultos: bool = False) -> pd.Dat
                 col = f"precio{int(lista)}"
                 if col in out.columns:
                     out.loc[out["sku"] == sku, col] = float(precio)
+        # Variantes MANUALES fuera de Aleph (fase 6, E4): se sintetizan filas
+        # heredando los atributos del producto; stock/precio son 100% manuales.
+        nuevas = []
+        for p, o in ov.items():
+            extras = o.get("variantes_extra") or {}
+            if not extras:
+                continue
+            base_rows = out[out["producto_cod"] == p]
+            if base_rows.empty:
+                continue   # el producto no está en el catálogo actual
+            base = base_rows.iloc[0]
+            for sku, vo in extras.items():
+                fila = base.copy()
+                fila["sku"] = sku
+                fila["color"] = vo.get("color", "")
+                fila["color_cod"] = "X" + re.sub(r"[^A-Z0-9]", "", str(vo.get("color", "")).upper())[:12]
+                fila["talle"] = vo.get("talle", "U")
+                fila["ean"] = vo.get("ean", "")
+                fila["stock"] = int(vo.get("stock") or 0)
+                fila["stock_manual"] = True
+                fila["var_oculta"] = False
+                fila["es_manual"] = True
+                for lista, precio in (vo.get("precios") or {}).items():
+                    col = f"precio{int(lista)}"
+                    if col in out.columns:
+                        fila[col] = float(precio)
+                nuevas.append(fila)
+        if nuevas:
+            out = pd.concat([out, pd.DataFrame(nuevas)], ignore_index=True)
         if not incluir_ocultos:
             out = out[out["publicado"].map(lambda v: v is not False)]
             out = out[~out["var_oculta"] & (out["stock"] > 0)]
@@ -162,6 +208,12 @@ def variantes_overrides() -> tuple[dict, set, dict]:
                 stock_map[sku] = int(vo["stock"])
             if vo.get("oculta"):
                 ocultas.add(sku)
+            if vo.get("precios"):
+                var_precios[sku] = vo["precios"]
+        # Las variantes manuales SIEMPRE resuelven por su stock manual
+        # (BQ no las conoce) — clave para la validación al confirmar.
+        for sku, vo in (o.get("variantes_extra") or {}).items():
+            stock_map[sku] = int(vo.get("stock") or 0)
             if vo.get("precios"):
                 var_precios[sku] = vo["precios"]
     return stock_map, ocultas, var_precios

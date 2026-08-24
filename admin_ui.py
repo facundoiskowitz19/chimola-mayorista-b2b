@@ -378,6 +378,7 @@ def _producto_vista(cod, f0, filas, o, raw_p, stock_bq) -> None:
         "Stock": int(r["stock"]), "Stock Aleph": stock_bq.get(r["sku"], 0),
         "Precio L1": float(r["precio1"]),
         "Overrides": " · ".join(filter(None, [
+            "VARIANTE MANUAL" if r.get("es_manual") else "",
             "stock manual" if vov.get(r["sku"], {}).get("stock") is not None else "",
             "oculta" if vov.get(r["sku"], {}).get("oculta") else "",
             "precio manual" if vov.get(r["sku"], {}).get("precios") else "",
@@ -458,6 +459,51 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
                         "manual, el sitio deja de validar contra Aleph y puede vender de más.</div>",
                         unsafe_allow_html=True)
 
+    # --- Variantes MANUALES fuera de Aleph (fase 6, E4) ---
+    extras = o.get("variantes_extra") or {}
+    st.markdown("<div class='kicker' style='margin:.8rem 0 .2rem'>Variantes manuales — no existen en "
+                "Aleph; stock y precio son 100% tuyos y el Excel las marca</div>", unsafe_allow_html=True)
+    if extras:
+        xdf = pd.DataFrame([{"sku": sku, "color": vo.get("color", ""), "talle": vo.get("talle", ""),
+                             "stock": int(vo.get("stock") or 0),
+                             "precio_l1": float((vo.get("precios") or {}).get("1") or 0),
+                             "ean": vo.get("ean", ""), "eliminar": False}
+                            for sku, vo in sorted(extras.items())])
+        xed = st.data_editor(xdf, hide_index=True, use_container_width=True, key=f"adm_extra_{cod}",
+                             disabled=["sku", "color", "talle"],
+                             column_config={
+                                 "sku": "SKU", "color": "Color", "talle": "Talle",
+                                 "stock": st.column_config.NumberColumn("Stock", min_value=0, step=1),
+                                 "precio_l1": st.column_config.NumberColumn("Precio L1", min_value=0.0,
+                                                                            step=100.0, format="$ %.0f"),
+                                 "ean": "EAN", "eliminar": st.column_config.CheckboxColumn("Eliminar"),
+                             })
+    else:
+        xed = None
+        st.markdown("<p class='muted'>Este producto no tiene variantes manuales.</p>", unsafe_allow_html=True)
+    with st.form(f"extra_{cod}", border=False):
+        a = st.columns([1.2, 0.8, 0.8, 1, 1.2, 1.2])
+        x_color = a[0].text_input("Color nuevo")
+        x_talle = a[1].text_input("Talle", value="U")
+        x_stock = a[2].number_input("Stock", min_value=0, step=1, value=0)
+        x_precio = a[3].number_input("Precio L1", min_value=0.0, step=100.0, value=0.0)
+        x_ean = a[4].text_input("EAN (opcional)")
+        if a[5].form_submit_button("Agregar variante manual", use_container_width=True):
+            if not x_color.strip() or x_stock <= 0 or x_precio <= 0:
+                st.error("Color, stock > 0 y precio L1 > 0 son obligatorios para una variante manual.")
+            else:
+                import re as _re
+                talle_n = x_talle.strip().upper().replace(" ", "") or "U"
+                slug = _re.sub(r"[^A-Z0-9]", "", x_color.strip().upper())[:12] or "MANUAL"
+                sku_n = f"{cod}_{talle_n}_X{slug}"
+                nuevos = dict(extras)
+                nuevos[sku_n] = {"color": x_color.strip().upper(), "talle": talle_n,
+                                 "stock": int(x_stock), "precios": {"1": float(x_precio)},
+                                 "ean": x_ean.strip()}
+                overrides.set_catalogo_override(cod, {"variantes_extra": nuevos}, _admin_email())
+                st.toast(f"Variante manual {sku_n} agregada")
+                st.rerun()
+
     st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:1rem 0 .6rem'></div>",
                 unsafe_allow_html=True)
     g1, g2, g3, _ = st.columns([1, 1, 1.3, 2])
@@ -473,12 +519,18 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
                 v["precios"] = {"1": float(r["precio_manual_l1"])}
             if v:
                 variantes[r["sku"]] = v
-        overrides.set_catalogo_override(cod, {
+        campos = {
             "nombre": nombre.strip() or None, "descripcion": descr.strip() or None,
             "precios": {k: float(v) for k, v in precios.items() if v and v > 0},
             "publicado": PUB_VALOR[pub], "destacado": bool(dest),
             "ub": int(ub) or None, "variantes": variantes,
-        }, _admin_email())
+        }
+        if xed is not None:   # ediciones/bajas de variantes manuales
+            campos["variantes_extra"] = {
+                r["sku"]: {"color": r["color"], "talle": r["talle"], "stock": int(r["stock"] or 0),
+                           "precios": {"1": float(r["precio_l1"] or 0)}, "ean": str(r["ean"] or "")}
+                for _, r in xed.iterrows() if not bool(r["eliminar"])}
+        overrides.set_catalogo_override(cod, campos, _admin_email())
         st.session_state.adm_prod_edit = False   # guardar vuelve a modo vista
         st.toast(f"{cod} guardado")
         st.rerun()

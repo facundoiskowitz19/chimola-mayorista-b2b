@@ -25,7 +25,10 @@ Firestore (ADMINISTRABLE) ─────────┴─ overrides: pisan lo 
 
 **Regla de oro**: BigQuery nunca se escribe desde el sitio. Todo lo que el
 admin edita vive en Firestore y **pisa** el valor de Aleph; si el override no
-existe (o es null), vale Aleph. Ningún override crea productos ni stock.
+existe (o es null), vale Aleph. Ningún override crea PRODUCTOS nuevos.
+**Excepción (fase 6, E4)**: el admin puede crear **variantes manuales** de un
+producto existente (`variantes_extra`, §3.5) — con stock y precio 100%
+manuales, y marcadas en Excel/email porque Aleph no las conoce.
 
 ## 3. Catálogo administrable
 
@@ -57,6 +60,20 @@ existe (o es null), vale Aleph. Ningún override crea productos ni stock.
 - `precios: {lista → precio}`: precio propio de la variante, pisa al del
   producto para esa lista.
 - Todo editable desde el modal "Editar producto" del admin (tabla de variantes).
+
+### 3.5 Variantes MANUALES (`variantes_extra: {sku: {...}}`) — fase 6, E4
+- Variantes de un producto existente que **no existen en Aleph** (ej: un color
+  nuevo). SKU generado `{prod}_{TALLE}_X{SLUGCOLOR}` (el prefijo `X` no puede
+  chocar con un color_cod numérico de Aleph).
+- `color`, `talle`, `stock` (>0) y `precios.1` (>0) obligatorios; `ean`
+  opcional. Sin fallback a Aleph: stock y precio son 100% responsabilidad del
+  admin, y la validación al confirmar usa ese stock manual.
+- Se sintetizan en el catálogo heredando nombre/marca/temporada/rubro/fotos
+  del producto; stock 0 las saca del catálogo del cliente.
+- ⚠ Operativo: en el Excel y el email la línea sale marcada
+  **"(VARIANTE MANUAL — no existe en Aleph)"** para que el equipo no la
+  busque en el ERP al cargar la NP.
+- Alta/edición/baja desde la ficha de producto (modo edición).
 
 ### 3.4 Criterios de aceptación
 - Ocultar producto → desaparece del catálogo/compra rápida del cliente en ≤ 60 s

@@ -5,6 +5,22 @@ completos y validados end-to-end en DEV
 (https://mayorista-b2b-dev-vhnuyigzqa-uc.a.run.app). Specs funcionales en
 `SPECS.md`. Falta definir cosas con Chimola (§8) y promover a PROD (§7).
 
+## Fase 6 — Requerimientos → tareas (2026-08-24) ✅
+
+- [x] **E2** Producto ver→editar: ficha en modo VISTA (default, read-only con
+      origen de cada dato) y EDICIÓN tras el botón Editar.
+- [x] **E1** Ficha de cliente: click abre vista con datos efectivos, métricas
+      (`_metricas_cliente`), top productos y pedidos con detalle; Editar
+      habilita overrides/password/activo.
+- [x] **E3** Configurador de emails: templates por evento en `config/emails`
+      (texto o HTML multipart), variables, preview en vivo y "Enviarme una
+      prueba" desde Admin → Config.
+- [x] **E4** Variantes manuales fuera de Aleph (`variantes_extra`): alta/baja
+      desde la ficha, stock/precio 100% manuales (validación al confirmar
+      incluida), sintetizadas en el catálogo del cliente y marcadas
+      "(VARIANTE MANUAL — no existe en Aleph)" en Excel y email. SPECS §3.5.
+- [x] Tests 26/26 · e2e por UI y por code-paths · deploy y commit por épica.
+
 ## Fase 5 — Notificaciones y cancelación (2026-08-24) ✅
 
 - [x] Emails por cambio de estado (procesado/cancelado) al cliente + Lautin,

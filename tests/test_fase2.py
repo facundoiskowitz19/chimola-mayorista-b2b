@@ -202,6 +202,50 @@ def test_overrides_por_variante(monkeypatch):
     assert "M211_U_2059" not in set(overrides.aplicar_overrides(_df())["sku"])
 
 
+def test_variantes_extra(monkeypatch):
+    ov = {"M211": {"variantes_extra": {"M211_U_XPRUEBA": {
+        "color": "PRUEBA", "talle": "U", "stock": 10, "precios": {"1": 30000}, "ean": ""}}}}
+    monkeypatch.setattr(overrides, "get_catalogo_overrides", lambda: ov)
+    out = overrides.aplicar_overrides(_df())
+    extra = out[out.sku == "M211_U_XPRUEBA"]
+    assert len(extra) == 1
+    fila = extra.iloc[0]
+    assert fila["producto_nombre"] == "Mochila Soft Rainbow"     # hereda del producto
+    assert fila["color"] == "PRUEBA" and fila["stock"] == 10 and fila["precio1"] == 30000
+    assert fila["es_manual"] and fila["stock_manual"] and fila["color_cod"].startswith("X")
+    # con stock 0 desaparece para clientes
+    ov["M211"]["variantes_extra"]["M211_U_XPRUEBA"]["stock"] = 0
+    assert "M211_U_XPRUEBA" not in set(overrides.aplicar_overrides(_df())["sku"])
+    # y la validación de stock usa el manual
+    stock_map, _, _ = overrides.variantes_overrides()
+    assert stock_map["M211_U_XPRUEBA"] == 0
+    # item de carrito arrastra la marca manual
+    ov["M211"]["variantes_extra"]["M211_U_XPRUEBA"]["stock"] = 10
+    out = catalog.con_precio(overrides.aplicar_overrides(_df()), 1, aplicar_descvta=False)
+    it = cr.item_desde_variante(out[out.sku == "M211_U_XPRUEBA"].iloc[0], 2)
+    assert it["manual"] is True and it["precio_unit"] == 30000
+
+
+def test_excel_marca_variante_manual():
+    import datetime as dt
+    import io
+
+    import openpyxl
+    items = [{"sku": "M211_U_XPRUEBA", "ean": "", "producto_cod": "M211",
+              "producto_nombre": "Mochila Soft Rainbow", "color_cod": "XPRUEBA", "color": "PRUEBA",
+              "talle": "U", "cantidad": 2, "precio_unit": 30000.0, "manual": True}]
+    p = {"numero": 98, "cliente_cod": 1026, "cliente_nombre": "Test", "cliente_cuit": "-",
+         "usuario_email": "x@y.com", "lista_precios": 1, "items": items, "estado": "confirmado",
+         "observaciones": "", "confirmed_at": dt.datetime(2026, 8, 24, 15, tzinfo=dt.timezone.utc),
+         "fecha_str": "24/08/2026"}
+    p.update(pedidos.calcular_totales(items, 25))
+    p["xlsx_filename"] = pedidos.nombre_archivo(p)
+    ws = openpyxl.load_workbook(io.BytesIO(pedidos.generar_excel(p)))["Detalle"]
+    assert "VARIANTE MANUAL" in ws["B2"].value
+    import email_notif
+    assert "[VARIANTE MANUAL" in email_notif.variables_pedido(p)["detalle"]
+
+
 def test_stock_actual_respeta_overrides(monkeypatch):
     import stock as stock_mod
 
