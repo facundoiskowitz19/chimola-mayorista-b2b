@@ -234,6 +234,33 @@ def set_config(campos: dict, por: str) -> None:
     log.info("Config global por %s: %s", por, campos)
 
 
+def get_emails_config() -> dict:
+    """Doc config/emails: {evento: {formato, asunto, cuerpo}} (vacío = defaults)."""
+    def load():
+        snap = db.emails_ref().get()
+        return snap.to_dict() or {}
+    return _cached("emails", load)
+
+
+def set_email_template(evento: str, campos: dict, por: str) -> None:
+    permitidos = {"formato", "asunto", "cuerpo"}
+    campos = {k: v for k, v in campos.items() if k in permitidos}
+    if campos.get("formato") not in (None, "texto", "html"):
+        raise ValueError("formato debe ser 'texto' o 'html'")
+    db.emails_ref().set({evento: campos, **_audit({}, por)}, merge=True)
+    db.emails_ref().update({evento: campos})   # reemplaza el evento completo
+    invalidar("emails")
+    log.info("Template email '%s' por %s (formato=%s)", evento, por, campos.get("formato"))
+
+
+def reset_email_template(evento: str, por: str) -> None:
+    from google.cloud import firestore as _fs
+
+    db.emails_ref().set(_audit({}, por), merge=True)
+    db.emails_ref().update({evento: _fs.DELETE_FIELD})
+    invalidar("emails")
+
+
 def pedidos_email_to() -> list[str]:
     v = get_config().get("pedidos_email_to")
     if v:

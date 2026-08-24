@@ -156,6 +156,30 @@ def test_cuerpos_email_estado():
     assert "CANCELADO por el equipo de Lautin" in canc_adm
 
 
+def test_render_email_templates(monkeypatch):
+    import email_notif
+    ped = {"numero": 7, "cliente_nombre": "Kinderland", "cliente_cod": 1026, "usuario_email": "f@k.com",
+           "fecha_str": "24/08/2026", "unidades": 10, "lista_precios": 1, "subtotal": 1000.0,
+           "descuento_pct": 25.0, "descuento_monto": 250.0, "total": 750.0, "iva_pct": 21.0,
+           "iva_monto": 157.5, "total_con_iva": 907.5, "observaciones": "", "estado": "confirmado",
+           "items": [{"producto_cod": "A", "producto_nombre": "a", "color": "X", "talle": "U",
+                      "cantidad": 10, "precio_unit": 100.0, "subtotal": 1000.0}]}
+    # defaults (sin doc en Firestore)
+    monkeypatch.setattr("overrides.get_emails_config", lambda: {})
+    r = email_notif.render_email("confirmacion", ped)
+    assert r["formato"] == "texto" and "Pedido N° 7" in r["asunto"] and "TOTAL c/IVA" in r["cuerpo"]
+    assert "A a | X | T U | 10 u" in r["cuerpo"]
+    # template custom html con variable desconocida → queda literal
+    monkeypatch.setattr("overrides.get_emails_config", lambda: {
+        "procesado": {"formato": "html", "asunto": "Listo {numero}",
+                      "cuerpo": "<b>{cliente}</b> {no_existe}"}})
+    r = email_notif.render_email("procesado", ped, por="admin@lautin.com.ar")
+    assert r["formato"] == "html" and r["asunto"] == "Listo 7"
+    assert r["cuerpo"] == "<b>Kinderland</b> {no_existe}"
+    assert "procesó tu pedido" in r["texto_plano"]        # fallback texto = default
+    assert "<b>" in email_notif.texto_a_html("hola\nchau") or "<br>" in email_notif.texto_a_html("hola\nchau")
+
+
 # ---------------------------------------------------------------------------
 # Fase 3: overrides por variante, U.B., IVA, KPIs
 # ---------------------------------------------------------------------------

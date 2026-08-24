@@ -46,6 +46,10 @@ def config_ref():
     return client().collection(COL_CONFIG).document("global")
 
 
+def emails_ref():
+    return client().collection(COL_CONFIG).document("emails")
+
+
 @firestore.transactional
 def _next_numero(tx, ref):
     snap = ref.get(transaction=tx)

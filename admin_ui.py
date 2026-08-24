@@ -14,6 +14,7 @@ import zoneinfo
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 import auth
 import catalog
@@ -835,6 +836,77 @@ def _sec_config() -> None:
             fotos.indice_fotos(force=True)
             overrides.invalidar()
         st.toast("Catálogo actualizado")
+    st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:1rem 0 .6rem'></div>",
+                unsafe_allow_html=True)
+    st.markdown("#### Emails")
+    _config_emails()
     if appconfig.EMAIL_OVERRIDE_TO:
         st.markdown(f"<p class='muted'>DEV: todos los emails se redirigen a {appconfig.EMAIL_OVERRIDE_TO}.</p>",
                     unsafe_allow_html=True)
+
+
+def _pedido_ejemplo() -> dict:
+    """Un pedido real para el preview (el último), o uno sintético."""
+    try:
+        lista = pedidos.listar_pedidos(None, limit=1)
+        if lista:
+            return lista[0]
+    except Exception:  # noqa: BLE001
+        pass
+    return {"numero": 999, "cliente_nombre": "CLIENTE DE EJEMPLO S.A.", "cliente_cod": 1234,
+            "usuario_email": "cliente@ejemplo.com", "fecha_str": "24/08/2026", "unidades": 12,
+            "lista_precios": 1, "subtotal": 120000.0, "descuento_pct": 20.0, "descuento_monto": 24000.0,
+            "total": 96000.0, "iva_pct": 21.0, "iva_monto": 20160.0, "total_con_iva": 116160.0,
+            "observaciones": "Pedido de ejemplo", "estado": "confirmado",
+            "items": [{"producto_cod": "M211", "producto_nombre": "Mochila Soft Rainbow", "color": "AQUA",
+                       "talle": "U", "cantidad": 12, "precio_unit": 10000.0, "subtotal": 120000.0}]}
+
+
+EVENTO_LABEL = {"confirmacion": "Pedido realizado (lleva el Excel adjunto)",
+                "procesado": "Pedido procesado por Lautin",
+                "cancelado": "Pedido cancelado"}
+
+
+def _config_emails() -> None:
+    evento = st.selectbox("Evento", list(email_notif.EVENTOS), format_func=EVENTO_LABEL.get, key="em_evento")
+    tpl = email_notif.template_de(evento)
+    c1, c2 = st.columns([1, 3])
+    formato = c1.radio("Formato", ["texto", "html"], index=0 if tpl.get("formato") != "html" else 1,
+                       key=f"em_fmt_{evento}", horizontal=True)
+    asunto = c2.text_input("Asunto", value=tpl["asunto"], key=f"em_asu_{evento}")
+    cuerpo = st.text_area("Cuerpo", value=tpl["cuerpo"], height=220, key=f"em_cue_{evento}")
+    st.markdown("<p class='muted'>Variables: {numero} {cliente} {cliente_cod} {usuario} {fecha} {unidades} "
+                "{subtotal} {descuento_pct} {descuento_monto} {total} {iva_pct} {iva_monto} {total_con_iva} "
+                "{lineas_iva} {lista_precios} {observaciones} {detalle} {quien} {estado} — una variable "
+                "desconocida queda escrita tal cual, no rompe el envío.</p>", unsafe_allow_html=True)
+
+    ejemplo = _pedido_ejemplo()
+    vs = email_notif._SafeDict(email_notif.variables_pedido(ejemplo, _admin_email()))
+    st.markdown(f"<div class='kicker' style='margin:.4rem 0 .2rem'>Preview — con el pedido "
+                f"N° {ejemplo['numero']} de {ejemplo['cliente_nombre']}</div>", unsafe_allow_html=True)
+    st.markdown(f"<b>Asunto:</b> {asunto.format_map(vs)}", unsafe_allow_html=True)
+    if formato == "html":
+        components.html(cuerpo.format_map(vs), height=320, scrolling=True)
+    else:
+        st.code(cuerpo.format_map(vs), language=None)
+
+    b1, b2, b3, _ = st.columns([1, 1.6, 1.3, 1.4])
+    if b1.button("Guardar template", type="primary", use_container_width=True):
+        overrides.set_email_template(evento, {"formato": formato, "asunto": asunto.strip(),
+                                              "cuerpo": cuerpo}, _admin_email())
+        st.toast(f"Template '{EVENTO_LABEL[evento]}' guardado")
+        st.rerun()
+    if b2.button("Guardar y enviarme una prueba", use_container_width=True):
+        overrides.set_email_template(evento, {"formato": formato, "asunto": asunto.strip(),
+                                              "cuerpo": cuerpo}, _admin_email())
+        res = email_notif.enviar_prueba(evento, ejemplo, _admin_email())
+        if res["enviado"]:
+            st.success(f"Prueba enviada a {', '.join(res['destinatarios'])}")
+        else:
+            st.error(f"No se pudo enviar: {res['error']}")
+    if b3.button("Restaurar default", use_container_width=True):
+        overrides.reset_email_template(evento, _admin_email())
+        for k in (f"em_fmt_{evento}", f"em_asu_{evento}", f"em_cue_{evento}"):
+            st.session_state.pop(k, None)
+        st.toast("Template restaurado al default")
+        st.rerun()
