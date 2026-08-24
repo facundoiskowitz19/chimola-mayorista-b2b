@@ -118,6 +118,10 @@ st.markdown("""
   .aviso-stock { color:var(--alert-text); font-size:.86rem; }
   .aviso-bloque { background:#fff1f4; border-left:3px solid #d6006c; color:#aa0b56;
                   padding:.7rem .9rem; font-size:.9rem; margin:.4rem 0; }
+  .nota-acento { background:#e9f8ff; border-left:3px solid #0088b0; color:#201e1d;
+                 padding:.7rem .9rem; font-size:.9rem; margin:.4rem 0; }
+  .stApp div[class*="st-key-cli_desactivar"] button,
+  .stApp div[class*="st-key-cli_desactivar"] button p { color:#aa0b56 !important; border-color:#d6006c !important; }
   .total-box { background:transparent; border-top:2px solid var(--text); padding:.9rem .1rem 0; }
   .lt-footer { border-top:2px solid var(--text); margin-top:2.5rem; padding:1.3rem .1rem 0;
     display:grid; grid-template-columns:repeat(3, 1fr); gap:1rem; font-size:.9rem; color:var(--text); }

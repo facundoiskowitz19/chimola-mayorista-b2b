@@ -48,35 +48,65 @@ def _fmt(n) -> str:
     return f"$ {float(n):,.0f}".replace(",", ".")
 
 
+def _fmt_compacto(n) -> str:
+    """$ abreviado para métricas (handoff v2 §D): $ 18,4 M en vez de $ 18.400.000."""
+    n = float(n or 0)
+    if abs(n) >= 1_000_000:
+        return f"$ {n / 1_000_000:.1f} M".replace(".", ",")
+    return _fmt(n)
+
+
 def _tag(estado: str) -> str:
     return f"<span class='tag {TAG_CLS.get(estado, 'tag-proc')}'>{estado}</span>"
 
 
+def _adm_nav_click() -> None:
+    """Cambiar de pestaña sale de una ficha abierta (handoff v2 A2). Click en
+    la pestaña ya activa la deselecciona → volvemos a esa misma sección."""
+    if st.session_state.get("adm_nav") is None:
+        st.session_state.adm_nav = st.session_state.get("adm_nav_ultima") or "inicio"
+    st.session_state.adm_prod = None
+    st.session_state.adm_cliente = None
+    st.session_state.pop("adm_prod_edit", None)
+    st.session_state.pop("adm_cli_edit", None)
+
+
 def page_admin() -> None:
-    if st.session_state.get("adm_prod"):
-        _editar_producto(st.session_state.adm_prod)
-        return
-    if st.session_state.get("adm_cliente"):
-        _ficha_cliente(st.session_state.adm_cliente)
-        return
-    t1, t2 = st.columns([1, 2], vertical_alignment="bottom")
-    t1.markdown("## Administración")
-    t2.markdown("<p class='muted' style='text-align:right'>BigQuery es de solo lectura · "
-                "lo que edites vive en Firestore y pisa a Aleph</p>", unsafe_allow_html=True)
-    # Volver del editor debe caer en Catálogo (adm_nav es widget: si no se
-    # renderizó en el run anterior, Streamlit lo resetea → lo fijamos acá).
+    # El nav se renderiza SIEMPRE (handoff v2 A2): en una ficha de producto
+    # marca Catálogo; en una de cliente, Clientes. Volver del editor debe caer
+    # en Catálogo (adm_nav es widget: si no se renderizó en el run anterior,
+    # Streamlit lo resetea → lo fijamos acá con adm_nav_forzar).
     if "adm_nav_forzar" in st.session_state:
         st.session_state.adm_nav = st.session_state.pop("adm_nav_forzar")
+    prod = st.session_state.get("adm_prod")
+    cli = st.session_state.get("adm_cliente")
+    if prod:
+        st.session_state.adm_nav = "catalogo"
+    elif cli:
+        st.session_state.adm_nav = "clientes"
+    if "adm_nav" not in st.session_state:
+        st.session_state.adm_nav = "inicio"
+    if not (prod or cli):
+        t1, t2 = st.columns([1, 2], vertical_alignment="bottom")
+        t1.markdown("## Administración")
+        t2.markdown("<p class='muted' style='text-align:right'>BigQuery es de solo lectura · "
+                    "lo que edites vive en Firestore y pisa a Aleph</p>", unsafe_allow_html=True)
     conteo = pedidos.contar_por_estado()
     sin_procesar = conteo.get("confirmado", 0)
     labels = {"inicio": "Inicio", "catalogo": "Catálogo", "clientes": "Clientes",
               "pedidos": "Pedidos" + (f" · {sin_procesar} sin procesar" if sin_procesar else ""),
               "config": "Config"}
-    if "adm_nav" not in st.session_state:
-        st.session_state.adm_nav = "inicio"
     sec = st.segmented_control("Sección", SECCIONES, format_func=lambda s: labels[s],
-                               key="adm_nav", label_visibility="collapsed")
+                               key="adm_nav", label_visibility="collapsed",
+                               on_change=_adm_nav_click)
+    st.session_state.adm_nav_ultima = sec or "inicio"
     st.markdown("")
+    if prod and sec == "catalogo":
+        _editar_producto(prod)
+        return
+    if cli and sec == "clientes":
+        _ficha_cliente(cli)
+        return
     {"inicio": _sec_inicio, "catalogo": _sec_catalogo, "clientes": _sec_clientes,
      "pedidos": _sec_pedidos, "config": _sec_config}.get(sec or "inicio", _sec_inicio)()
 
@@ -513,15 +543,16 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
 
     # --- Variantes MANUALES fuera de Aleph (fase 6, E4) ---
     extras = o.get("variantes_extra") or {}
-    st.markdown("<div class='kicker' style='margin:.8rem 0 .2rem'>Variantes manuales — no existen en "
-                "Aleph; stock y precio son 100% tuyos y el Excel las marca. "
-                "<span style='color:#006786'>«Agregar» se aplica al instante</span>; las ediciones de la "
-                "tabla, con Guardar</div>", unsafe_allow_html=True)
+    st.markdown("<div class='kicker' style='margin:.8rem 0 0'>Variantes manuales</div>"
+                "<p class='muted' style='margin:0 0 .4rem'>No existen en Aleph: stock y precio son "
+                "100% tuyos y el Excel las marca. <span style='color:#006786'>«Agregar» se aplica al "
+                "instante</span>; las ediciones de la tabla van con Guardar.</p>",
+                unsafe_allow_html=True)
     if extras:
         xdf = pd.DataFrame([{"sku": sku, "color": vo.get("color", ""), "talle": vo.get("talle", ""),
                              "stock": int(vo.get("stock") or 0),
                              "precio_l1": float((vo.get("precios") or {}).get("1") or 0),
-                             "ean": vo.get("ean", ""), "eliminar": False}
+                             "ean": vo.get("ean", ""), "quitar": False}
                             for sku, vo in sorted(extras.items())])
         xed = st.data_editor(xdf, hide_index=True, use_container_width=True, key=f"adm_extra_{cod}",
                              disabled=["sku", "color", "talle"],
@@ -530,14 +561,14 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
                                  "stock": st.column_config.NumberColumn("Stock", min_value=0, step=1),
                                  "precio_l1": st.column_config.NumberColumn("Precio L1", min_value=0.0,
                                                                             step=100.0, format="$ %.0f"),
-                                 "ean": "EAN", "eliminar": st.column_config.CheckboxColumn("Eliminar"),
+                                 "ean": "EAN", "quitar": st.column_config.CheckboxColumn("Quitar ×"),
                              })
     else:
         xed = None
         st.markdown("<p class='muted'>Este producto no tiene variantes manuales.</p>", unsafe_allow_html=True)
     with st.form(f"extra_{cod}", border=False):
         a = st.columns([1.2, 0.8, 0.8, 1, 1.2, 1.2])
-        x_color = a[0].text_input("Color nuevo")
+        x_color = a[0].text_input("Color nuevo", placeholder="obligatorio")
         x_talle = a[1].text_input("Talle", value="U")
         x_stock = a[2].number_input("Stock", min_value=0, step=1, value=0)
         x_precio = a[3].number_input("Precio L1", min_value=0.0, step=100.0, value=0.0)
@@ -583,7 +614,7 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
             campos["variantes_extra"] = {
                 r["sku"]: {"color": r["color"], "talle": r["talle"], "stock": int(r["stock"] or 0),
                            "precios": {"1": float(r["precio_l1"] or 0)}, "ean": str(r["ean"] or "")}
-                for _, r in xed.iterrows() if not bool(r["eliminar"])}
+                for _, r in xed.iterrows() if not bool(r["quitar"])}
         overrides.set_catalogo_override(cod, campos, _admin_email())
         st.session_state.adm_prod_edit = False   # guardar vuelve a modo vista
         _limpiar_edicion_producto(cod)
@@ -710,55 +741,96 @@ def _ficha_cliente(email: str) -> None:
         _cliente_edicion(email, u, cod, e)
         return
 
-    # ---- VISTA ----
+    # ---- VISTA (handoff v2 §D) ----
+    def _dato(col, kicker: str, valor, origen: str | None = None) -> None:
+        html = f"<div class='kicker'>{kicker}</div><span style='font-size:1.25rem'>{valor}</span>"
+        if origen:
+            color = "#006786" if origen.lower() == "override" else "var(--muted)"
+            html += f"<br><span style='color:{color}'>{origen.capitalize()}</span>"
+        col.markdown(html, unsafe_allow_html=True)
+
     if e:
         d = st.columns(4)
-        d[0].markdown(f"<div class='kicker'>Lista de precios</div>{e['lista_precios']} "
-                      f"<span class='muted'>({e['lista_origen']})</span>", unsafe_allow_html=True)
-        d[1].markdown(f"<div class='kicker'>Descuento cabecera</div>{e['descuento']:g}% "
-                      f"<span class='muted'>({e['descuento_origen']})</span>", unsafe_allow_html=True)
-        d[2].markdown(f"<div class='kicker'>CUIT</div>{e.get('cuit') or '—'}", unsafe_allow_html=True)
-        d[3].markdown(f"<div class='kicker'>Ubicación</div>{e.get('localidad') or '—'} · "
-                      f"{e.get('provincia_desc') or ''}", unsafe_allow_html=True)
+        _dato(d[0], "Lista de precios", e["lista_precios"], e["lista_origen"])
+        _dato(d[1], "Descuento cabecera", f"{e['descuento']:g}%", e["descuento_origen"])
+        _dato(d[2], "CUIT", e.get("cuit") or "—")
+        _dato(d[3], "Ubicación", f"{e.get('localidad') or '—'} · {e.get('provincia_desc') or ''}")
         if e.get("notas"):
             st.markdown(f"<p class='muted'>Notas: {e['notas']}</p>", unsafe_allow_html=True)
 
+    lista, ev = [], None
     if cod is None:
         st.markdown("<p class='muted'>Usuario administrador, sin historial de pedidos.</p>",
                     unsafe_allow_html=True)
-        return
-
-    with st.spinner("Buscando pedidos del cliente..."):
-        lista = pedidos.listar_pedidos(int(cod))
-    m = _metricas_cliente(lista)
-    st.markdown("<div class='kicker' style='margin:.8rem 0 .2rem'>Métricas</div>", unsafe_allow_html=True)
-    c = st.columns(6)
-    c[0].metric("Pedidos", m["pedidos"])
-    c[1].metric("Unidades", f"{m['unidades']:,}".replace(",", "."))
-    c[2].metric("Total histórico", _fmt(m["total"]))
-    c[3].metric("Ticket promedio", _fmt(m["ticket"]))
-    c[4].metric("Último pedido", m["ultimo"])
-    c[5].metric("Cancelados", m["cancelados"])
-    if m["top"]:
-        st.markdown("<div class='kicker' style='margin:.6rem 0 .2rem'>Top productos</div>", unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame(m["top"], columns=["Código", "Producto", "Unidades"]),
-                     hide_index=True, use_container_width=True)
-
-    st.markdown("<div class='kicker' style='margin:.8rem 0 .2rem'>Pedidos</div>", unsafe_allow_html=True)
-    if not lista:
-        st.markdown("<p class='muted'>Sin pedidos todavía.</p>", unsafe_allow_html=True)
-        return
-    tabla = pd.DataFrame([{
-        "N°": p["numero"], "Fecha": p.get("fecha_str", ""), "Unidades": p["unidades"],
-        "Total": p["total"], "Estado": p["estado"],
-    } for p in lista])
-    ev = st.dataframe(tabla, hide_index=True, use_container_width=True, key=f"cli_ped_{cod}",
-                      on_select="rerun", selection_mode="single-row",
-                      column_config={"Total": st.column_config.NumberColumn(format="$ %.0f")})
-    if ev.selection.rows:
-        _detalle_pedido(lista[ev.selection.rows[0]])
     else:
-        st.markdown("<p class='muted'>Click en un pedido para ver el detalle.</p>", unsafe_allow_html=True)
+        with st.spinner("Buscando pedidos del cliente..."):
+            lista = pedidos.listar_pedidos(int(cod))
+        m = _metricas_cliente(lista)
+        st.markdown("<div class='kicker' style='margin:1rem 0 .3rem'>Métricas</div>", unsafe_allow_html=True)
+        met = st.columns(6)
+        datos = [("Pedidos", str(m["pedidos"])), ("Unidades", f"{m['unidades']:,}".replace(",", ".")),
+                 ("Total histórico", _fmt_compacto(m["total"])),
+                 ("Ticket promedio", _fmt_compacto(m["ticket"])),
+                 ("Último pedido", m["ultimo"]), ("Cancelados", str(m["cancelados"]))]
+        for col, (lab, val) in zip(met, datos):
+            col.markdown("<div style='border-top:1px solid rgba(32,30,29,.35); padding-top:.35rem'>"
+                         f"<span class='muted'>{lab}</span><br>"
+                         f"<span style='font-size:1.4rem; font-weight:600'>{val}</span></div>",
+                         unsafe_allow_html=True)
+
+        ct, cp = st.columns([1, 1.6], gap="large")
+        with ct:
+            st.markdown("<div class='kicker' style='margin:1rem 0 .3rem'>Top productos</div>",
+                        unsafe_allow_html=True)
+            if m["top"]:
+                for codp, nom, uds in m["top"]:
+                    st.markdown("<div style='display:flex; justify-content:space-between; "
+                                "border-bottom:1px solid rgba(32,30,29,.12); padding:.3rem 0'>"
+                                f"<span>{nom} <span class='muted' style='font-size:.8rem'>{codp}</span></span>"
+                                f"<span>{uds} u.</span></div>", unsafe_allow_html=True)
+            else:
+                st.markdown("<p class='muted'>Sin compras todavía.</p>", unsafe_allow_html=True)
+        with cp:
+            st.markdown("<div class='kicker' style='margin:1rem 0 .3rem'>Pedidos · click para ver el "
+                        "detalle</div>", unsafe_allow_html=True)
+            if lista:
+                tabla = pd.DataFrame([{
+                    "N°": f"{p['numero']:06d}", "Fecha": p.get("fecha_str", ""),
+                    "Unid.": p["unidades"], "Total": _fmt(p["total"]),
+                    "Estado": p["estado"].upper(),
+                } for p in lista])
+                estilos = {"CONFIRMADO": "background-color:#e9f8ff; color:#006786",
+                           "PROCESADO": "background-color:#eae7e7; color:#444141",
+                           "CANCELADO": "background-color:#fff1f4; color:#aa0b56"}
+                _est = lambda v: estilos.get(v, "")  # noqa: E731
+                sty = (tabla.style.map(_est, subset=["Estado"]) if hasattr(tabla.style, "map")
+                       else tabla.style.applymap(_est, subset=["Estado"]))
+                ev = st.dataframe(sty, hide_index=True, use_container_width=True, key=f"cli_ped_{cod}",
+                                  on_select="rerun", selection_mode="single-row")
+            else:
+                st.markdown("<p class='muted'>Sin pedidos todavía.</p>", unsafe_allow_html=True)
+        if ev is not None and ev.selection.rows:
+            _detalle_pedido(lista[ev.selection.rows[0]])
+
+    # Acciones instantáneas, separadas al pie (no pasan por Guardar)
+    st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:1rem 0 .4rem'></div>",
+                unsafe_allow_html=True)
+    a0, a1, a2 = st.columns([2.2, 1.2, 1.2], vertical_alignment="center")
+    a0.markdown("<p class='muted' style='margin:0'>Estas dos acciones se aplican al instante, "
+                "sin guardar:</p>", unsafe_allow_html=True)
+    if a1.button("Resetear password", key="cli_resetpwd", use_container_width=True):
+        pwd = auth.generar_password()
+        auth.cambiar_password(email, pwd)
+        auth.guardar_password_en_secret(email, pwd)
+        st.session_state.adm_pwd_msg = (email, pwd)
+        st.rerun()
+    if u.get("activo", True):
+        if a2.button("Desactivar usuario", key="cli_desactivar", use_container_width=True):
+            db.usuario_ref(email).update({"activo": False})
+            st.rerun()
+    elif a2.button("Activar usuario", key="cli_activar", use_container_width=True):
+        db.usuario_ref(email).update({"activo": True})
+        st.rerun()
 
 
 def _cliente_edicion(email: str, u: dict, cod, e) -> None:
@@ -790,19 +862,8 @@ def _cliente_edicion(email: str, u: dict, cod, e) -> None:
         if st.button("Volver a la vista"):
             st.session_state.adm_cli_edit = False
             st.rerun()
-    st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:.8rem 0 .6rem'></div>"
-                "<p class='muted'>Estas dos acciones se aplican al instante:</p>", unsafe_allow_html=True)
-    b1, b2, _ = st.columns([1.1, 1.1, 2])
-    if b1.button("Resetear password", use_container_width=True):
-        pwd = auth.generar_password()
-        auth.cambiar_password(email, pwd)
-        auth.guardar_password_en_secret(email, pwd)
-        st.session_state.adm_pwd_msg = (email, pwd)
-        st.session_state.adm_cli_edit = False
-        st.rerun()
-    if b2.button("Desactivar usuario" if u.get("activo", True) else "Activar usuario", use_container_width=True):
-        db.usuario_ref(email).update({"activo": not u.get("activo", True)})
-        st.rerun()
+    st.markdown("<p class='muted'>Resetear password y activar/desactivar están en la vista de la "
+                "ficha (se aplican al instante, no pasan por Guardar).</p>", unsafe_allow_html=True)
 
 
 @st.dialog("Nuevo usuario")
@@ -911,21 +972,36 @@ def _detalle_pedido(p: dict) -> None:
 # Config
 # ---------------------------------------------------------------------------
 def _sec_config() -> None:
+    """Config global (handoff v2 §E): cada campo con su regla escrita debajo."""
     cfg = overrides.get_config()
+    st.markdown("<p class='muted'>Todo esto afecta a los clientes al instante una vez guardado. "
+                "Nada se aplica hasta tocar «Guardar configuración».</p>", unsafe_allow_html=True)
     with st.form("config_global"):
-        email_to = st.text_input("Email(s) de Lautin que reciben pedidos (coma; vacío = default del deploy)",
+        email_to = st.text_input("Emails de Lautin que reciben pedidos (separados por coma)",
                                  value=cfg.get("pedidos_email_to") or "")
-        banner = st.text_area("Banner para clientes (vacío = no se muestra)", value=cfg.get("banner_texto") or "",
-                              height=80)
-        c1, c2, c3 = st.columns(3)
-        descvta = c1.checkbox("Aplicar descvta de Aleph (como el Woo)", value=bool(cfg.get("aplicar_descvta")))
-        notificar = c1.checkbox("Email al cliente y a Lautin al cambiar el estado de un pedido",
-                                value=bool(cfg.get("notificar_estados", True)))
-        minimo = c2.number_input("Mínimo de unidades por pedido (0 = sin mínimo)", min_value=0, step=1,
+        st.markdown("<p class='muted' style='margin-top:-0.6rem'>Vacío = default del deploy "
+                    f"({', '.join(appconfig.PEDIDOS_EMAIL_TO)})</p>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        minimo = c1.number_input("Mínimo de unidades por pedido", min_value=0, step=1,
                                  value=int(cfg.get("minimo_pedido_unidades") or 0))
-        iva = c3.number_input("IVA % informativo (0 = ocultar)", min_value=0.0, max_value=30.0, step=0.5,
-                              value=float(cfg.get("iva_pct") or 0),
-                              help="Las listas de Aleph son sin IVA. Se muestra como línea aparte.")
+        c1.markdown("<p class='muted' style='margin-top:-0.6rem'>0 = sin mínimo</p>",
+                    unsafe_allow_html=True)
+        iva = c2.number_input("IVA % informativo", min_value=0.0, max_value=30.0, step=0.5,
+                              value=float(cfg.get("iva_pct") or 0))
+        c2.markdown("<p class='muted' style='margin-top:-0.6rem'>Las listas de Aleph son sin IVA; se "
+                    "muestra como línea aparte en carrito, Excel y email. 0 = ocultar</p>",
+                    unsafe_allow_html=True)
+        banner = st.text_area("Banner para clientes", value=cfg.get("banner_texto") or "", height=80)
+        st.markdown("<div class='nota-acento'>Así lo va a ver el cliente arriba del catálogo. "
+                    "Se muestra en todas las páginas hasta que vacíes el campo.</div>",
+                    unsafe_allow_html=True)
+        descvta = st.toggle("Aplicar descvta de Aleph", value=bool(cfg.get("aplicar_descvta")))
+        st.markdown("<p class='muted' style='margin-top:-0.6rem'>El descuento por venta del ERP (por "
+                    "artículo), como lo usa el Woo</p>", unsafe_allow_html=True)
+        notificar = st.toggle("Notificar cambios de estado por email",
+                              value=bool(cfg.get("notificar_estados", True)))
+        st.markdown("<p class='muted' style='margin-top:-0.6rem'>Al cliente y a Lautin cuando un "
+                    "pedido pasa a procesado o cancelado</p>", unsafe_allow_html=True)
         if st.form_submit_button("Guardar configuración", type="primary"):
             overrides.set_config({
                 "pedidos_email_to": email_to.strip() or None,
@@ -937,17 +1013,24 @@ def _sec_config() -> None:
             }, _admin_email())
             st.toast("Configuración guardada")
             st.rerun()
-    st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:.8rem 0 .6rem'></div>",
-                unsafe_allow_html=True)
-    if st.button("Actualizar catálogo ahora (BQ + fotos)"):
+    b1, b2 = st.columns([1.2, 2.8], vertical_alignment="center")
+    if b1.button("Actualizar catálogo ahora", use_container_width=True):
         with st.spinner("Refrescando catálogo e índice de fotos..."):
             catalog.load_variantes(force=True)
             fotos.indice_fotos(force=True)
             overrides.invalidar()
         st.toast("Catálogo actualizado")
-    st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:1rem 0 .6rem'></div>",
+        st.rerun()
+    hace = catalog.catalogo_actualizado_hace()
+    b2.markdown("<p class='muted' style='margin:0'>Relee BigQuery y el índice de fotos"
+                + (f" · último refresco hace {hace // 60} min" if hace >= 0 else "")
+                + "</p>", unsafe_allow_html=True)
+    st.markdown("<div style='border-top:2px solid #201e1d; margin:1.2rem 0 .6rem'></div>",
                 unsafe_allow_html=True)
-    st.markdown("#### Emails")
+    t1, t2 = st.columns([1, 2], vertical_alignment="bottom")
+    t1.markdown("### Plantillas de email")
+    t2.markdown("<p class='muted'>Editás el asunto y el cuerpo; la vista previa se arma con un "
+                "pedido de ejemplo.</p>", unsafe_allow_html=True)
     _config_emails()
     if appconfig.EMAIL_OVERRIDE_TO:
         st.markdown(f"<p class='muted'>DEV: todos los emails se redirigen a {appconfig.EMAIL_OVERRIDE_TO}.</p>",
@@ -971,45 +1054,70 @@ def _pedido_ejemplo() -> dict:
                        "talle": "U", "cantidad": 12, "precio_unit": 10000.0, "subtotal": 120000.0}]}
 
 
-EVENTO_LABEL = {"confirmacion": "Pedido realizado (lleva el Excel adjunto)",
-                "procesado": "Pedido procesado por Lautin",
-                "cancelado": "Pedido cancelado"}
+EVENTO_LABEL = {"confirmacion": "Confirmación de pedido",
+                "procesado": "Cambio a procesado",
+                "cancelado": "Cancelación"}
+
+VARIABLES_EMAIL = ("numero", "cliente", "cliente_cod", "usuario", "fecha", "unidades", "subtotal",
+                   "descuento_pct", "descuento_monto", "total", "iva_pct", "iva_monto",
+                   "total_con_iva", "lineas_iva", "lista_precios", "observaciones", "detalle",
+                   "quien", "estado")
 
 
 def _config_emails() -> None:
-    evento = st.selectbox("Evento", list(email_notif.EVENTOS), format_func=EVENTO_LABEL.get, key="em_evento")
+    """Plantillas por evento (handoff v2 §F): editor y vista previa lado a lado."""
+    if "em_evento" not in st.session_state:
+        st.session_state.em_evento = "confirmacion"
+    evento = st.pills("Evento", list(email_notif.EVENTOS), format_func=EVENTO_LABEL.get,
+                      key="em_evento", label_visibility="collapsed") or "confirmacion"
     tpl = email_notif.template_de(evento)
-    c1, c2 = st.columns([1, 3])
-    formato = c1.radio("Formato", ["texto", "html"], index=0 if tpl.get("formato") != "html" else 1,
-                       key=f"em_fmt_{evento}", horizontal=True)
-    asunto = c2.text_input("Asunto", value=tpl["asunto"], key=f"em_asu_{evento}")
-    cuerpo = st.text_area("Cuerpo", value=tpl["cuerpo"], height=220, key=f"em_cue_{evento}")
-    st.markdown("<p class='muted'>Variables: {numero} {cliente} {cliente_cod} {usuario} {fecha} {unidades} "
-                "{subtotal} {descuento_pct} {descuento_monto} {total} {iva_pct} {iva_monto} {total_con_iva} "
-                "{lineas_iva} {lista_precios} {observaciones} {detalle} {quien} {estado} — una variable "
-                "desconocida queda escrita tal cual, no rompe el envío.</p>", unsafe_allow_html=True)
-
     ejemplo = _pedido_ejemplo()
     vs = email_notif._SafeDict(email_notif.variables_pedido(ejemplo, _admin_email()))
-    st.markdown(f"<div class='kicker' style='margin:.4rem 0 .2rem'>Preview — con el pedido "
-                f"N° {ejemplo['numero']} de {ejemplo['cliente_nombre']}</div>", unsafe_allow_html=True)
-    st.markdown(f"<b>Asunto:</b> {asunto.format_map(vs)}", unsafe_allow_html=True)
-    if formato == "html":
-        components.html(cuerpo.format_map(vs), height=320, scrolling=True)
-    else:
-        st.code(cuerpo.format_map(vs), language=None)
 
-    st.markdown("<p class='muted'>El preview no guarda nada: los cambios recién aplican con "
-                "«Guardar template».</p>", unsafe_allow_html=True)
-    b1, b2, b3, _ = st.columns([1, 1.6, 1.3, 1.4])
-    if b1.button("Guardar template", type="primary", use_container_width=True):
+    ced, cpre = st.columns(2, gap="large")
+    with ced:
+        asunto = st.text_input("Asunto", value=tpl["asunto"], key=f"em_asu_{evento}")
+        formato = st.radio("Formato", ["texto", "html"], index=0 if tpl.get("formato") != "html" else 1,
+                           key=f"em_fmt_{evento}", horizontal=True)
+        cuerpo = st.text_area("Cuerpo", value=tpl["cuerpo"], height=260, key=f"em_cue_{evento}")
+        st.markdown("<div class='kicker' style='margin:.2rem 0 .2rem'>Variables disponibles</div>",
+                    unsafe_allow_html=True)
+        st.markdown(" ".join(f"`{{{v}}}`" for v in VARIABLES_EMAIL))
+        st.markdown("<p class='muted'>Los chips no se insertan solos (limitación de Streamlit): "
+                    "copiá el nombre en el cuerpo. Una variable que no exista queda literal en el "
+                    "email, no rompe el envío.</p>", unsafe_allow_html=True)
+    with cpre:
+        st.markdown(f"<div class='kicker' style='margin:0 0 .3rem'>Vista previa · pedido "
+                    f"N° {ejemplo['numero']} de {ejemplo['cliente_nombre']}</div>",
+                    unsafe_allow_html=True)
+        para = ejemplo.get("usuario_email", "cliente@ejemplo.com")
+        cc = ", ".join(overrides.pedidos_email_to())
+        with st.container(border=True):
+            st.markdown(f"<p class='muted' style='margin:0'>Para: {para} · CC: {cc}</p>"
+                        f"<p style='font-size:1.15rem; font-weight:600; margin:.2rem 0 .6rem'>"
+                        f"{asunto.format_map(vs)}</p>", unsafe_allow_html=True)
+            if formato == "html":
+                components.html(cuerpo.format_map(vs), height=300, scrolling=True)
+            else:
+                st.markdown(f"<div style='white-space:pre-wrap; font-size:.95rem'>"
+                            f"{cuerpo.format_map(vs)}</div>", unsafe_allow_html=True)
+            if evento == "confirmacion":
+                try:
+                    adj = ejemplo.get("xlsx_filename") or pedidos.nombre_archivo(ejemplo)
+                except Exception:  # noqa: BLE001 — pedido sintético sin confirmed_at
+                    adj = f"pedido_{ejemplo['cliente_cod']}_{ejemplo['numero']}.xlsx"
+                st.markdown(f"<p class='muted' style='margin:.6rem 0 0'>Adjunto: {adj}</p>",
+                            unsafe_allow_html=True)
+
+    b1, b2, b3, _ = st.columns([1.1, 1.3, 1.6, 1])
+    if b1.button("Guardar plantilla", type="primary", use_container_width=True):
         overrides.set_email_template(evento, {"formato": formato, "asunto": asunto.strip(),
                                               "cuerpo": cuerpo}, _admin_email())
         for k in (f"em_fmt_{evento}", f"em_asu_{evento}", f"em_cue_{evento}"):
             st.session_state.pop(k, None)
-        st.toast(f"Template '{EVENTO_LABEL[evento]}' guardado")
+        st.toast(f"Plantilla «{EVENTO_LABEL[evento]}» guardada")
         st.rerun()
-    if b2.button("Guardar y enviarme una prueba", use_container_width=True):
+    if b2.button("Enviarme una prueba", use_container_width=True):
         overrides.set_email_template(evento, {"formato": formato, "asunto": asunto.strip(),
                                               "cuerpo": cuerpo}, _admin_email())
         for k in (f"em_fmt_{evento}", f"em_asu_{evento}", f"em_cue_{evento}"):
@@ -1019,9 +1127,11 @@ def _config_emails() -> None:
             st.success(f"Prueba enviada a {', '.join(res['destinatarios'])}")
         else:
             st.error(f"No se pudo enviar: {res['error']}")
-    if b3.button("Restaurar default", use_container_width=True):
+    if b3.button("Volver al texto por defecto", use_container_width=True):
         overrides.reset_email_template(evento, _admin_email())
         for k in (f"em_fmt_{evento}", f"em_asu_{evento}", f"em_cue_{evento}"):
             st.session_state.pop(k, None)
-        st.toast("Template restaurado al default")
+        st.toast("Plantilla restaurada al texto por defecto")
         st.rerun()
+    st.markdown(f"<p class='muted'>«Enviarme una prueba» también guarda la plantilla. La prueba va a "
+                f"{_admin_email()}, nunca al cliente.</p>", unsafe_allow_html=True)

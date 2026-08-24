@@ -197,14 +197,14 @@ Referencia: README del handoff (orden sugerido B → A2 → E → D → C → F)
       lista" (Lista N + origen), tabla de variantes con Stock efectivo
       (oculta→0) / Aleph / Overrides coloreada (cian; VARIANTE MANUAL en
       magenta), avisos al pie en bloque tintado con SKU y números, Fotos como
-      atributo de ficha, subrubro en metadatos. ⏸ Pausa para revisión.
-- [ ] **A1** Click en producto abre la ficha (ya era así — nada que rehacer).
-- [ ] **A2** El nav marca la sección padre en fichas (Catálogo/Clientes).
-- [ ] **E** Config: regla de cada campo debajo, preview del banner,
+      atributo de ficha, subrubro en metadatos.
+- [x] **A1** Click en producto abre la ficha (ya era así — nada que rehacer).
+- [x] **A2** El nav marca la sección padre en fichas (Catálogo/Clientes).
+- [x] **E** Config: regla de cada campo debajo, preview del banner,
       consecuencia de los flags, "Actualizar catálogo" con última hora.
-- [ ] **D** Ficha de cliente: datos comerciales con origen, métricas como fila,
+- [x] **D** Ficha de cliente: datos comerciales con origen, métricas como fila,
       top productos + pedidos en 2 columnas, acciones instantáneas separadas.
-- [ ] **C** Variantes manuales: tabla con × (checkbox quitar), fila de alta al
+- [x] **C** Variantes manuales: tabla con × (checkbox quitar), fila de alta al
       pie, línea que explica alta instantánea vs Guardar.
-- [ ] **F** Emails: pills por evento, editor y preview lado a lado, preview
+- [x] **F** Emails: pills por evento, editor y preview lado a lado, preview
       con forma de email (Para/CC/asunto/adjunto), chips de variables.
