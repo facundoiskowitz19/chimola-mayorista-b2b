@@ -231,7 +231,8 @@ def _sec_catalogo() -> None:
     if multi and sel_cods:
         with st.container(border=True, key="adm_lote"):
             b = st.columns([1.6, 0.9, 1, 1.2, 1, 1.4, 1.2])
-            b[0].markdown(f"<b style='color:#006786'>{len(sel_cods)} producto(s) seleccionados</b>",
+            b[0].markdown(f"<b style='color:#006786'>{len(sel_cods)} producto(s) seleccionados</b><br>"
+                          "<span class='muted'>las acciones de lote se aplican al instante</span>",
                           unsafe_allow_html=True)
             if b[1].button("Editar", disabled=len(sel_cods) != 1, use_container_width=True):
                 st.session_state.adm_prod = sel_cods[0]
@@ -298,17 +299,26 @@ def _confirmar_lote(cods: list[str], campos: dict) -> None:
 # ---------------------------------------------------------------------------
 # Editor de producto como PANTALLA (handoff 10, 11, 12, 14)
 # ---------------------------------------------------------------------------
+def _limpiar_edicion_producto(cod: str) -> None:
+    """Borra el estado de los widgets de edición para que siempre arranquen
+    desde lo GUARDADO (fase 6.1: editar sin guardar no deja rastro)."""
+    for k in [f"pe_{cod}_{n}" for n in (1, 2, 3, 4)] + [f"adm_var_{cod}", f"adm_extra_{cod}"]:
+        st.session_state.pop(k, None)
+
+
 def _editar_producto(cod: str) -> None:
     """Ficha de producto: modo VISTA (default) ↔ modo EDICIÓN (handoff fase 6, E2)."""
     if st.button("← Catálogo"):
         st.session_state.adm_prod = None
         st.session_state.adm_prod_edit = False
         st.session_state.adm_nav_forzar = "catalogo"
+        _limpiar_edicion_producto(cod)
         st.rerun()
-    # Al cambiar de producto siempre se entra en modo vista
+    # Al cambiar de producto siempre se entra en modo vista, sin estado viejo
     if st.session_state.get("adm_prod_edit_cod") != cod:
         st.session_state.adm_prod_edit = False
         st.session_state.adm_prod_edit_cod = cod
+        _limpiar_edicion_producto(cod)
     editando = st.session_state.get("adm_prod_edit", False)
 
     df = catalog.variantes_admin()
@@ -326,6 +336,7 @@ def _editar_producto(cod: str) -> None:
     t1.markdown(f"## {f0['producto_nombre']}")
     if not editando and t2.button("Editar", type="primary", use_container_width=True):
         st.session_state.adm_prod_edit = True
+        _limpiar_edicion_producto(cod)   # arrancar la edición desde lo guardado
         st.rerun()
     n_fotos = len(fotos.indice_fotos().get(cod.upper(), []))
     st.markdown(f"<div class='card-sub'>{cod} · {f0['marca'] or ''} · {f0['temporada'] or ''} · "
@@ -396,6 +407,9 @@ def _producto_vista(cod, f0, filas, o, raw_p, stock_bq) -> None:
 
 
 def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
+    st.markdown("<p class='muted'><b style='color:#201e1d'>Nada se aplica hasta tocar Guardar</b> — "
+                "Descartar vuelve a la vista sin cambios. Única excepción: «Agregar variante manual», "
+                "que se aplica al instante.</p>", unsafe_allow_html=True)
     ci, cd = st.columns([1, 2.6], gap="large")
     with ci:
         st.image(fotos.foto_principal(cod), use_container_width=True)
@@ -462,7 +476,9 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
     # --- Variantes MANUALES fuera de Aleph (fase 6, E4) ---
     extras = o.get("variantes_extra") or {}
     st.markdown("<div class='kicker' style='margin:.8rem 0 .2rem'>Variantes manuales — no existen en "
-                "Aleph; stock y precio son 100% tuyos y el Excel las marca</div>", unsafe_allow_html=True)
+                "Aleph; stock y precio son 100% tuyos y el Excel las marca. "
+                "<span style='color:#006786'>«Agregar» se aplica al instante</span>; las ediciones de la "
+                "tabla, con Guardar</div>", unsafe_allow_html=True)
     if extras:
         xdf = pd.DataFrame([{"sku": sku, "color": vo.get("color", ""), "talle": vo.get("talle", ""),
                              "stock": int(vo.get("stock") or 0),
@@ -532,14 +548,17 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
                 for _, r in xed.iterrows() if not bool(r["eliminar"])}
         overrides.set_catalogo_override(cod, campos, _admin_email())
         st.session_state.adm_prod_edit = False   # guardar vuelve a modo vista
+        _limpiar_edicion_producto(cod)
         st.toast(f"{cod} guardado")
         st.rerun()
     if g2.button("Descartar", use_container_width=True):
         st.session_state.adm_prod_edit = False
+        _limpiar_edicion_producto(cod)
         st.rerun()
     if g3.button("Quitar TODOS los overrides", use_container_width=True):
         overrides.quitar_catalogo_override(cod)
         st.session_state.adm_prod_edit = False
+        _limpiar_edicion_producto(cod)
         st.toast(f"{cod} volvió 100% a Aleph")
         st.rerun()
 
@@ -733,8 +752,8 @@ def _cliente_edicion(email: str, u: dict, cod, e) -> None:
         if st.button("Volver a la vista"):
             st.session_state.adm_cli_edit = False
             st.rerun()
-    st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:.8rem 0 .6rem'></div>",
-                unsafe_allow_html=True)
+    st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:.8rem 0 .6rem'></div>"
+                "<p class='muted'>Estas dos acciones se aplican al instante:</p>", unsafe_allow_html=True)
     b1, b2, _ = st.columns([1.1, 1.1, 2])
     if b1.button("Resetear password", use_container_width=True):
         pwd = auth.generar_password()
@@ -942,15 +961,21 @@ def _config_emails() -> None:
     else:
         st.code(cuerpo.format_map(vs), language=None)
 
+    st.markdown("<p class='muted'>El preview no guarda nada: los cambios recién aplican con "
+                "«Guardar template».</p>", unsafe_allow_html=True)
     b1, b2, b3, _ = st.columns([1, 1.6, 1.3, 1.4])
     if b1.button("Guardar template", type="primary", use_container_width=True):
         overrides.set_email_template(evento, {"formato": formato, "asunto": asunto.strip(),
                                               "cuerpo": cuerpo}, _admin_email())
+        for k in (f"em_fmt_{evento}", f"em_asu_{evento}", f"em_cue_{evento}"):
+            st.session_state.pop(k, None)
         st.toast(f"Template '{EVENTO_LABEL[evento]}' guardado")
         st.rerun()
     if b2.button("Guardar y enviarme una prueba", use_container_width=True):
         overrides.set_email_template(evento, {"formato": formato, "asunto": asunto.strip(),
                                               "cuerpo": cuerpo}, _admin_email())
+        for k in (f"em_fmt_{evento}", f"em_asu_{evento}", f"em_cue_{evento}"):
+            st.session_state.pop(k, None)
         res = email_notif.enviar_prueba(evento, ejemplo, _admin_email())
         if res["enviado"]:
             st.success(f"Prueba enviada a {', '.join(res['destinatarios'])}")

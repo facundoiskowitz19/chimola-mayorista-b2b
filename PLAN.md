@@ -5,6 +5,19 @@ completos y validados end-to-end en DEV
 (https://mayorista-b2b-dev-vhnuyigzqa-uc.a.run.app). Specs funcionales en
 `SPECS.md`. Falta definir cosas con Chimola (§8) y promover a PROD (§7).
 
+## Fase 6.1 — Entrada a Inicio + guardado claro (2026-08-24) ✅
+
+- [x] Entrar a Administración desde la nav aterriza SIEMPRE en Inicio (y
+      cierra cualquier ficha abierta); los breadcrumbs internos siguen yendo
+      a su sección.
+- [x] Editar sin guardar no deja rastro: las keys de los widgets de edición
+      (precios, variantes, extras, emails) se limpian al entrar/salir de
+      edición y al guardar — los campos siempre arrancan desde lo GUARDADO.
+- [x] Semántica señalizada: aviso "Nada se aplica hasta tocar Guardar" en la
+      edición de producto; captions "se aplica al instante" en alta de
+      variante manual, acciones de lote y password/activo de cliente; leyenda
+      "el preview no guarda" en Emails.
+
 ## Fase 6 — Requerimientos → tareas (2026-08-24) ✅
 
 - [x] **E2** Producto ver→editar: ficha en modo VISTA (default, read-only con

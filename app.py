@@ -208,6 +208,11 @@ def nav() -> None:
         cols = st.columns(anchos, vertical_alignment="center")
         for (key, label), col in zip(items, cols):
             if col.button(label, key=f"nav_{key}"):
+                if key == "admin":
+                    # Entrar a Administración aterriza SIEMPRE en Inicio (fase 6.1)
+                    st.session_state.adm_nav_forzar = "inicio"
+                    st.session_state.adm_prod = None
+                    st.session_state.adm_cliente = None
                 ir(key)
         hace = catalog.catalogo_actualizado_hace()
         info = f"Catálogo actualizado hace {hace // 60} min" if hace >= 0 else ""
