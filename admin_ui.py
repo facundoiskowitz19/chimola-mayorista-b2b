@@ -55,6 +55,9 @@ def page_admin() -> None:
     if st.session_state.get("adm_prod"):
         _editar_producto(st.session_state.adm_prod)
         return
+    if st.session_state.get("adm_cliente"):
+        _ficha_cliente(st.session_state.adm_cliente)
+        return
     t1, t2 = st.columns([1, 2], vertical_alignment="bottom")
     t1.markdown("## Administración")
     t2.markdown("<p class='muted' style='text-align:right'>BigQuery es de solo lectura · "
@@ -500,11 +503,36 @@ def _listar_usuarios() -> list[dict]:
     return sorted(out, key=lambda u: u["email"])
 
 
+def _metricas_cliente(lista: list[dict]) -> dict:
+    """Métricas puras del historial de UN cliente (testeable sin GCP)."""
+    activos = [p for p in lista if p.get("estado") != "cancelado"]
+    total = round(sum(float(p.get("total") or 0) for p in activos), 2)
+    top: dict[str, dict] = {}
+    for p in activos:
+        for it in p.get("items", []):
+            t = top.setdefault(it["producto_cod"], {"nombre": it["producto_nombre"], "unidades": 0})
+            t["unidades"] += int(it["cantidad"])
+    ultimo = max(activos, key=lambda p: p.get("confirmed_at"), default=None)
+    return {
+        "pedidos": len(activos),
+        "cancelados": sum(1 for p in lista if p.get("estado") == "cancelado"),
+        "sin_procesar": sum(1 for p in lista if p.get("estado") == "confirmado"),
+        "unidades": sum(int(p.get("unidades") or 0) for p in activos),
+        "total": total,
+        "ticket": round(total / len(activos), 2) if activos else 0.0,
+        "ultimo": ultimo.get("fecha_str") if ultimo else "—",
+        "top": sorted(([c, d["nombre"], d["unidades"]] for c, d in top.items()),
+                      key=lambda x: -x[2])[:5],
+    }
+
+
 def _sec_clientes() -> None:
     usuarios = _listar_usuarios()
     cods = sorted({int(u["cliente_cod"]) for u in usuarios if u.get("cliente_cod") is not None})
     with st.spinner("Leyendo clientes..."):
         efectivos = catalog.get_clientes(cods)
+    st.markdown("<p class='muted'>Click en un cliente para ver su ficha (pedidos, métricas y edición).</p>",
+                unsafe_allow_html=True)
     rows = []
     for u in usuarios:
         cod = u.get("cliente_cod")
@@ -518,13 +546,14 @@ def _sec_clientes() -> None:
             "Último login": (u.get("last_login_at").astimezone(TZ).strftime("%d/%m %H:%M")
                              if u.get("last_login_at") else "—"),
         })
+    ver = st.session_state.get("adm_cli_ver", 0)
     ev = st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True,
-                      key="adm_cli_tabla", on_select="rerun", selection_mode="single-row")
-    sel = usuarios[ev.selection.rows[0]] if ev.selection.rows else None
-    c1, c2, _ = st.columns([1.2, 1, 2.4])
-    if c1.button("Editar seleccionado", disabled=sel is None):
-        _editar_cliente(sel["email"])
-    if c2.button("Nuevo usuario"):
+                      key=f"adm_cli_tabla_{ver}", on_select="rerun", selection_mode="single-row")
+    if ev.selection.rows:
+        st.session_state.adm_cliente = usuarios[ev.selection.rows[0]]["email"]
+        st.session_state.adm_cli_ver = ver + 1
+        st.rerun()
+    if st.button("Nuevo usuario"):
         _alta_usuario()
     if st.session_state.get("adm_pwd_msg"):
         e, p = st.session_state.pop("adm_pwd_msg")
@@ -532,46 +561,136 @@ def _sec_clientes() -> None:
                    "`mayorista-seed-passwords`).")
 
 
-@st.dialog("Editar cliente", width="large")
-def _editar_cliente(email: str) -> None:
+def _ficha_cliente(email: str) -> None:
+    """Ficha de cliente: VISTA (datos + métricas + pedidos) ↔ EDICIÓN (fase 6, E1)."""
+    if st.button("← Clientes"):
+        st.session_state.adm_cliente = None
+        st.session_state.adm_cli_edit = False
+        st.session_state.adm_nav_forzar = "clientes"
+        st.rerun()
+    if st.session_state.get("adm_cli_edit_for") != email:
+        st.session_state.adm_cli_edit = False
+        st.session_state.adm_cli_edit_for = email
+    editando = st.session_state.get("adm_cli_edit", False)
+
     u = auth.get_usuario(email)
     if not u:
         st.error("Usuario no encontrado")
         return
     cod = u.get("cliente_cod")
-    st.markdown(f"**{email}** · rol `{u.get('rol', 'cliente')}`")
-    if cod is not None:
-        e = catalog.get_cliente(int(cod)) or {}
-        st.markdown(f"<p class='muted'>{e.get('nombre_display', cod)} · efectivo hoy: lista "
-                    f"<b>{e.get('lista_precios')}</b> ({e.get('lista_origen')}) · desc "
-                    f"<b>{e.get('descuento', 0):g}%</b> ({e.get('descuento_origen')})</p>",
+    e = catalog.get_cliente(int(cod)) if cod is not None else None
+
+    t1, t2 = st.columns([3, 1], vertical_alignment="center")
+    t1.markdown(f"## {(e or {}).get('nombre_display', u.get('nombre_display', email))}")
+    if not editando and t2.button("Editar", type="primary", use_container_width=True):
+        st.session_state.adm_cli_edit = True
+        st.rerun()
+    st.markdown(f"<div class='card-sub'>{email} · rol {u.get('rol', 'cliente')} · "
+                f"{'activo' if u.get('activo', True) else 'DESACTIVADO'}"
+                + (f" · cliente {cod}" if cod is not None else " · sin cliente asociado")
+                + "</div>", unsafe_allow_html=True)
+    st.markdown("")
+
+    if st.session_state.get("adm_pwd_msg"):
+        em, pw = st.session_state.pop("adm_pwd_msg")
+        st.success(f"Password de **{em}**: `{pw}` — guardala ahora (también quedó en el secret "
+                   "`mayorista-seed-passwords`).")
+
+    if editando:
+        _cliente_edicion(email, u, cod, e)
+        return
+
+    # ---- VISTA ----
+    if e:
+        d = st.columns(4)
+        d[0].markdown(f"<div class='kicker'>Lista de precios</div>{e['lista_precios']} "
+                      f"<span class='muted'>({e['lista_origen']})</span>", unsafe_allow_html=True)
+        d[1].markdown(f"<div class='kicker'>Descuento cabecera</div>{e['descuento']:g}% "
+                      f"<span class='muted'>({e['descuento_origen']})</span>", unsafe_allow_html=True)
+        d[2].markdown(f"<div class='kicker'>CUIT</div>{e.get('cuit') or '—'}", unsafe_allow_html=True)
+        d[3].markdown(f"<div class='kicker'>Ubicación</div>{e.get('localidad') or '—'} · "
+                      f"{e.get('provincia_desc') or ''}", unsafe_allow_html=True)
+        if e.get("notas"):
+            st.markdown(f"<p class='muted'>Notas: {e['notas']}</p>", unsafe_allow_html=True)
+
+    if cod is None:
+        st.markdown("<p class='muted'>Usuario administrador, sin historial de pedidos.</p>",
                     unsafe_allow_html=True)
+        return
+
+    with st.spinner("Buscando pedidos del cliente..."):
+        lista = pedidos.listar_pedidos(int(cod))
+    m = _metricas_cliente(lista)
+    st.markdown("<div class='kicker' style='margin:.8rem 0 .2rem'>Métricas</div>", unsafe_allow_html=True)
+    c = st.columns(6)
+    c[0].metric("Pedidos", m["pedidos"])
+    c[1].metric("Unidades", f"{m['unidades']:,}".replace(",", "."))
+    c[2].metric("Total histórico", _fmt(m["total"]))
+    c[3].metric("Ticket promedio", _fmt(m["ticket"]))
+    c[4].metric("Último pedido", m["ultimo"])
+    c[5].metric("Cancelados", m["cancelados"])
+    if m["top"]:
+        st.markdown("<div class='kicker' style='margin:.6rem 0 .2rem'>Top productos</div>", unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame(m["top"], columns=["Código", "Producto", "Unidades"]),
+                     hide_index=True, use_container_width=True)
+
+    st.markdown("<div class='kicker' style='margin:.8rem 0 .2rem'>Pedidos</div>", unsafe_allow_html=True)
+    if not lista:
+        st.markdown("<p class='muted'>Sin pedidos todavía.</p>", unsafe_allow_html=True)
+        return
+    tabla = pd.DataFrame([{
+        "N°": p["numero"], "Fecha": p.get("fecha_str", ""), "Unidades": p["unidades"],
+        "Total": p["total"], "Estado": p["estado"],
+    } for p in lista])
+    ev = st.dataframe(tabla, hide_index=True, use_container_width=True, key=f"cli_ped_{cod}",
+                      on_select="rerun", selection_mode="single-row",
+                      column_config={"Total": st.column_config.NumberColumn(format="$ %.0f")})
+    if ev.selection.rows:
+        _detalle_pedido(lista[ev.selection.rows[0]])
+    else:
+        st.markdown("<p class='muted'>Click en un pedido para ver el detalle.</p>", unsafe_allow_html=True)
+
+
+def _cliente_edicion(email: str, u: dict, cod, e) -> None:
+    if cod is not None:
         o = overrides.get_clientes_overrides().get(int(cod), {})
         with st.form(f"cli_{cod}"):
             usar_desc = st.checkbox("Override de descuento", value=o.get("descuento_pct") is not None)
             desc = st.number_input("Descuento %", 0.0, 100.0,
-                                   float(o.get("descuento_pct") or e.get("descuento") or 0), step=0.5)
+                                   float(o.get("descuento_pct") or (e or {}).get("descuento") or 0), step=0.5)
             usar_lista = st.checkbox("Override de lista", value=bool(o.get("lista_precios")))
-            lista = st.number_input("Lista de precios", 1, 10, int(o.get("lista_precios") or e.get("lista_precios") or 1))
+            lista = st.number_input("Lista de precios", 1, 10,
+                                    int(o.get("lista_precios") or (e or {}).get("lista_precios") or 1))
             notas = st.text_input("Notas", value=o.get("notas") or "")
-            if st.form_submit_button("Guardar", type="primary", use_container_width=True):
+            g1, g2 = st.columns(2)
+            if g1.form_submit_button("Guardar", type="primary", use_container_width=True):
                 overrides.set_cliente_override(int(cod), {
                     "descuento_pct": float(desc) if usar_desc else None,
                     "lista_precios": int(lista) if usar_lista else None,
                     "notas": notas.strip(),
                 }, _admin_email())
+                st.session_state.adm_cli_edit = False
                 st.toast("Cliente guardado")
                 st.rerun()
+            if g2.form_submit_button("Descartar", use_container_width=True):
+                st.session_state.adm_cli_edit = False
+                st.rerun()
     else:
-        st.markdown("<p class='muted'>Usuario sin cliente asociado (admin puro).</p>", unsafe_allow_html=True)
-    b1, b2 = st.columns(2)
+        st.markdown("<p class='muted'>Usuario sin cliente asociado: solo cuenta.</p>", unsafe_allow_html=True)
+        if st.button("Volver a la vista"):
+            st.session_state.adm_cli_edit = False
+            st.rerun()
+    st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:.8rem 0 .6rem'></div>",
+                unsafe_allow_html=True)
+    b1, b2, _ = st.columns([1.1, 1.1, 2])
     if b1.button("Resetear password", use_container_width=True):
         pwd = auth.generar_password()
         auth.cambiar_password(email, pwd)
         auth.guardar_password_en_secret(email, pwd)
         st.session_state.adm_pwd_msg = (email, pwd)
+        st.session_state.adm_cli_edit = False
         st.rerun()
-    if b2.button("Desactivar" if u.get("activo", True) else "Activar", use_container_width=True):
+    if b2.button("Desactivar usuario" if u.get("activo", True) else "Activar usuario", use_container_width=True):
         db.usuario_ref(email).update({"activo": not u.get("activo", True)})
         st.rerun()
 
@@ -636,7 +755,11 @@ def _sec_pedidos() -> None:
         st.markdown("<p class='muted'>Click en una fila para ver el detalle.</p>", unsafe_allow_html=True)
         return
     p = filt[ev.selection.rows[0]]
+    _detalle_pedido(p)
 
+
+def _detalle_pedido(p: dict) -> None:
+    """Detalle + acciones de un pedido (usado en Pedidos y en la ficha de cliente)."""
     st.markdown(f"### Pedido N° {p['numero']} &nbsp; {_tag(p['estado'])}", unsafe_allow_html=True)
     st.markdown(f"<p class='muted'>{p['fecha_str']} · <b>{p['cliente_nombre']}</b> (cliente {p['cliente_cod']}) · "
                 f"{p['usuario_email']} · {p['unidades']} u. · <b>{_fmt(p['total'])}</b> "

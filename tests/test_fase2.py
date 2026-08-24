@@ -122,6 +122,28 @@ def test_puede_cancelar():
     assert not pedidos.puede_cancelar(None, cli) and not pedidos.puede_cancelar(ped, None)
 
 
+def test_metricas_cliente():
+    import datetime as dt
+
+    import admin_ui
+    mk = lambda n, est, dia, total, unid, items: {  # noqa: E731
+        "numero": n, "estado": est, "total": total, "unidades": unid, "fecha_str": f"{dia:02d}/08/2026",
+        "confirmed_at": dt.datetime(2026, 8, dia, 12, tzinfo=dt.timezone.utc), "items": items}
+    lista = [
+        mk(1, "procesado", 10, 100.0, 2, [{"producto_cod": "A", "producto_nombre": "a", "cantidad": 2}]),
+        mk(2, "confirmado", 20, 300.0, 4, [{"producto_cod": "A", "producto_nombre": "a", "cantidad": 1},
+                                           {"producto_cod": "B", "producto_nombre": "b", "cantidad": 3}]),
+        mk(3, "cancelado", 21, 999.0, 9, [{"producto_cod": "C", "producto_nombre": "c", "cantidad": 9}]),
+    ]
+    m = admin_ui._metricas_cliente(lista)
+    assert m["pedidos"] == 2 and m["cancelados"] == 1 and m["sin_procesar"] == 1
+    assert m["total"] == 400.0 and m["unidades"] == 6 and m["ticket"] == 200.0
+    assert m["ultimo"] == "20/08/2026"
+    assert m["top"][0] == ["A", "a", 3] and all(r[0] != "C" for r in m["top"])
+    vacio = admin_ui._metricas_cliente([])
+    assert vacio["pedidos"] == 0 and vacio["ticket"] == 0.0 and vacio["ultimo"] == "—"
+
+
 def test_cuerpos_email_estado():
     import email_notif
     ped = {"numero": 7, "cliente_nombre": "Kinderland", "cliente_cod": 1026,
