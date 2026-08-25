@@ -120,12 +120,16 @@ st.markdown("""
                   padding:.7rem .9rem; font-size:.9rem; margin:.4rem 0; }
   .nota-acento { background:#e9f8ff; border-left:3px solid #0088b0; color:#201e1d;
                  padding:.7rem .9rem; font-size:.9rem; margin:.4rem 0; }
-  /* Galería: miniaturas clickeables (botón invisible superpuesto a la imagen) */
+  /* Galería: miniaturas clickeables (botón invisible superpuesto a la imagen).
+     El toolbar de hover de st.image (fullscreen) queda POR ENCIMA del botón y
+     se come el click del usuario real → z-index alto + toolbar oculto. */
   div[class*="st-key-gal_"], div[class*="st-key-gal_on_"] { position:relative; }
   div[class*="st-key-gal_"] .stButton, div[class*="st-key-gal_on_"] .stButton
-    { position:absolute; inset:0; margin:0; z-index:2; }
+    { position:absolute; inset:0; margin:0; z-index:30; }
   div[class*="st-key-gal_"] .stButton button, div[class*="st-key-gal_on_"] .stButton button
-    { width:100%; height:100%; min-height:0; opacity:0; border:none; }
+    { width:100%; height:100%; min-height:0; opacity:0; border:none; cursor:pointer; }
+  div[class*="st-key-gal_"] [data-testid="stElementToolbar"],
+  div[class*="st-key-gal_on_"] [data-testid="stElementToolbar"] { display:none !important; }
   div[class*="st-key-gal_on_"] img { outline:2px solid #0088b0; outline-offset:1px; }
   .stApp div[class*="st-key-cli_desactivar"] button,
   .stApp div[class*="st-key-cli_desactivar"] button p { color:#aa0b56 !important; border-color:#d6006c !important; }
