@@ -598,7 +598,7 @@ def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: b
                         total = _agregar_items(items)
                         st.session_state.mx_ver = ver + 1
                         st.session_state.card_abierta = None
-                        st.toast(f"{total} unidades agregadas al carrito")
+                        toast_pendiente(f"Agregaste {total} unidades al carrito.")
                         st.rerun()
                     if b2.button("Ver ficha completa", key=f"pfull_{abierta}", use_container_width=True):
                         ir("producto", producto_sel=abierta)
@@ -690,11 +690,12 @@ def page_producto() -> None:
 # ---------------------------------------------------------------------------
 # Carrito
 # ---------------------------------------------------------------------------
-def _quitar_item(sku: str) -> None:
+def _quitar_item(sku: str, nombre: str = "") -> None:
     items = [i for i in st.session_state.cart if i["sku"] != sku]
     st.session_state.cart = items
     pedidos.guardar_carrito(st.session_state.user["email"], items)
     st.session_state.cart_ver = st.session_state.get("cart_ver", 0) + 1
+    toast_pendiente(f"Quitaste {nombre or sku} del carrito.")
 
 
 def page_carrito() -> None:
@@ -766,7 +767,8 @@ def page_carrito() -> None:
                 q = tope
             c[3].markdown(fmt_money(it["precio_unit"]))
             c[4].markdown(f"<b>{fmt_money(int(q) * it['precio_unit'])}</b>", unsafe_allow_html=True)
-            c[5].button("×", key=f"del_{it['sku']}", on_click=_quitar_item, args=(it["sku"],))
+            c[5].button("×", key=f"del_{it['sku']}", on_click=_quitar_item,
+                        args=(it["sku"], f"{it['producto_nombre']} ({it['color']})"))
             if it["sku"] in avisos:
                 st.markdown(f"<div class='aviso-stock'>{avisos[it['sku']]}</div>", unsafe_allow_html=True)
             st.markdown("<div style='border-bottom:1px solid rgba(32,30,29,.16); margin:.1rem 0 .55rem'></div>",
@@ -870,6 +872,7 @@ def page_carrito() -> None:
         if st.button("Vaciar carrito"):
             guardar_cart([])
             st.session_state.pop("stock_avisos", None)
+            toast_pendiente("Vaciaste el carrito.")
             st.rerun()
 
 
@@ -956,6 +959,7 @@ def page_pedidos() -> None:
                 nuevos = pedidos.agregar_al_carrito(nuevos, it)
             guardar_cart(nuevos)
             st.session_state.cart_ver = st.session_state.get("cart_ver", 0) + 1
+            toast_pendiente(f"Pedido cargado al carrito: {sum(i['cantidad'] for i in items)} unidades.")
             if not avisos_rep:
                 ir("carrito")
         else:
@@ -1046,7 +1050,7 @@ def page_compra_rapida() -> None:
                 st.stop()
             total = _agregar_items(items)
             st.session_state.cr_ver = ver + 1
-            st.toast(f"{total} unidades agregadas al carrito")
+            toast_pendiente(f"Agregaste {total} unidades al carrito.")
             st.rerun()
 
     with tab_pegar:
@@ -1077,6 +1081,8 @@ def page_compra_rapida() -> None:
         if ok and texto.strip():
             items, incidencias = cr.resolver_pegado(texto, df)
             total = _agregar_items(items) if items else 0
+            toast_pendiente(f"Agregaste {total} unidades al carrito." if total
+                            else "No se agregó nada al carrito — revisá el detalle de las líneas.")
             st.session_state.cr_resultado = (cr.resumen_incidencias(incidencias), incidencias, total)
             st.rerun()
 
