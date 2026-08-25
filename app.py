@@ -746,7 +746,7 @@ def page_carrito() -> None:
             c = st.columns([0.5, 2.3, 0.95, 0.85, 0.85, 0.3], vertical_alignment="center")
             with c[0]:
                 if fotos.tiene_fotos(it["producto_cod"]):
-                    st.image(fotos.foto_principal(it["producto_cod"]), width=52)
+                    st.image(fotos.miniatura(it["producto_cod"], it.get("color")), width=52)
             c[1].markdown(f"<b>{it['producto_nombre']}</b><br><span class='card-sub'>"
                           f"{it['producto_cod']} · {it['color']} · Talle {it['talle']}</span>", unsafe_allow_html=True)
             # La cantidad puede superar el stock actual (se sumó de a tandas o
@@ -935,7 +935,9 @@ def page_pedidos() -> None:
     if p.get("observaciones"):
         st.markdown(f"<p class='muted'>Obs: {p['observaciones']}</p>", unsafe_allow_html=True)
     items_df = pd.DataFrame(p["items"])
-    items_df["foto"] = items_df["producto_cod"].map(lambda c: fotos.foto_principal(c) if fotos.tiene_fotos(c) else "")
+    items_df["foto"] = items_df.apply(
+        lambda r: fotos.miniatura(r["producto_cod"], r.get("color")) if fotos.tiene_fotos(r["producto_cod"]) else "",
+        axis=1)
     st.dataframe(items_df[["foto", "producto_cod", "producto_nombre", "color", "talle", "cantidad",
                            "precio_unit", "subtotal"]], hide_index=True, use_container_width=True,
                  column_config={"foto": st.column_config.ImageColumn("", width="small"),
@@ -1012,8 +1014,9 @@ def page_compra_rapida() -> None:
         cinfo.markdown(f"<p class='muted'>{len(sub)} variantes con stock y precio · página {pag}/{n_pag} · "
                        "cargá cantidades y tocá Agregar</p>", unsafe_allow_html=True)
         page_df = sub.iloc[(pag - 1) * por_pag: pag * por_pag].copy()
-        page_df["foto"] = page_df["producto_cod"].map(
-            lambda c: fotos.foto_principal(c) if fotos.tiene_fotos(c) else "")
+        page_df["foto"] = page_df.apply(
+            lambda r: fotos.miniatura(r["producto_cod"], r["color"]) if fotos.tiene_fotos(r["producto_cod"]) else "",
+            axis=1)
         page_df["cantidad"] = 0
         ver = st.session_state.get("cr_ver", 0)
         # Sin columna de stock: el cliente nunca ve cuánto queda.

@@ -318,6 +318,28 @@ def _sec_catalogo() -> None:
         if f4.button("Quitar destacados", key="masivo_nodest", disabled=prods.empty, use_container_width=True):
             _aplicar_lote(list(prods["producto_cod"]), {"destacado": False})
 
+    with st.expander("Fotos ↔ variantes (auditoría)"):
+        st.markdown("<p class='muted'>Genera el mapa de qué foto usa cada variante (equivalente al "
+                    "imagenes.csv del Woo), sobre lo FILTRADO arriba. Origen: <b>color</b> = matching "
+                    "automático · <b>manual</b> = asignada en la ficha · <b>portada</b> = sin foto "
+                    "propia del color · <b>sin_foto</b>.</p>", unsafe_allow_html=True)
+        if st.button("Generar mapeo", key="fotomap_gen"):
+            with st.spinner("Cruzando fotos y variantes..."):
+                rows = fotos.mapeo_variantes(
+                    sub[["producto_cod", "sku", "color", "talle"]].to_dict("records"),
+                    overrides_por_prod=ov)
+            st.session_state.adm_fotomap = pd.DataFrame(rows)
+        fm = st.session_state.get("adm_fotomap")
+        if fm is not None and len(fm):
+            cnt = fm["origen"].value_counts().to_dict()
+            st.markdown("<p class='muted'>" + " · ".join(f"{k}: <b>{v}</b>" for k, v in sorted(cnt.items()))
+                        + f" · {len(fm)} variantes</p>", unsafe_allow_html=True)
+            st.download_button("Descargar CSV", data=fm.to_csv(index=False).encode("utf-8"),
+                               file_name="fotos_variantes.csv", mime="text/csv", key="fotomap_dl")
+            sin = fm[fm["origen"].isin(["portada", "sin_foto"])]
+            if len(sin):
+                st.dataframe(sin.head(50), hide_index=True, use_container_width=True)
+
 
 LOTE_LABEL = {("publicado", False): "OCULTAR", ("publicado", None): "volver a publicación AUTOMÁTICA",
               ("destacado", True): "DESTACAR", ("destacado", False): "quitar el destacado a"}
@@ -359,7 +381,8 @@ def _confirmar_lote(cods: list[str], campos: dict) -> None:
 def _limpiar_edicion_producto(cod: str) -> None:
     """Borra el estado de los widgets de edición para que siempre arranquen
     desde lo GUARDADO (fase 6.1: editar sin guardar no deja rastro)."""
-    for k in [f"pe_{cod}_{n}" for n in (1, 2, 3, 4)] + [f"adm_var_{cod}", f"adm_extra_{cod}"]:
+    for k in [f"pe_{cod}_{n}" for n in (1, 2, 3, 4)] + [f"adm_var_{cod}", f"adm_extra_{cod}",
+                                                        f"adm_fc_{cod}"]:
         st.session_state.pop(k, None)
 
 
@@ -616,6 +639,30 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
                 st.toast(f"Variante manual {sku_n} agregada")
                 st.rerun()
 
+    # --- Fotos por color (fase 9): asociar variante ↔ foto ---
+    files_prod = fotos.indice_fotos().get(cod.upper(), [])
+    fed = None
+    if files_prod:
+        st.markdown("<div class='kicker' style='margin:.8rem 0 0'>Fotos por color</div>"
+                    "<p class='muted' style='margin:0 0 .4rem'>La miniatura de cada variante usa la "
+                    "foto de SU color (detección por nombre de archivo, como el Woo). Si un color no "
+                    "matchea, asignale el archivo a mano — va con Guardar.</p>", unsafe_allow_html=True)
+        colores_prod = list(dict.fromkeys(filas["color"]))
+        ov_fc = o.get("fotos_color") or {}
+        mapa_auto = fotos.foto_por_color(cod, colores_prod, files_prod, None)
+        fdf = pd.DataFrame([{
+            "color": c,
+            "auto": mapa_auto.get(fotos.norm(c)) or "— (usa portada)",
+            "manual": ov_fc.get(fotos.norm(c)) or "(automática)",
+        } for c in colores_prod])
+        fed = st.data_editor(fdf, key=f"adm_fc_{cod}", hide_index=True, use_container_width=True,
+                             disabled=["color", "auto"],
+                             column_config={
+                                 "color": "Color", "auto": "Foto detectada",
+                                 "manual": st.column_config.SelectboxColumn(
+                                     "Asignación manual", options=["(automática)"] + sorted(files_prod)),
+                             })
+
     st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:1rem 0 .6rem'></div>",
                 unsafe_allow_html=True)
     g1, g2, g3, _ = st.columns([1, 1, 1.3, 2])
@@ -637,6 +684,9 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
             "publicado": PUB_VALOR[pub], "destacado": bool(dest),
             "ub": int(ub) or None, "variantes": variantes,
         }
+        if fed is not None:   # asignación manual foto↔color (reemplazo completo)
+            campos["fotos_color"] = {fotos.norm(r["color"]): r["manual"] for _, r in fed.iterrows()
+                                     if r["manual"] and r["manual"] != "(automática)"}
         if xed is not None:   # ediciones/bajas de variantes manuales
             campos["variantes_extra"] = {
                 r["sku"]: {"color": r["color"], "talle": r["talle"], "stock": int(r["stock"] or 0),
@@ -1029,7 +1079,9 @@ def _detalle_pedido(p: dict) -> None:
                     f"por {h['por']}</p>", unsafe_allow_html=True)
 
     items = pd.DataFrame(p["items"])
-    items["foto"] = items["producto_cod"].map(lambda c: fotos.foto_principal(c) if fotos.tiene_fotos(c) else "")
+    items["foto"] = items.apply(
+        lambda r: fotos.miniatura(r["producto_cod"], r.get("color")) if fotos.tiene_fotos(r["producto_cod"]) else "",
+        axis=1)
     st.dataframe(items[["foto", "producto_cod", "producto_nombre", "color", "talle", "cantidad",
                         "precio_unit", "subtotal"]],
                  hide_index=True, use_container_width=True,

@@ -225,3 +225,21 @@ y se le avisa con un mensaje EFÍMERO (st.toast, unos segundos):
 Los toasts diferidos viajan por `st.session_state._toasts` y se disparan al
 inicio del run siguiente (sobreviven al st.rerun). El admin sigue viendo
 stock en todas las vistas (matriz con leyenda, cards, tablas del admin).
+
+
+## 13. Foto ↔ variante (fase 9, 2026-08-25)
+
+Port de la lógica del `imagenes.csv` del pipeline Woo (`pipeline/images.py`):
+- `fotos.foto_por_color()`: foto principal POR COLOR con matching exacto por
+  nombre normalizado + fuzzy para typos (difflib, umbral 0.85, sin ambigüedad).
+- **Miniaturas por variante** (`fotos.miniatura(prod, color)`): carrito,
+  compra rápida, items de pedidos (cliente y admin) muestran la foto del
+  color de la variante; si no matchea, la portada.
+- **Asignación manual** en el editor de producto (sección «Fotos por color»):
+  `catalogo_overrides.{prod}.fotos_color = {COLOR_NORM: filename}` pisa el
+  matching (reemplazo completo al Guardar, como precios/variantes).
+- **Auditoría exportable** (admin → Catálogo → «Fotos ↔ variantes»):
+  `fotos.mapeo_variantes()` genera el CSV producto/sku/color/talle/foto/origen
+  (color | manual | portada | sin_foto) sobre lo filtrado — el equivalente del
+  archivo que generaba el Woo.
+- La galería de la ficha usa el mismo fuzzy en «Ver fotos del color».

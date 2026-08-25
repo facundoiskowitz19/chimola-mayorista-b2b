@@ -214,14 +214,145 @@ def foto_principal(producto_cod: str) -> str:
 
 
 def fotos_por_color(fotos: list[dict], color: str) -> list[dict]:
-    """Fotos del color (exacto o fuzzy por inclusión); si no hay, todas."""
+    """Fotos del color: exacto → fuzzy (typos, mismo criterio que el Woo) →
+    inclusión; si no hay nada, todas."""
     cn = norm(color)
     exact = [f for f in fotos if f["color_norm"] == cn]
     if exact:
         return exact
+    colores_fotos = sorted({f["color_norm"] for f in fotos if f["color_norm"]})
+    best = _resolver_color_fuzzy(cn, colores_fotos)
+    if best:
+        return [f for f in fotos if f["color_norm"] == best]
     aprox = [f for f in fotos if f["color_norm"] and (cn in f["color_norm"] or f["color_norm"] in cn)]
     return aprox or fotos
 
 
 def tiene_fotos(producto_cod: str) -> bool:
     return bool(indice_fotos().get(producto_cod.strip().upper()))
+
+
+# ---------------------------------------------------------------------------
+# Foto ↔ VARIANTE (fase 9 — port de pipeline/images.py del Woo)
+# ---------------------------------------------------------------------------
+FUZZY_THRESHOLD = 0.85
+
+
+def _resolver_color_fuzzy(color_norm: str, candidatos_norm: list[str]) -> str | None:
+    """Mejor candidato para un color con typos (port del Woo): inclusión
+    ponderada o difflib; umbral 0.85 y sin ambigüedad (dos parecidos → None)."""
+    import difflib
+
+    if not color_norm or not candidatos_norm:
+        return None
+    scored = []
+    for c in candidatos_norm:
+        if color_norm in c or c in color_norm:
+            score = min(len(color_norm), len(c)) / max(len(color_norm), len(c))
+        else:
+            score = difflib.SequenceMatcher(None, color_norm, c).ratio()
+        scored.append((score, c))
+    scored.sort(reverse=True)
+    best_score, best = scored[0]
+    if best_score < FUZZY_THRESHOLD:
+        return None
+    if len(scored) > 1 and scored[1][0] >= best_score - 0.05:
+        return None
+    return best
+
+
+def foto_por_color(producto_cod: str, colores_catalogo: list[str],
+                   filenames: list[str] | None = None,
+                   overrides_color: dict | None = None) -> dict[str, str]:
+    """{color_catalogo_NORM: filename} — la foto principal de cada color.
+    Matching exacto por nombre normalizado + fuzzy para typos (el mismo
+    criterio que arma el imagenes.csv del pipeline Woo). `overrides_color`
+    ({color: filename}, cargado por el admin) pisa el matching automático."""
+    prod = producto_cod.strip().upper()
+    files = filenames if filenames is not None else indice_fotos().get(prod, [])
+    fotos = parsear_fotos(producto_cod, files, colores_catalogo)
+    colores_norm = [norm(c) for c in colores_catalogo if c]
+
+    main_by_color: dict[str, dict] = {}
+    for f in fotos:
+        c = f["color_norm"]
+        if not c:
+            continue
+        cur = main_by_color.get(c)
+        if cur is None or (f["is_main"] and not cur["is_main"]) \
+                or (f["is_main"] == cur["is_main"] and f["order"] < cur["order"]):
+            main_by_color[c] = f
+
+    out: dict[str, str] = {}
+    for cfoto, f in sorted(main_by_color.items()):
+        destino = cfoto if cfoto in colores_norm else _resolver_color_fuzzy(cfoto, colores_norm)
+        if destino and destino not in out:
+            out[destino] = f["filename"]
+    for c, fn in (overrides_color or {}).items():
+        cn = norm(c)
+        if fn and fn in files:
+            out[cn] = fn
+        elif not fn:
+            out.pop(cn, None)
+    return out
+
+
+def _overrides_fotos(producto_cod: str) -> dict:
+    """fotos_color del override del producto ({} si no hay o sin Firestore)."""
+    try:
+        import overrides as _ov
+        o = _ov.get_catalogo_overrides().get(producto_cod.strip().upper(), {})
+        return o.get("fotos_color") or {}
+    except Exception:  # noqa: BLE001 — tests / local sin Firestore
+        return {}
+
+
+def miniatura(producto_cod: str, color: str | None = None) -> str:
+    """URL de la miniatura de una VARIANTE: la foto de SU color (matching
+    automático o asignación manual del admin); si no se pudo asociar, la
+    portada del producto."""
+    prod = producto_cod.strip().upper()
+    files = indice_fotos().get(prod, [])
+    if not files:
+        return PLACEHOLDER
+    if color:
+        mapa = foto_por_color(producto_cod, [color], files, _overrides_fotos(producto_cod))
+        fn = mapa.get(norm(color))
+        if fn:
+            return url_foto(producto_cod, fn)
+    return foto_principal(producto_cod)
+
+
+def mapeo_variantes(variantes: list[dict], indice: dict[str, list[str]] | None = None,
+                    overrides_por_prod: dict | None = None) -> list[dict]:
+    """Mapa foto ↔ variante para exportar/auditar (equivalente al imagenes.csv
+    del Woo): [{producto_cod, sku, color, talle, foto, origen}] con
+    origen = color (automático) | manual (override) | portada | sin_foto."""
+    idx = indice if indice is not None else indice_fotos()
+    ovs = overrides_por_prod or {}
+    por_prod: dict[str, list[dict]] = {}
+    for v in variantes:
+        por_prod.setdefault(str(v["producto_cod"]).strip().upper(), []).append(v)
+    out = []
+    for prod, vs in sorted(por_prod.items()):
+        files = idx.get(prod, [])
+        colores = sorted({str(v.get("color") or "") for v in vs if v.get("color")})
+        ov_fotos = (ovs.get(prod) or {}).get("fotos_color") or {}
+        mapa = foto_por_color(prod, colores, files, ov_fotos) if files else {}
+        portada = None
+        if files:
+            pf = parsear_fotos(prod, files, colores)
+            portada = pf[0]["filename"] if pf else None
+        manual_norm = {norm(c) for c, fn in ov_fotos.items() if fn}
+        for v in sorted(vs, key=lambda x: (str(x.get("color") or ""), str(x.get("talle") or ""))):
+            cn = norm(str(v.get("color") or ""))
+            fn = mapa.get(cn)
+            if fn:
+                origen = "manual" if cn in manual_norm else "color"
+            elif portada:
+                fn, origen = portada, "portada"
+            else:
+                fn, origen = "", "sin_foto"
+            out.append({"producto_cod": prod, "sku": v["sku"], "color": v.get("color", ""),
+                        "talle": v.get("talle", ""), "foto": fn, "origen": origen})
+    return out

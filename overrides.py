@@ -65,7 +65,7 @@ def set_catalogo_override(producto_cod: str, campos: dict, por: str) -> None:
     precios, ub} y de variante `variantes: {sku: {stock, oculta, precios}}`.
     ub = múltiplo/mínimo de compra (unidad de bulto). Ver SPECS §3."""
     permitidos = {"publicado", "destacado", "nombre", "descripcion", "precios", "ub", "variantes",
-                  "variantes_extra"}
+                  "variantes_extra", "fotos_color"}
     campos = {k: v for k, v in campos.items() if k in permitidos}
     if "variantes_extra" in campos:
         limpio = {}
@@ -96,11 +96,14 @@ def set_catalogo_override(producto_cod: str, campos: dict, por: str) -> None:
             if v:
                 limpio[sku] = v
         campos["variantes"] = limpio
+    if "fotos_color" in campos:   # {color: filename} — asignación manual foto↔variante
+        campos["fotos_color"] = {str(c): str(fn) for c, fn in (campos["fotos_color"] or {}).items() if fn}
     ref = db.catalogo_overrides_col().document(str(producto_cod))
-    # `precios` y `variantes` se REEMPLAZAN completos (merge fusionaría por clave
-    # y no se podría quitar un override de una lista/variante).
+    # `precios`, `variantes` y `fotos_color` se REEMPLAZAN completos (merge
+    # fusionaría por clave y no se podría quitar un override puntual).
     variantes = campos.pop("variantes", None)
     extras = campos.pop("variantes_extra", None)
+    fotos_color = campos.pop("fotos_color", None)
     precios = campos.pop("precios", None) if "precios" in campos else "__keep__"
     ref.set(_audit(campos, por), merge=True)
     reemplazos = {}
@@ -108,6 +111,8 @@ def set_catalogo_override(producto_cod: str, campos: dict, por: str) -> None:
         reemplazos["variantes"] = variantes
     if extras is not None:
         reemplazos["variantes_extra"] = extras
+    if fotos_color is not None:
+        reemplazos["fotos_color"] = fotos_color
     if precios != "__keep__":
         reemplazos["precios"] = precios or {}
     if reemplazos:

@@ -214,3 +214,32 @@ def test_override_cliente_contacto_y_cuit(monkeypatch):
                                              "lista_precios": 1, "cuit": "30-71065547-9"})
     assert e2["cuit"] == "30-71065547-9" and e2["cuit_origen"] == "Aleph"
     assert e2["contacto_nombre"] == "" and e2["contacto_email"] == ""
+
+
+# --- Fase 9: foto ↔ variante (port del imagenes.csv del Woo) ---
+def test_foto_por_color_y_fuzzy():
+    files = ["M211 AQUA (1).jpg", "M211 AQUA (2).jpg", "M211 RAINBOW (1).jpg",
+             "M211 allcolors.jpg", "M211 LIGTH PINK (1).jpg"]   # typo de LIGHT PINK
+    mapa = fotos.foto_por_color("M211", ["AQUA", "RAINBOW", "LIGHT PINK"], files)
+    assert mapa["AQUA"] == "M211 AQUA (1).jpg"
+    assert mapa["RAINBOW"] == "M211 RAINBOW (1).jpg"
+    assert mapa["LIGHTPINK"] == "M211 LIGTH PINK (1).jpg"   # fuzzy rescata el typo
+    mapa2 = fotos.foto_por_color("M211", ["AQUA"], files, {"AQUA": "M211 AQUA (2).jpg"})
+    assert mapa2["AQUA"] == "M211 AQUA (2).jpg"             # manual pisa al automático
+    assert fotos._resolver_color_fuzzy("AZUL", ["AZULCLARO", "AZULOSCURO"]) is None  # ambiguo
+
+
+def test_mapeo_variantes():
+    variantes = [
+        {"producto_cod": "M211", "sku": "M211_U_1", "color": "AQUA", "talle": "U"},
+        {"producto_cod": "M211", "sku": "M211_U_2", "color": "VERDE", "talle": "U"},
+        {"producto_cod": "ZZZ9", "sku": "ZZZ9_U_1", "color": "BLACK", "talle": "U"},
+    ]
+    idx = {"M211": ["M211 AQUA (1).jpg", "M211 allcolors.jpg"]}
+    por_sku = {r["sku"]: r for r in fotos.mapeo_variantes(variantes, indice=idx)}
+    assert por_sku["M211_U_1"]["origen"] == "color" and por_sku["M211_U_1"]["foto"] == "M211 AQUA (1).jpg"
+    assert por_sku["M211_U_2"]["origen"] == "portada" and por_sku["M211_U_2"]["foto"] == "M211 allcolors.jpg"
+    assert por_sku["ZZZ9_U_1"]["origen"] == "sin_foto"
+    rows2 = fotos.mapeo_variantes(variantes, indice=idx,
+                                  overrides_por_prod={"M211": {"fotos_color": {"VERDE": "M211 allcolors.jpg"}}})
+    assert {r["sku"]: r for r in rows2}["M211_U_2"]["origen"] == "manual"
