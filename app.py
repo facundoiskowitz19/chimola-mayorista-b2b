@@ -453,18 +453,25 @@ def matriz_variantes(prod: dict, key: str) -> list:
                 continue
             pedido = int(q)
             q = min(pedido, int(v["stock"]))
-            if q < pedido:
-                recortes.append(f"{c} Talle {t}")
             if ub > 1:
                 q = (q // ub) * ub
+            if q < pedido:
+                recortes.append((c, t, pedido, q))
             if q > 0:
                 items.append(cr.item_desde_variante(v, q))
     if recortes:
-        # Aviso efímero, sin números: nunca le mostramos el stock al cliente.
-        firma = (key, tuple(recortes))
+        # Aviso PERSISTENTE mientras el valor tipeado exceda lo disponible
+        # (pedido del usuario 2026-08-25): dice qué se va a cargar, sin
+        # mencionar el stock. El toast avisa además al momento del cambio.
+        for c, t, pedido, q in recortes:
+            st.markdown(f"<div class='aviso-stock'>{c} · Talle {t}: pediste <b>{pedido}</b> y supera "
+                        f"la cantidad disponible — se van a cargar <b>{q}</b>.</div>",
+                        unsafe_allow_html=True)
+        firma = (key, tuple(r[:2] for r in recortes))
         if st.session_state.get("mx_recorte_firma") != firma:
             st.session_state.mx_recorte_firma = firma
-            st.toast("Estás superando la cantidad disponible en " + ", ".join(recortes)
+            st.toast("Estás superando la cantidad disponible en "
+                     + ", ".join(f"{c} Talle {t}" for c, t, _, _ in recortes)
                      + " — lo ajustamos al máximo posible.")
     return items
 
@@ -474,9 +481,11 @@ def _totales_seleccion(items: list) -> None:
     unidades = sum(i["cantidad"] for i in items)
     monto = sum(i["cantidad"] * i["precio_unit"] for i in items)
     if unidades:
-        st.markdown(f"Seleccionadas <b>{unidades} u.</b> · {fmt_money(monto)} precio lista · "
+        # OJO: envuelto en <div> — con DOS "$" en markdown plano, Streamlit
+        # los interpreta como fórmula matemática (LaTeX) y rompe el HTML.
+        st.markdown(f"<div>Seleccionadas <b>{unidades} u.</b> · {fmt_money(monto)} precio lista · "
                     f"<span style='color:#006786'>{fmt_money(catalog.aplicar_descuento(monto, cli.get('descuento', 0)))} "
-                    f"con tu {cli.get('descuento', 0):g}%</span>", unsafe_allow_html=True)
+                    f"con tu {cli.get('descuento', 0):g}%</span></div>", unsafe_allow_html=True)
 
 
 def page_catalogo() -> None:
