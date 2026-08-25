@@ -577,6 +577,10 @@ def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: b
             prod = catalog.get_producto(df, abierta)
             if prod and prod["precio"] is not None:
                 with st.container(border=True, key=f"panel_{abierta}"):
+                    # OJO nesting: el grid ya vive dentro de la columna `main`
+                    # (rail de filtros, fase 8) → acá solo se permite UN nivel
+                    # más de columnas. Los botones van al nivel del container,
+                    # nunca adentro de pdet (StreamlitAPIException).
                     pi, pdet = st.columns([1, 3.1], gap="medium")
                     with pi:
                         st.image(fotos.foto_principal(abierta), use_container_width=True)
@@ -588,19 +592,19 @@ def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: b
                         ver = st.session_state.get("mx_ver", 0)
                         items = matriz_variantes(prod, key=f"mx_{abierta}_{ver}")
                         _totales_seleccion(items)
-                        b1, b2, b3 = st.columns([1.3, 1.3, 2.2])
-                        if b1.button("Agregar al carrito", type="primary", key=f"padd_{abierta}",
-                                     disabled=not items, use_container_width=True):
-                            total = _agregar_items(items)
-                            st.session_state.mx_ver = ver + 1
-                            st.session_state.card_abierta = None
-                            st.toast(f"{total} unidades agregadas al carrito")
-                            st.rerun()
-                        if b2.button("Ver ficha completa", key=f"pfull_{abierta}", use_container_width=True):
-                            ir("producto", producto_sel=abierta)
-                        if b3.button("Cerrar", key=f"pcls_{abierta}"):
-                            st.session_state.card_abierta = None
-                            st.rerun()
+                    b1, b2, b3 = st.columns([1.3, 1.3, 2.2])
+                    if b1.button("Agregar al carrito", type="primary", key=f"padd_{abierta}",
+                                 disabled=not items, use_container_width=True):
+                        total = _agregar_items(items)
+                        st.session_state.mx_ver = ver + 1
+                        st.session_state.card_abierta = None
+                        st.toast(f"{total} unidades agregadas al carrito")
+                        st.rerun()
+                    if b2.button("Ver ficha completa", key=f"pfull_{abierta}", use_container_width=True):
+                        ir("producto", producto_sel=abierta)
+                    if b3.button("Cerrar", key=f"pcls_{abierta}"):
+                        st.session_state.card_abierta = None
+                        st.rerun()
 
     if len(prods) > len(sub):
         m1, m2, m3 = st.columns([1, 2, 1])
