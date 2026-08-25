@@ -92,6 +92,9 @@ def variables_pedido(pedido: dict, por: str = "") -> dict:
         "cliente_cod": pedido.get("cliente_cod"), "usuario": pedido.get("usuario_email", ""),
         "fecha": pedido.get("fecha_str", ""), "unidades": pedido.get("unidades", 0),
         "lista_precios": pedido.get("lista_precios", ""),
+        "contacto": (" ".join(filter(None, [pedido.get("contacto_nombre"),
+                     f"<{pedido.get('contacto_email')}>" if pedido.get("contacto_email") else ""]))
+                     or pedido.get("usuario_email", "")),
         "subtotal": _fmt(pedido.get("subtotal", 0)), "descuento_pct": f"{float(pedido.get('descuento_pct') or 0):g}",
         "descuento_monto": _fmt(pedido.get("descuento_monto", 0)), "total": _fmt(pedido.get("total", 0)),
         "iva_pct": f"{iva:g}", "iva_monto": _fmt(pedido.get("iva_monto", 0)),

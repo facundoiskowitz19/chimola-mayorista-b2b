@@ -115,7 +115,12 @@ def get_usuario(email: str) -> dict | None:
 
 def crear_usuario(email: str, password: str, cliente_cod: int | None, nombre_display: str,
                   rol: str = "cliente", activo: bool = True, sobrescribir: bool = False) -> dict:
-    email = email.strip().lower()
+    email = (email or "").strip().lower()
+    # Email vacío/roto → Firestore devuelve un 400 críptico (path 'usuarios/'
+    # con trailing slash). Validar acá con un error humano.
+    if not email or "@" not in email or " " in email or "/" in email \
+            or "." not in email.split("@")[-1]:
+        raise ValueError("Email inválido: completá una dirección real (ej: persona@empresa.com)")
     ref = db.usuario_ref(email)
     if ref.get().exists and not sobrescribir:
         raise ValueError(f"El usuario {email} ya existe")

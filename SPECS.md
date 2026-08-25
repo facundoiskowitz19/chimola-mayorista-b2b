@@ -92,6 +92,15 @@ manuales, y marcadas en Excel/email porque Aleph no las conoce.
   visible UNA vez en pantalla y guardada en el secret `mayorista-seed-passwords`.
 - Reset password y activar/desactivar usuario desde la UI.
 - Criterio: override 25% para 2722 (Aleph=20) → carrito, Excel y email usan 25%.
+- **Contacto por cliente (2026-08-25)**: `clientes_overrides.{cod}` guarda
+  `contacto_nombre` / `contacto_email` / `cuit` (el CUIT pisa al de Aleph, con
+  origen visible en la ficha). El CLIENTE los ve precargados y editables en el
+  formulario de confirmación del carrito («si lo cambiás, queda guardado para
+  la próxima»); el ADMIN los edita en la ficha del cliente. El pedido guarda
+  `contacto_nombre`/`contacto_email`, el detalle del admin los muestra y las
+  plantillas de email tienen la variable `{contacto}`. Talle se muestra como
+  «Talle X» (nunca «T X»). El alta de usuario valida el email (antes un email
+  vacío daba un 400 críptico de Firestore).
 
 ## 5. Pedidos: estados, cancelación y notificaciones
 

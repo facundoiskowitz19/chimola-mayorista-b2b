@@ -416,7 +416,7 @@ def matriz_variantes(prod: dict, key: str) -> list:
     vs = prod["variantes"]
     colores = list(dict.fromkeys(v["color"] for v in vs))
     talles = sorted({v["talle"] for v in vs}, key=catalog.talle_key)
-    cols_t = [f"T {t}" for t in talles]
+    cols_t = [f"Talle {t}" for t in talles]
     by_ct = {(v["color"], v["talle"]): v for v in vs}
     ub = int(prod.get("ub") or 0)
 
@@ -438,13 +438,13 @@ def matriz_variantes(prod: dict, key: str) -> list:
     for c in colores:
         for t in talles:
             v = by_ct.get((c, t))
-            q = ed.loc[c, f"T {t}"]
+            q = ed.loc[c, f"Talle {t}"]
             if v is None or pd.isna(q) or int(q) <= 0 or pd.isna(v["precio"]):
                 continue
             pedido = int(q)
             q = min(pedido, int(v["stock"]))
             if q < pedido:
-                recortes.append(f"{c} T {t}")
+                recortes.append(f"{c} Talle {t}")
             if ub > 1:
                 q = (q // ub) * ub
             if q > 0:
@@ -747,7 +747,7 @@ def page_carrito() -> None:
                 if fotos.tiene_fotos(it["producto_cod"]):
                     st.image(fotos.foto_principal(it["producto_cod"]), width=52)
             c[1].markdown(f"<b>{it['producto_nombre']}</b><br><span class='card-sub'>"
-                          f"{it['producto_cod']} · {it['color']} · T {it['talle']}</span>", unsafe_allow_html=True)
+                          f"{it['producto_cod']} · {it['color']} · Talle {it['talle']}</span>", unsafe_allow_html=True)
             # La cantidad puede superar el stock actual (se sumó de a tandas o
             # el stock bajó): se acota SIN mostrar nunca el stock al cliente
             # (sin max_value, que delata el número) — aviso efímero por toast.
@@ -803,10 +803,33 @@ def page_carrito() -> None:
         if not puede_pedir():
             st.warning("Tu usuario no tiene cliente asociado; no podés confirmar pedidos.")
         with st.form("confirmar_form", border=False):
+            st.markdown("<div class='kicker'>Contacto para este pedido</div>"
+                        "<p class='muted' style='margin:0 0 .3rem'>Con quién coordina Lautin la "
+                        "entrega. Si lo cambiás, queda guardado para la próxima.</p>",
+                        unsafe_allow_html=True)
+            contacto_nombre = st.text_input("Persona de contacto",
+                                            value=cli.get("contacto_nombre") or "",
+                                            placeholder="Nombre y apellido")
+            contacto_email = st.text_input("Email de contacto",
+                                           value=cli.get("contacto_email")
+                                           or st.session_state.user.get("email", ""))
             obs = st.text_area("Observaciones para Lautin (opcional)", height=90)
             confirmar = st.form_submit_button("Confirmar pedido", type="primary", use_container_width=True,
                                               disabled=not puede_pedir())
         if confirmar and not st.session_state.get("confirmando"):
+            contacto_nombre = contacto_nombre.strip()
+            contacto_email = contacto_email.strip().lower()
+            if contacto_email and ("@" not in contacto_email or " " in contacto_email):
+                st.error("El email de contacto no parece válido.")
+                st.stop()
+            # Persistir el contacto para la próxima (merge: no toca descuento/lista)
+            if (contacto_nombre != (cli.get("contacto_nombre") or "")
+                    or contacto_email != (cli.get("contacto_email") or "")):
+                overrides.set_cliente_override(int(cli["cliente_cod"]),
+                                               {"contacto_nombre": contacto_nombre,
+                                                "contacto_email": contacto_email},
+                                               st.session_state.user.get("email", ""))
+            cli = {**cli, "contacto_nombre": contacto_nombre, "contacto_email": contacto_email}
             st.session_state.confirmando = True
             try:
                 with st.spinner("Validando stock y generando el pedido..."):

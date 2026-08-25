@@ -241,6 +241,8 @@ def confirmar_pedido(usuario: dict, cliente: dict, items: list[dict], observacio
         "cliente_cod": int(cliente["cliente_cod"]),
         "cliente_nombre": cliente.get("nombre_display") or cliente.get("nombre") or "",
         "cliente_cuit": cliente.get("cuit") or "",
+        "contacto_nombre": cliente.get("contacto_nombre") or "",
+        "contacto_email": cliente.get("contacto_email") or "",
         "usuario_email": usuario["email"],
         "lista_precios": int(cliente.get("lista_precios") or 1),
         "items": [{k: it.get(k) for k in ("sku", "ean", "producto_cod", "producto_nombre", "color_cod",
@@ -290,7 +292,8 @@ def repetir_pedido(pedido: dict, df_publicadas) -> tuple[list[dict], list[str]]:
     for it in pedido["items"]:
         v = por_sku.get(it["sku"])
         if v is None:
-            avisos.append(f"{it['sku']} ({it['producto_nombre']} {it['color']} T{it['talle']}): ya no está disponible")
+            avisos.append(f"{it['sku']} ({it['producto_nombre']} {it['color']} Talle {it['talle']}): "
+                          "ya no está disponible")
             continue
         if pd.isna(v["precio"]):
             avisos.append(f"{it['sku']}: sin precio en tu lista, consultá a Chimola")

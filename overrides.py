@@ -229,7 +229,8 @@ def get_clientes_overrides() -> dict[int, dict]:
 
 
 def set_cliente_override(cliente_cod: int, campos: dict, por: str) -> None:
-    permitidos = {"descuento_pct", "lista_precios", "notas"}
+    permitidos = {"descuento_pct", "lista_precios", "notas",
+                  "contacto_nombre", "contacto_email", "cuit"}
     campos = {k: v for k, v in campos.items() if k in permitidos}
     db.clientes_overrides_col().document(str(int(cliente_cod))).set(_audit(campos, por), merge=True)
     invalidar("clientes")
@@ -250,6 +251,14 @@ def aplicar_override_cliente(cliente: dict) -> dict:
         out["lista_origen"] = "Override"
     if o.get("notas"):
         out["notas"] = o["notas"]
+    # Contacto (no existe en Aleph: siempre viene del override si está)
+    out["contacto_nombre"] = o.get("contacto_nombre") or ""
+    out["contacto_email"] = o.get("contacto_email") or ""
+    # CUIT: el override pisa al de Aleph
+    out["cuit_origen"] = "Aleph"
+    if o.get("cuit"):
+        out["cuit"] = o["cuit"]
+        out["cuit_origen"] = "Override"
     return out
 
 

@@ -191,3 +191,26 @@ def test_variantes_de_get_producto_sirven_para_item_de_carrito():
     it = cr.item_desde_variante(v, 3)   # no debe faltar ninguna key
     assert it["producto_cod"] == "M211" and it["producto_nombre"] == "Mochila Soft Rainbow"
     assert it["cantidad"] == 3 and it["sku"] == v["sku"] and it["manual"] is False
+
+
+# --- Contacto por cliente + validación de email (2026-08-25) ---
+def test_crear_usuario_valida_email():
+    for malo in ("", "   ", "sinarroba", "con espacio@x.com", "con/barra@x.com", "x@sinpunto"):
+        with pytest.raises(ValueError):
+            auth.crear_usuario(malo, "pwd", None, "X")
+
+
+def test_override_cliente_contacto_y_cuit(monkeypatch):
+    import overrides
+    ov = {1026: {"contacto_nombre": "Fernando", "contacto_email": "fer@kinderland.com.ar",
+                 "cuit": "30-99999999-9"}}
+    monkeypatch.setattr(overrides, "get_clientes_overrides", lambda: ov)
+    e = overrides.aplicar_override_cliente({"cliente_cod": 1026, "descuento": 25.0,
+                                            "lista_precios": 1, "cuit": "30-71065547-9"})
+    assert e["contacto_nombre"] == "Fernando" and e["contacto_email"] == "fer@kinderland.com.ar"
+    assert e["cuit"] == "30-99999999-9" and e["cuit_origen"] == "Override"
+    monkeypatch.setattr(overrides, "get_clientes_overrides", lambda: {})
+    e2 = overrides.aplicar_override_cliente({"cliente_cod": 1026, "descuento": 25.0,
+                                             "lista_precios": 1, "cuit": "30-71065547-9"})
+    assert e2["cuit"] == "30-71065547-9" and e2["cuit_origen"] == "Aleph"
+    assert e2["contacto_nombre"] == "" and e2["contacto_email"] == ""

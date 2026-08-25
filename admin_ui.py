@@ -780,8 +780,12 @@ def _ficha_cliente(email: str) -> None:
         d = st.columns(4)
         _dato(d[0], "Lista de precios", e["lista_precios"], e["lista_origen"])
         _dato(d[1], "Descuento cabecera", f"{e['descuento']:g}%", e["descuento_origen"])
-        _dato(d[2], "CUIT", e.get("cuit") or "—")
+        _dato(d[2], "CUIT", e.get("cuit") or "—", e.get("cuit_origen"))
         _dato(d[3], "Ubicación", f"{e.get('localidad') or '—'} · {e.get('provincia_desc') or ''}")
+        contacto = " · ".join(filter(None, [e.get("contacto_nombre"), e.get("contacto_email")]))
+        st.markdown(f"<div class='kicker' style='margin-top:.5rem'>Contacto</div>"
+                    f"{contacto or '<span class=muted>sin cargar — se pide al confirmar un pedido</span>'}",
+                    unsafe_allow_html=True)
         if e.get("notas"):
             st.markdown(f"<p class='muted'>Notas: {e['notas']}</p>", unsafe_allow_html=True)
 
@@ -870,12 +874,20 @@ def _cliente_edicion(email: str, u: dict, cod, e) -> None:
             usar_lista = st.checkbox("Override de lista", value=bool(o.get("lista_precios")))
             lista = st.number_input("Lista de precios", 1, 10,
                                     int(o.get("lista_precios") or (e or {}).get("lista_precios") or 1))
+            c1, c2 = st.columns(2)
+            contacto_n = c1.text_input("Persona de contacto", value=o.get("contacto_nombre") or "")
+            contacto_e = c2.text_input("Email de contacto", value=o.get("contacto_email") or "")
+            cuit = st.text_input("CUIT", value=o.get("cuit") or "",
+                                 placeholder=f"vacío = usa Aleph ({(e or {}).get('cuit') or '—'})")
             notas = st.text_input("Notas", value=o.get("notas") or "")
             g1, g2 = st.columns(2)
             if g1.form_submit_button("Guardar", type="primary", use_container_width=True):
                 overrides.set_cliente_override(int(cod), {
                     "descuento_pct": float(desc) if usar_desc else None,
                     "lista_precios": int(lista) if usar_lista else None,
+                    "contacto_nombre": contacto_n.strip(),
+                    "contacto_email": contacto_e.strip().lower(),
+                    "cuit": cuit.strip() or None,
                     "notas": notas.strip(),
                 }, _admin_email())
                 st.session_state.adm_cli_edit = False
@@ -962,6 +974,9 @@ def _detalle_pedido(p: dict) -> None:
     st.markdown(f"<p class='muted'>{p['fecha_str']} · <b>{p['cliente_nombre']}</b> (cliente {p['cliente_cod']}) · "
                 f"{p['usuario_email']} · {p['unidades']} u. · <b>{_fmt(p['total'])}</b> "
                 f"(desc. {p['descuento_pct']:g}%)</p>", unsafe_allow_html=True)
+    contacto_p = " · ".join(filter(None, [p.get("contacto_nombre"), p.get("contacto_email")]))
+    if contacto_p:
+        st.markdown(f"<p class='muted'>Contacto del pedido: {contacto_p}</p>", unsafe_allow_html=True)
     if p.get("observaciones"):
         st.markdown(f"<p class='muted'>Obs: {p['observaciones']}</p>", unsafe_allow_html=True)
     for h in p.get("historial", []):
@@ -1085,8 +1100,8 @@ EVENTO_LABEL = {"confirmacion": "Confirmación de pedido",
                 "procesado": "Cambio a procesado",
                 "cancelado": "Cancelación"}
 
-VARIABLES_EMAIL = ("numero", "cliente", "cliente_cod", "usuario", "fecha", "unidades", "subtotal",
-                   "descuento_pct", "descuento_monto", "total", "iva_pct", "iva_monto",
+VARIABLES_EMAIL = ("numero", "cliente", "cliente_cod", "usuario", "contacto", "fecha", "unidades",
+                   "subtotal", "descuento_pct", "descuento_monto", "total", "iva_pct", "iva_monto",
                    "total_con_iva", "lineas_iva", "lista_precios", "observaciones", "detalle",
                    "quien", "estado")
 
