@@ -120,17 +120,12 @@ st.markdown("""
                   padding:.7rem .9rem; font-size:.9rem; margin:.4rem 0; }
   .nota-acento { background:#e9f8ff; border-left:3px solid #0088b0; color:#201e1d;
                  padding:.7rem .9rem; font-size:.9rem; margin:.4rem 0; }
-  /* Galería: miniaturas clickeables (botón invisible superpuesto a la imagen).
-     El toolbar de hover de st.image (fullscreen) queda POR ENCIMA del botón y
-     se come el click del usuario real → z-index alto + toolbar oculto. */
-  div[class*="st-key-gal_"], div[class*="st-key-gal_on_"] { position:relative; }
-  div[class*="st-key-gal_"] .stButton, div[class*="st-key-gal_on_"] .stButton
-    { position:absolute; inset:0; margin:0; z-index:30; }
-  div[class*="st-key-gal_"] .stButton button, div[class*="st-key-gal_on_"] .stButton button
-    { width:100%; height:100%; min-height:0; opacity:0; border:none; cursor:pointer; }
-  div[class*="st-key-gal_"] [data-testid="stElementToolbar"],
-  div[class*="st-key-gal_on_"] [data-testid="stElementToolbar"] { display:none !important; }
-  div[class*="st-key-gal_on_"] img { outline:2px solid #0088b0; outline-offset:1px; }
+  /* Galería: la miniatura ES un botón con la foto de fondo (por producto se
+     inyecta un <style> con el background de cada uno) — el área clickeable es
+     el 100% de la miniatura, sin capas superpuestas frágiles. */
+  div[class*="st-key-galb_"] button { width:100%; height:76px; min-height:76px;
+    padding:0; border-radius:2px; cursor:pointer; background-color:#fff; }
+  div[class*="st-key-galb_"] button p { visibility:hidden; }
   .stApp div[class*="st-key-cli_desactivar"] button,
   .stApp div[class*="st-key-cli_desactivar"] button p { color:#aa0b56 !important; border-color:#d6006c !important; }
   .total-box { background:transparent; border-top:2px solid var(--text); padding:.9rem .1rem 0; }
@@ -659,13 +654,17 @@ def page_producto() -> None:
             st.image(visibles[idx]["url"], use_container_width=True)
             if len(visibles) > 1:
                 thumbs = st.columns(min(len(visibles), 8))
+                css = []
                 for j, f in enumerate(visibles[:16]):
                     with thumbs[j % 8]:
-                        activa = "_on" if j == idx else ""
-                        with st.container(key=f"gal{activa}_{cod}_{j}"):
-                            st.image(f["url"], use_container_width=True)
-                            st.button(" ", key=f"galb_{idx_key}_{j}", on_click=_elegir_foto,
-                                      args=(idx_key, j), use_container_width=True)
+                        bkey = f"galb_{cod}_{j}"
+                        st.button(" ", key=bkey, on_click=_elegir_foto, args=(idx_key, j),
+                                  use_container_width=True)
+                        borde = "2px solid #0088b0" if j == idx else "1px solid rgba(32,30,29,.15)"
+                        css.append(f'.st-key-{bkey} button {{ background-image:url("{f["url"]}"); '
+                                   "background-size:contain; background-position:center; "
+                                   f"background-repeat:no-repeat; border:{borde}; }}")
+                st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
         else:
             st.image(fotos.PLACEHOLDER, use_container_width=True)
             st.caption("Este producto todavía no tiene fotos cargadas.")
