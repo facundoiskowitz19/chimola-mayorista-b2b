@@ -120,6 +120,13 @@ st.markdown("""
                   padding:.7rem .9rem; font-size:.9rem; margin:.4rem 0; }
   .nota-acento { background:#e9f8ff; border-left:3px solid #0088b0; color:#201e1d;
                  padding:.7rem .9rem; font-size:.9rem; margin:.4rem 0; }
+  /* Galería: miniaturas clickeables (botón invisible superpuesto a la imagen) */
+  div[class*="st-key-gal_"], div[class*="st-key-gal_on_"] { position:relative; }
+  div[class*="st-key-gal_"] .stButton, div[class*="st-key-gal_on_"] .stButton
+    { position:absolute; inset:0; margin:0; z-index:2; }
+  div[class*="st-key-gal_"] .stButton button, div[class*="st-key-gal_on_"] .stButton button
+    { width:100%; height:100%; min-height:0; opacity:0; border:none; }
+  div[class*="st-key-gal_on_"] img { outline:2px solid #0088b0; outline-offset:1px; }
   .stApp div[class*="st-key-cli_desactivar"] button,
   .stApp div[class*="st-key-cli_desactivar"] button p { color:#aa0b56 !important; border-color:#d6006c !important; }
   .total-box { background:transparent; border-top:2px solid var(--text); padding:.9rem .1rem 0; }
@@ -395,6 +402,10 @@ def _quitar_filtro(campo, valor=None) -> None:
         st.session_state[f"f_{campo}"] = [v for v in st.session_state.get(f"f_{campo}", []) if v != valor]
 
 
+def _elegir_foto(idx_key: str, j: int) -> None:
+    st.session_state[idx_key] = j
+
+
 def _abrir_card(cod: str) -> None:
     st.session_state.card_abierta = None if st.session_state.get("card_abierta") == cod else cod
 
@@ -638,16 +649,19 @@ def page_producto() -> None:
         if galeria:
             color_foto = st.selectbox("Ver fotos del color", ["Todas"] + prod["colores"], key="foto_color")
             visibles = galeria if color_foto == "Todas" else fotos.fotos_por_color(galeria, color_foto)
-            idx = 0
-            if len(visibles) > 1:
-                idx = st.radio("Foto", range(len(visibles)), horizontal=True, key=f"foto_idx_{cod}_{color_foto}",
-                               format_func=lambda i: str(i + 1), label_visibility="collapsed")
+            # Click en una miniatura → esa foto al visor principal (sin numeritos)
+            idx_key = f"foto_idx_{cod}_{color_foto}"
+            idx = min(int(st.session_state.get(idx_key, 0) or 0), len(visibles) - 1)
             st.image(visibles[idx]["url"], use_container_width=True)
             if len(visibles) > 1:
                 thumbs = st.columns(min(len(visibles), 8))
                 for j, f in enumerate(visibles[:16]):
                     with thumbs[j % 8]:
-                        st.image(f["url"], use_container_width=True)
+                        activa = "_on" if j == idx else ""
+                        with st.container(key=f"gal{activa}_{cod}_{j}"):
+                            st.image(f["url"], use_container_width=True)
+                            st.button(" ", key=f"galb_{idx_key}_{j}", on_click=_elegir_foto,
+                                      args=(idx_key, j), use_container_width=True)
         else:
             st.image(fotos.PLACEHOLDER, use_container_width=True)
             st.caption("Este producto todavía no tiene fotos cargadas.")
