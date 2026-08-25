@@ -113,7 +113,7 @@ manuales, y marcadas en Excel/email porque Aleph no las conoce.
   `procesado` o `cancelado` se avisa por email al cliente + Chimola (el de
   cancelado dice si canceló el cliente o el equipo). El resultado queda en
   `pedidos/{n}.email_{estado}`. Además del email original de confirmación con
-  el Excel adjunto. En DEV todo se redirige a `EMAIL_OVERRIDE_TO`.
+  el Excel adjunto. Los emails van al COMPRADOR real (también en DEV, decisión 2026-08-25 — ojo con usuarios de prueba con emails de terceros).
 - Filtros del listado admin: estado, cliente, rango de fechas.
 - "Reenviar email" reenvía la confirmación con el Excel del backup GCS.
 - El cliente ve el estado actual de sus pedidos en "Mis pedidos".
@@ -128,7 +128,7 @@ manuales, y marcadas en Excel/email porque Aleph no las conoce.
 | `minimo_pedido_unidades` | mínimo de unidades para confirmar | null = sin mínimo |
 | `iva_pct` | % de IVA informativo: las listas de Aleph son SIN IVA (la NP del ERP lo suma; verificado con Kinderland: subtotal −desc +21% = total NP). Se muestra como líneas "IVA" y "Total c/IVA" en carrito, Excel y email. 0 = ocultar. | `21` |
 
-`EMAIL_OVERRIDE_TO` (redirección DEV) sigue siendo env-only, no administrable.
+`EMAIL_OVERRIDE_TO` (env-only, no administrable): si se setea, redirige TODOS los emails a esa casilla. Desde 2026-08-25 está APAGADO también en DEV: cada email va al comprador real.
 
 ## 7. Compra rápida (cliente)
 
