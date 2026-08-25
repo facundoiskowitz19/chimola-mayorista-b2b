@@ -57,12 +57,16 @@ def vaciar_carrito(email: str) -> None:
 
 
 def agregar_al_carrito(items: list[dict], nuevo: dict) -> list[dict]:
-    """Suma cantidades si el SKU ya está. Devuelve la lista nueva (no muta)."""
+    """Suma cantidades si el SKU ya está, sin superar el stock conocido
+    (sumar de a tandas no debe dejar el carrito por encima del stock).
+    Devuelve la lista nueva (no muta)."""
     out = [dict(i) for i in items]
     for it in out:
         if it["sku"] == nuevo["sku"]:
             it["cantidad"] = int(it["cantidad"]) + int(nuevo["cantidad"])
             it["stock"] = nuevo.get("stock", it.get("stock"))
+            if it.get("stock"):
+                it["cantidad"] = min(it["cantidad"], int(it["stock"]))
             it["precio_unit"] = nuevo["precio_unit"]
             return out
     out.append(dict(nuevo))

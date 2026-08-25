@@ -712,7 +712,7 @@ def page_carrito() -> None:
         h = st.columns([0.5, 2.3, 0.95, 0.85, 0.85, 0.3])
         for col, txt in zip(h, ["", "Producto", "Cantidad", "Precio lista", "Subtotal", ""]):
             col.markdown(f"<div class='kicker'>{txt}</div>", unsafe_allow_html=True)
-        nuevos, cambio = [], False
+        nuevos, cambio, recortes = [], False, {}
         for it in items:
             c = st.columns([0.5, 2.3, 0.95, 0.85, 0.85, 0.3], vertical_alignment="center")
             with c[0]:
@@ -720,8 +720,15 @@ def page_carrito() -> None:
                     st.image(fotos.foto_principal(it["producto_cod"]), width=52)
             c[1].markdown(f"<b>{it['producto_nombre']}</b><br><span class='card-sub'>"
                           f"{it['producto_cod']} · {it['color']} · T {it['talle']}</span>", unsafe_allow_html=True)
-            q = c[2].number_input("Cantidad", min_value=0, max_value=int(it.get("stock") or 99999),
-                                  value=int(it["cantidad"]), step=1, key=f"cq_{ver}_{it['sku']}",
+            # La cantidad guardada puede superar el stock actual (se sumó de a
+            # tandas, o el stock bajó): se acota al tope, con aviso, sin romper.
+            tope = int(it.get("stock") or 99999)
+            val = min(int(it["cantidad"]), tope)
+            if val < int(it["cantidad"]):
+                recortes[it["sku"]] = (f"Tenías {int(it['cantidad'])} u. pero hay {tope} disponibles: "
+                                       f"lo ajustamos a {val}.")
+            q = c[2].number_input("Cantidad", min_value=0, max_value=tope,
+                                  value=val, step=1, key=f"cq_{ver}_{it['sku']}",
                                   label_visibility="collapsed")
             c[3].markdown(fmt_money(it["precio_unit"]))
             c[4].markdown(f"<b>{fmt_money(int(q) * it['precio_unit'])}</b>", unsafe_allow_html=True)
@@ -737,6 +744,8 @@ def page_carrito() -> None:
             else:
                 cambio = True
         if cambio:
+            if recortes:   # que el aviso sobreviva al rerun del guardado
+                st.session_state.stock_avisos = {**st.session_state.get("stock_avisos", {}), **recortes}
             guardar_cart(nuevos)
             st.rerun()
 

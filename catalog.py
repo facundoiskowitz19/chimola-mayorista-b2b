@@ -319,7 +319,10 @@ def get_producto(df: pd.DataFrame, producto_cod: str) -> dict | None:
         "descripcion": first.get("descripcion", ""),
         "ub": int(ub) if pd.notna(ub) and ub else None,
         "precio": float(first["precio"]) if pd.notna(first["precio"]) else None,
-        "variantes": sub[["sku", "ean", "color_cod", "color", "talle", "stock", "precio"]].to_dict("records"),
+        # producto_cod/nombre/es_manual viajan en cada variante: item_desde_variante los necesita
+        "variantes": sub[[c for c in ["sku", "ean", "producto_cod", "producto_nombre", "color_cod",
+                                      "color", "talle", "stock", "precio", "es_manual"]
+                          if c in sub.columns]].to_dict("records"),
         "colores": sorted(sub["color"].unique()),
         "talles": list(dict.fromkeys(sub["talle"])),
     }

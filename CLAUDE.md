@@ -124,6 +124,13 @@ Navegador ──cookie JWT (24h)──▶ Streamlit (Cloud Run, --session-affini
 - **Firestore `listar_pedidos`** (where cliente_cod + order by confirmed_at)
   necesita índice compuesto (lo crea `setup_infra.sh`).
 - Cloud Run necesita `--session-affinity` (websockets de Streamlit).
+- **`st.number_input` explota si `value > max_value`** (StreamlitValueAboveMaxError).
+  En el carrito la cantidad guardada puede superar el stock actual (se sumó de
+  a tandas o el stock bajó) → SIEMPRE `value=min(cantidad, tope)` + aviso;
+  `pedidos.agregar_al_carrito` también capea la suma al stock conocido.
+- **`get_producto()` debe incluir `producto_cod`/`producto_nombre`/`es_manual`
+  en cada variante**: `compra_rapida.item_desde_variante` los exige (KeyError
+  al agregar desde la matriz si faltan).
 - **Las listas mayoristas de Aleph son SIN IVA**: la NP del ERP suma 21%
   (verificado: NP Kinderland = subtotal − desc + 21%). El sitio lo muestra como
   líneas informativas (config `iva_pct`, default 21) en carrito/Excel/email.

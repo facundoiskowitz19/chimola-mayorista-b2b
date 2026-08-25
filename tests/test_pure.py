@@ -170,3 +170,24 @@ def test_facetas_categoria_color_talle():
     assert len(catalog.filtrar_variantes(df, {"categoria": ["Indumentaria"]})) == 2
     assert len(catalog.filtrar_variantes(df, {"color": ["AQUA"], "talle": ["U"]})) == 1
     assert catalog.productos(df).set_index("producto_cod").loc["M211", "categoria"] == "Marroquineria"
+
+
+# --- Bugfix 2026-08-24: carrito por encima del stock + matriz de variantes ---
+def test_agregar_al_carrito_capea_al_stock():
+    items = pedidos.agregar_al_carrito([], {"sku": "A", "cantidad": 8, "precio_unit": 100, "stock": 10})
+    items = pedidos.agregar_al_carrito(items, {"sku": "A", "cantidad": 5, "precio_unit": 100, "stock": 10})
+    assert items[0]["cantidad"] == 10  # 8+5 pero hay 10
+    # sin stock conocido no capea (compat con items viejos)
+    items2 = pedidos.agregar_al_carrito([{"sku": "B", "cantidad": 3, "precio_unit": 1, "stock": None}],
+                                        {"sku": "B", "cantidad": 4, "precio_unit": 1, "stock": None})
+    assert items2[0]["cantidad"] == 7
+
+
+def test_variantes_de_get_producto_sirven_para_item_de_carrito():
+    import compra_rapida as cr
+    df = catalog.con_precio(_df(), 1)
+    prod = catalog.get_producto(df, "M211")
+    v = prod["variantes"][0]
+    it = cr.item_desde_variante(v, 3)   # no debe faltar ninguna key
+    assert it["producto_cod"] == "M211" and it["producto_nombre"] == "Mochila Soft Rainbow"
+    assert it["cantidad"] == 3 and it["sku"] == v["sku"] and it["manual"] is False
