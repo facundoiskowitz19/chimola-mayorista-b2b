@@ -661,10 +661,18 @@ def page_producto() -> None:
                         st.button(" ", key=bkey, on_click=_elegir_foto, args=(idx_key, j),
                                   use_container_width=True)
                         borde = "2px solid #0088b0" if j == idx else "1px solid rgba(32,30,29,.15)"
-                        css.append(f'.st-key-{bkey} button {{ background-image:url("{f["url"]}"); '
-                                   "background-size:contain; background-position:center; "
-                                   f"background-repeat:no-repeat; border:{borde}; }}")
-                st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
+                        # OJO: el CSS global pone `background:transparent !important` y
+                        # `border ... !important` en los botones secundarios → estas
+                        # reglas necesitan MÁS especificidad y longhands !important.
+                        css.append(
+                            f'.st-key-{bkey} .stButton > button[kind="secondary"] {{ '
+                            f'background-image:url("{f["url"]}") !important; '
+                            "background-size:contain !important; background-position:center !important; "
+                            "background-repeat:no-repeat !important; background-color:#fff !important; "
+                            f"border:{borde} !important; }}")
+                # st.html (no st.markdown): el parser de markdown rompería los
+                # `&` de las signed URLs dentro del url(...) del CSS.
+                st.html("<style>" + "".join(css) + "</style>")
         else:
             st.image(fotos.PLACEHOLDER, use_container_width=True)
             st.caption("Este producto todavía no tiene fotos cargadas.")
