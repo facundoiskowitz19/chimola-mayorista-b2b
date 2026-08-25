@@ -236,3 +236,28 @@ duplican valores: "Bolsos y totes"/"Bolsos y Totes", "Librería"/"Libreria").
       «Acciones sobre TODO lo filtrado» ampliado (destacar/quitar destacado)
       y con confirmación mostrando el alcance; `overrides.set_masivo()` con
       batched writes de Firestore para cientos de productos.
+
+
+## 11. QA integral (2026-08-25) — resultado
+
+Barrida e2e completa por UI (Playwright + verificación Firestore/BQ), roles
+cliente y admin, sobre el código de la rev 00033. **Resultado: 0 bugs de
+aplicación.** Todo lo siguiente verificado funcionando:
+
+- Cliente: login (error claro con password mala), filtros del rail (categoría,
+  chips, buscador, limpiar), Mostrar más acumulativo, click imagen→ficha,
+  galería (miniaturas con foto + click al visor), matriz (cargar/agregar con
+  toast), compra rápida (pegado con incidencias, sin columna stock), carrito
+  (miniaturas por color, Talle, quitar con toast, contacto precargado),
+  confirmación (pedido 000008 QA: contacto guardado, Excel backup en GCS,
+  registro de email), Mis pedidos (detalle, Repetir, cancelación por cliente
+  con historial), logout.
+- Admin: Inicio (KPIs + salud), editor (guardar precio manual → vista con
+  origen → quitar overrides → vuelve a Aleph), acciones masivas por filtro,
+  ficha de cliente (métricas + contacto), pedidos (filtro por estado, detalle
+  de cancelado sin acciones, contacto visible, reenviar email con error
+  legible), Config (banner ida y vuelta con efecto inmediato en el catálogo).
+- Hallazgo de entorno (no de código): `.env` local tenía EMAIL_OVERRIDE_TO
+  seteado → los tests locales redirigían emails; se vació para reflejar DEV.
+- El pedido 000008 (obs «PRUEBA AUTOMATICA QA - ignorar», cancelado) queda
+  como rastro del test.
