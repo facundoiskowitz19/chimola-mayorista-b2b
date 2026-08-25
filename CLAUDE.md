@@ -135,6 +135,10 @@ Navegador ──cookie JWT (24h)──▶ Streamlit (Cloud Run, --session-affini
 - **`get_producto()` debe incluir `producto_cod`/`producto_nombre`/`es_manual`
   en cada variante**: `compra_rapida.item_desde_variante` los exige (KeyError
   al agregar desde la matriz si faltan).
+- **La SA necesita `secretVersionAdder` + `secretAccessor` sobre el secret
+  `mayorista-seed-passwords`** (alta/reset de usuarios desde la UI). Lo hace
+  `setup_infra.sh`. `guardar_password_en_secret` es tolerante: si falla, la
+  password igual se muestra UNA vez y el admin ve el aviso de anotarla.
 - **Las listas mayoristas de Aleph son SIN IVA**: la NP del ERP suma 21%
   (verificado: NP Kinderland = subtotal − desc + 21%). El sitio lo muestra como
   líneas informativas (config `iva_pct`, default 21) en carrito/Excel/email.

@@ -145,29 +145,44 @@ def generar_password(n: int = 14) -> str:
 
 
 def guardar_password_en_secret(email: str, password: str,
-                               secret_name: str = "mayorista-seed-passwords") -> None:
-    """Merge {email: password} en el secret (mismo formato que scripts/seed_usuarios.py)."""
-    import json
+                               secret_name: str = "mayorista-seed-passwords") -> dict:
+    """Merge {email: password} en el secret (mismo formato que scripts/seed_usuarios.py).
 
-    from google.api_core.exceptions import AlreadyExists
+    TOLERANTE: si la SA no tiene permisos devuelve {"ok": False, "error": ...}
+    en vez de romper — la password igual se muestra UNA vez en pantalla, y el
+    caller avisa que hay que anotarla. Intenta add_version primero (el secret
+    ya existe normalmente) y solo crea el secret si no existe."""
+    import json
+    import logging
+
+    from google.api_core.exceptions import NotFound
     from google.cloud import secretmanager
 
-    client = secretmanager.SecretManagerServiceClient()
-    parent = f"projects/{config.GCP_PROJECT}"
     try:
-        client.create_secret(request={"parent": parent, "secret_id": secret_name,
-                                      "secret": {"replication": {"automatic": {}}}})
-    except AlreadyExists:
-        pass
-    previo = {}
-    try:
-        resp = client.access_secret_version(request={"name": f"{parent}/secrets/{secret_name}/versions/latest"})
-        previo = json.loads(resp.payload.data.decode("utf-8"))
-    except Exception:  # noqa: BLE001 — primera versión
-        pass
-    previo[email.strip().lower()] = password
-    client.add_secret_version(request={"parent": f"{parent}/secrets/{secret_name}",
-                                       "payload": {"data": json.dumps(previo, indent=2).encode("utf-8")}})
+        client = secretmanager.SecretManagerServiceClient()
+        parent = f"projects/{config.GCP_PROJECT}"
+        previo = {}
+        try:
+            resp = client.access_secret_version(
+                request={"name": f"{parent}/secrets/{secret_name}/versions/latest"})
+            previo = json.loads(resp.payload.data.decode("utf-8"))
+        except Exception:  # noqa: BLE001 — sin versiones todavía (o sin accessor)
+            pass
+        previo[email.strip().lower()] = password
+        payload = {"data": json.dumps(previo, indent=2).encode("utf-8")}
+        try:
+            client.add_secret_version(request={"parent": f"{parent}/secrets/{secret_name}",
+                                               "payload": payload})
+        except NotFound:   # el secret no existe: recién acá hace falta secrets.create
+            client.create_secret(request={"parent": parent, "secret_id": secret_name,
+                                          "secret": {"replication": {"automatic": {}}}})
+            client.add_secret_version(request={"parent": f"{parent}/secrets/{secret_name}",
+                                               "payload": payload})
+        return {"ok": True, "error": ""}
+    except Exception as e:  # noqa: BLE001 — típicamente PermissionDenied
+        logging.getLogger(__name__).warning("No se pudo guardar la password en el secret %s: %s",
+                                            secret_name, e)
+        return {"ok": False, "error": str(e)}
 
 
 def cambiar_password(email: str, password: str) -> None:

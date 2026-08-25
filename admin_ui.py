@@ -725,8 +725,11 @@ def _sec_clientes() -> None:
         _alta_usuario()
     if st.session_state.get("adm_pwd_msg"):
         e, p = st.session_state.pop("adm_pwd_msg")
-        st.success(f"Password de **{e}**: `{p}` — guardala ahora (también quedó en el secret "
-                   "`mayorista-seed-passwords`).")
+        warn = st.session_state.pop("adm_pwd_warn", None)
+        st.success(f"Password de **{e}**: `{p}` — guardala ahora"
+                   + ("." if warn else " (también quedó en el secret `mayorista-seed-passwords`)."))
+        if warn:
+            st.warning(warn)
 
 
 def _ficha_cliente(email: str) -> None:
@@ -761,8 +764,11 @@ def _ficha_cliente(email: str) -> None:
 
     if st.session_state.get("adm_pwd_msg"):
         em, pw = st.session_state.pop("adm_pwd_msg")
-        st.success(f"Password de **{em}**: `{pw}` — guardala ahora (también quedó en el secret "
-                   "`mayorista-seed-passwords`).")
+        warn = st.session_state.pop("adm_pwd_warn", None)
+        st.success(f"Password de **{em}**: `{pw}` — guardala ahora"
+                   + ("." if warn else " (también quedó en el secret `mayorista-seed-passwords`)."))
+        if warn:
+            st.warning(warn)
 
     if editando:
         _cliente_edicion(email, u, cod, e)
@@ -791,8 +797,13 @@ def _ficha_cliente(email: str) -> None:
 
     lista, ev = [], None
     if cod is None:
-        st.markdown("<p class='muted'>Usuario administrador, sin historial de pedidos.</p>",
-                    unsafe_allow_html=True)
+        if u.get("rol") == "admin":
+            st.markdown("<p class='muted'>Usuario administrador, sin historial de pedidos.</p>",
+                        unsafe_allow_html=True)
+        else:
+            st.markdown("<div class='aviso-bloque'>Usuario cliente SIN cliente de Aleph asociado: "
+                        "no puede hacer pedidos. Entrá a «Editar» y asignale el cliente_cod en la "
+                        "sección Cuenta.</div>", unsafe_allow_html=True)
     else:
         with st.spinner("Buscando pedidos del cliente..."):
             lista = pedidos.listar_pedidos(int(cod))
@@ -852,8 +863,11 @@ def _ficha_cliente(email: str) -> None:
     if a1.button("Resetear password", key="cli_resetpwd", use_container_width=True):
         pwd = auth.generar_password()
         auth.cambiar_password(email, pwd)
-        auth.guardar_password_en_secret(email, pwd)
+        res = auth.guardar_password_en_secret(email, pwd)   # tolerante: nunca rompe
         st.session_state.adm_pwd_msg = (email, pwd)
+        if not res["ok"]:
+            st.session_state.adm_pwd_warn = ("No se pudo guardar la password en el secret "
+                                             f"— anotala AHORA. ({res['error'][:180]})")
         st.rerun()
     if u.get("activo", True):
         if a2.button("Desactivar usuario", key="cli_desactivar", use_container_width=True):
@@ -865,6 +879,32 @@ def _ficha_cliente(email: str) -> None:
 
 
 def _cliente_edicion(email: str, u: dict, cod, e) -> None:
+    # --- Cuenta: rol y cliente de Aleph al que pertenece el usuario ---
+    st.markdown("<div class='kicker' style='margin:.2rem 0 .1rem'>Cuenta</div>"
+                "<p class='muted' style='margin:0 0 .4rem'>Rol y cliente de Aleph del usuario. "
+                "Sin cliente asociado no puede hacer pedidos.</p>", unsafe_allow_html=True)
+    with st.form(f"cuenta_{email}"):
+        a1, a2 = st.columns(2)
+        rol_n = a1.selectbox("Rol", ["cliente", "admin"], index=0 if u.get("rol") != "admin" else 1)
+        cod_n = a2.number_input("cliente_cod de Aleph (0 = sin cliente)", min_value=0, step=1,
+                                value=int(cod or 0))
+        if st.form_submit_button("Guardar cuenta", use_container_width=True):
+            try:
+                nuevo_cod = int(cod_n) or None
+                cambios = {"rol": rol_n, "cliente_cod": nuevo_cod}
+                if nuevo_cod and nuevo_cod != (int(cod) if cod is not None else None):
+                    cli_a = catalog.get_cliente(nuevo_cod)
+                    if cli_a is None:
+                        raise ValueError(f"cliente_cod {nuevo_cod} no existe en dim_cliente")
+                    cambios["nombre_display"] = cli_a["nombre_display"]
+                db.usuario_ref(email).update(cambios)
+                st.session_state.adm_cli_edit = False
+                st.toast("Cuenta actualizada")
+                st.rerun()
+            except Exception as ex:  # noqa: BLE001
+                st.error(str(ex))
+    st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:.6rem 0 .6rem'></div>",
+                unsafe_allow_html=True)
     if cod is not None:
         o = overrides.get_clientes_overrides().get(int(cod), {})
         with st.form(f"cli_{cod}"):
@@ -897,7 +937,8 @@ def _cliente_edicion(email: str, u: dict, cod, e) -> None:
                 st.session_state.adm_cli_edit = False
                 st.rerun()
     else:
-        st.markdown("<p class='muted'>Usuario sin cliente asociado: solo cuenta.</p>", unsafe_allow_html=True)
+        st.markdown("<p class='muted'>Sin cliente asociado no hay datos comerciales para editar: "
+                    "asignale un cliente_cod arriba para que pueda pedir.</p>", unsafe_allow_html=True)
         if st.button("Volver a la vista"):
             st.session_state.adm_cli_edit = False
             st.rerun()
@@ -909,7 +950,8 @@ def _cliente_edicion(email: str, u: dict, cod, e) -> None:
 def _alta_usuario() -> None:
     with st.form("alta_usuario", clear_on_submit=True):
         email = st.text_input("Email")
-        cod = st.number_input("cliente_cod (0 = sin cliente, admin)", min_value=0, step=1, value=0)
+        cod = st.number_input("cliente_cod de Aleph (0 = sin cliente: solo para admins)",
+                              min_value=0, step=1, value=0)
         nombre = st.text_input("Nombre para mostrar (vacío = razón social de Aleph)")
         rol = st.selectbox("Rol", ["cliente", "admin"])
         if st.form_submit_button("Crear usuario", type="primary", use_container_width=True):
@@ -921,8 +963,11 @@ def _alta_usuario() -> None:
                     nombre = nombre or cli["nombre_display"]
                 pwd = auth.generar_password()
                 auth.crear_usuario(email, pwd, int(cod) or None, nombre or email, rol=rol)
-                auth.guardar_password_en_secret(email, pwd)
+                res = auth.guardar_password_en_secret(email, pwd)
                 st.session_state.adm_pwd_msg = (email.strip().lower(), pwd)
+                if not res["ok"]:
+                    st.session_state.adm_pwd_warn = ("No se pudo guardar la password en el secret "
+                                                     f"— anotala AHORA. ({res['error'][:180]})")
                 st.rerun()
             except Exception as e:  # noqa: BLE001
                 st.error(str(e))

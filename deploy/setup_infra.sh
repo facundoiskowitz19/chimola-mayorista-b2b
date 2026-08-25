@@ -97,6 +97,16 @@ fi
 gcloud secrets add-iam-policy-binding mayorista-jwt-key --member="serviceAccount:$SA" \
   --role=roles/secretmanager.secretAccessor --project="$PROJECT" >/dev/null
 
+log "Secret seed-passwords: adder + accessor para $SA (alta/reset de usuarios desde la UI)"
+if ! gcloud secrets describe mayorista-seed-passwords --project="$PROJECT" >/dev/null 2>&1; then
+  printf '{}' | gcloud secrets create mayorista-seed-passwords --data-file=- \
+    --project="$PROJECT" --replication-policy=automatic
+fi
+for rol in secretmanager.secretVersionAdder secretmanager.secretAccessor; do
+  gcloud secrets add-iam-policy-binding mayorista-seed-passwords --member="serviceAccount:$SA" \
+    --role="roles/$rol" --project="$PROJECT" >/dev/null
+done
+
 log "Secret SMTP: accessor a $SMTP_SECRET_PROJECT/$SMTP_SECRET_NAME"
 gcloud secrets add-iam-policy-binding "$SMTP_SECRET_NAME" --member="serviceAccount:$SA" \
   --role=roles/secretmanager.secretAccessor --project="$SMTP_SECRET_PROJECT" >/dev/null
