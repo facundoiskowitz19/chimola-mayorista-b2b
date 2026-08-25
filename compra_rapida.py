@@ -92,7 +92,7 @@ def resolver_pegado(texto: str, df_publicadas: pd.DataFrame) -> tuple[list[dict]
         if final < cant:
             for i in propias:
                 i.update(tipo="ajustada", cargado=final,
-                         detalle=f"solo hay {disp} u. disponibles — se cargó {final} de {cant}")
+                         detalle=f"supera la cantidad disponible — se cargó {final} de {cant}")
         if final > 0:
             items.append(item_desde_variante(v, final))
         elif final == 0 and disp == 0:

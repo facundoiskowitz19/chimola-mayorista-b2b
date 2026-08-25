@@ -203,3 +203,16 @@ Rediseño aplicado desde `design_handoff_mayorista_ux/` (Claude Design):
   ocultar / automático / destacar / quitar destacado a TODO el conjunto, con
   confirmación cuando son más de 10. `overrides.set_masivo()` escribe en
   batches de 400 (límite Firestore 500) y solo acepta publicado/destacado.
+
+
+## 12. Privacidad de stock (2026-08-25)
+
+El stock remanente NUNCA se muestra a usuarios no-admin, en ninguna vista:
+sin tabla "Stock disponible" en la matriz, sin "N u." en las cards, sin
+columna Stock en compra rápida, sin números de stock en ningún mensaje.
+Cuando un cliente pide más de lo disponible, la cantidad se acota al máximo
+y se le avisa con un mensaje EFÍMERO (st.toast, unos segundos):
+"estás superando la cantidad disponible — lo ajustamos al máximo posible".
+Los toasts diferidos viajan por `st.session_state._toasts` y se disparan al
+inicio del run siguiente (sobreviven al st.rerun). El admin sigue viendo
+stock en todas las vistas (matriz con leyenda, cards, tablas del admin).

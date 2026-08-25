@@ -399,9 +399,20 @@ def _abrir_card(cod: str) -> None:
     st.session_state.card_abierta = None if st.session_state.get("card_abierta") == cod else cod
 
 
+def es_admin() -> bool:
+    return (st.session_state.get("user") or {}).get("rol") == "admin"
+
+
+def toast_pendiente(msg: str) -> None:
+    """Encola un toast que se muestra al inicio del próximo run (sobrevive a
+    st.rerun; el cliente lo ve unos segundos y desaparece)."""
+    st.session_state.setdefault("_toasts", []).append(msg)
+
+
 def matriz_variantes(prod: dict, key: str) -> list:
-    """Matriz color x talle (handoff cambio 3): stock read-only arriba,
-    cantidades editables abajo. Devuelve items de carrito."""
+    """Matriz color x talle (handoff cambio 3): cantidades editables.
+    El stock por variante SOLO lo ve el admin — al cliente nunca se le
+    muestra; si pide de más se acota con un toast. Devuelve items de carrito."""
     vs = prod["variantes"]
     colores = list(dict.fromkeys(v["color"] for v in vs))
     talles = sorted({v["talle"] for v in vs}, key=catalog.talle_key)
@@ -409,11 +420,13 @@ def matriz_variantes(prod: dict, key: str) -> list:
     by_ct = {(v["color"], v["talle"]): v for v in vs}
     ub = int(prod.get("ub") or 0)
 
-    stock_df = pd.DataFrame([[by_ct.get((c, t), {}).get("stock") for t in talles] for c in colores],
-                            index=colores, columns=cols_t)
-    st.markdown("<div class='kicker'>Stock disponible</div>", unsafe_allow_html=True)
-    st.dataframe(stock_df, use_container_width=True,
-                 column_config={c: st.column_config.NumberColumn(c, format="%d") for c in cols_t})
+    if es_admin():
+        stock_df = pd.DataFrame([[by_ct.get((c, t), {}).get("stock") for t in talles] for c in colores],
+                                index=colores, columns=cols_t)
+        st.markdown("<div class='kicker'>Stock disponible (solo lo ves como admin)</div>",
+                    unsafe_allow_html=True)
+        st.dataframe(stock_df, use_container_width=True,
+                     column_config={c: st.column_config.NumberColumn(c, format="%d") for c in cols_t})
     st.markdown("<div class='kicker'>Cantidades a pedir"
                 + (f" — múltiplos de {ub}" if ub > 1 else "") + "</div>", unsafe_allow_html=True)
     qty0 = pd.DataFrame([[0 if (c, t) in by_ct else None for t in talles] for c in colores],
@@ -421,18 +434,28 @@ def matriz_variantes(prod: dict, key: str) -> list:
     ed = st.data_editor(qty0, key=key, use_container_width=True,
                         column_config={c: st.column_config.NumberColumn(c, min_value=0, step=ub or 1, format="%d")
                                        for c in cols_t})
-    items = []
+    items, recortes = [], []
     for c in colores:
         for t in talles:
             v = by_ct.get((c, t))
             q = ed.loc[c, f"T {t}"]
             if v is None or pd.isna(q) or int(q) <= 0 or pd.isna(v["precio"]):
                 continue
-            q = min(int(q), int(v["stock"]))
+            pedido = int(q)
+            q = min(pedido, int(v["stock"]))
+            if q < pedido:
+                recortes.append(f"{c} T {t}")
             if ub > 1:
                 q = (q // ub) * ub
             if q > 0:
                 items.append(cr.item_desde_variante(v, q))
+    if recortes:
+        # Aviso efímero, sin números: nunca le mostramos el stock al cliente.
+        firma = (key, tuple(recortes))
+        if st.session_state.get("mx_recorte_firma") != firma:
+            st.session_state.mx_recorte_firma = firma
+            st.toast("Estás superando la cantidad disponible en " + ", ".join(recortes)
+                     + " — lo ajustamos al máximo posible.")
     return items
 
 
@@ -542,7 +565,8 @@ def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: b
                         f"<div class='card-title' title='{p['producto_nombre']}'>{p['producto_nombre']}</div>"
                         f"<div class='card-sub'>{p['producto_cod']} · {p['marca'] or ''} · {p['rubro'] or ''}</div>"
                         f"<div class='card-price'>{fmt_money(p['precio'])}</div>"
-                        f"<div class='muted'>{int(p['stock'])} u. · {len(p['colores'])} color(es)</div>",
+                        f"<div class='muted'>{(str(int(p['stock'])) + ' u. · ') if es_admin() else ''}"
+                        f"{len(p['colores'])} color(es)</div>",
                         unsafe_allow_html=True)
                     if puede_pedir():
                         st.button("Cargar cantidades", key=f"abrir_{p['producto_cod']}",
@@ -699,7 +723,7 @@ def page_carrito() -> None:
 
     avisos = st.session_state.get("stock_avisos", {})
     if avisos:
-        st.error(f"Cambió el stock de {len(avisos)} variante(s): ajustamos el carrito. "
+        st.error(f"Cambió la disponibilidad de {len(avisos)} producto(s): ajustamos el carrito. "
                  "Revisá las filas marcadas y volvé a confirmar.")
         en_carrito = {i["sku"] for i in items}
         for sku, msg in avisos.items():
@@ -720,16 +744,22 @@ def page_carrito() -> None:
                     st.image(fotos.foto_principal(it["producto_cod"]), width=52)
             c[1].markdown(f"<b>{it['producto_nombre']}</b><br><span class='card-sub'>"
                           f"{it['producto_cod']} · {it['color']} · T {it['talle']}</span>", unsafe_allow_html=True)
-            # La cantidad guardada puede superar el stock actual (se sumó de a
-            # tandas, o el stock bajó): se acota al tope, con aviso, sin romper.
+            # La cantidad puede superar el stock actual (se sumó de a tandas o
+            # el stock bajó): se acota SIN mostrar nunca el stock al cliente
+            # (sin max_value, que delata el número) — aviso efímero por toast.
             tope = int(it.get("stock") or 99999)
             val = min(int(it["cantidad"]), tope)
             if val < int(it["cantidad"]):
-                recortes[it["sku"]] = (f"Tenías {int(it['cantidad'])} u. pero hay {tope} disponibles: "
-                                       f"lo ajustamos a {val}.")
-            q = c[2].number_input("Cantidad", min_value=0, max_value=tope,
-                                  value=val, step=1, key=f"cq_{ver}_{it['sku']}",
+                recortes[it["sku"]] = (f"{it['producto_nombre']} ({it['color']}): pediste "
+                                       f"{int(it['cantidad'])} u. y estás superando la cantidad "
+                                       "disponible — lo ajustamos al máximo posible.")
+            q = c[2].number_input("Cantidad", min_value=0, step=1,
+                                  value=val, key=f"cq_{ver}_{it['sku']}",
                                   label_visibility="collapsed")
+            if int(q) > tope:   # tipeó de más recién ahora
+                recortes[it["sku"]] = (f"{it['producto_nombre']} ({it['color']}): estás superando la "
+                                       "cantidad disponible — lo ajustamos al máximo posible.")
+                q = tope
             c[3].markdown(fmt_money(it["precio_unit"]))
             c[4].markdown(f"<b>{fmt_money(int(q) * it['precio_unit'])}</b>", unsafe_allow_html=True)
             c[5].button("×", key=f"del_{it['sku']}", on_click=_quitar_item, args=(it["sku"],))
@@ -743,9 +773,11 @@ def page_carrito() -> None:
                 nuevos.append({**it, "cantidad": int(q)})
             else:
                 cambio = True
-        if cambio:
-            if recortes:   # que el aviso sobreviva al rerun del guardado
-                st.session_state.stock_avisos = {**st.session_state.get("stock_avisos", {}), **recortes}
+        if cambio or recortes:
+            for m in recortes.values():   # efímero: se ve unos segundos y listo
+                toast_pendiente(m)
+            if recortes:   # redibujar los inputs con el valor ya acotado
+                st.session_state.cart_ver = ver + 1
             guardar_cart(nuevos)
             st.rerun()
 
@@ -788,10 +820,11 @@ def page_carrito() -> None:
                     if it["sku"] in disp:
                         d = disp[it["sku"]]
                         if d <= 0:
-                            avisos_n[it["sku"]] = "Sin stock disponible — se quitó del carrito"
+                            avisos_n[it["sku"]] = "Sin disponibilidad — se quitó del carrito"
                             continue
-                        avisos_n[it["sku"]] = (f"Ajustado de {it['cantidad']} a {d} u. — "
-                                               "es todo el stock disponible")
+                        # Nunca revelar el stock: solo que superó lo disponible.
+                        avisos_n[it["sku"]] = (f"Pediste {it['cantidad']} u. y supera la cantidad "
+                                               "disponible — lo ajustamos al máximo posible")
                         it = {**it, "cantidad": d, "stock": d}
                     ajust.append(it)
                 guardar_cart(ajust)
@@ -952,14 +985,14 @@ def page_compra_rapida() -> None:
             lambda c: fotos.foto_principal(c) if fotos.tiene_fotos(c) else "")
         page_df["cantidad"] = 0
         ver = st.session_state.get("cr_ver", 0)
+        # Sin columna de stock: el cliente nunca ve cuánto queda.
         edited = st.data_editor(
-            page_df[["foto", "producto_cod", "producto_nombre", "color", "talle", "stock", "precio", "cantidad"]],
+            page_df[["foto", "producto_cod", "producto_nombre", "color", "talle", "precio", "cantidad"]],
             hide_index=True, use_container_width=True, key=f"cr_editor_{pag}_{ver}",
-            disabled=["foto", "producto_cod", "producto_nombre", "color", "talle", "stock", "precio"],
+            disabled=["foto", "producto_cod", "producto_nombre", "color", "talle", "precio"],
             column_config={
                 "foto": st.column_config.ImageColumn("", width="small"),
                 "producto_cod": "Código", "producto_nombre": "Producto", "color": "Color", "talle": "Talle",
-                "stock": st.column_config.NumberColumn("Stock", format="%d"),
                 "precio": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
                 "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1, format="%d"),
             })
@@ -968,7 +1001,11 @@ def page_compra_rapida() -> None:
         if st.button("Agregar al carrito", type="primary", disabled=not seleccion, key="cr_add"):
             items, ajustes = [], []
             for v, q in seleccion:
-                q = min(q, int(v["stock"]))
+                pedido = int(q)
+                q = min(pedido, int(v["stock"]))
+                if q < pedido:   # sin revelar el stock — aviso efímero
+                    toast_pendiente(f"{v['sku']}: estás superando la cantidad disponible — "
+                                    f"se cargó {q} de {pedido}.")
                 ub = int(v["ub"]) if ("ub" in v and pd.notna(v["ub"]) and v["ub"]) else 0
                 if ub > 1 and q % ub:
                     q = (q // ub) * ub
@@ -1029,6 +1066,8 @@ def page_admin() -> None:
 # ---------------------------------------------------------------------------
 def main() -> None:
     topbar()
+    for m in st.session_state.pop("_toasts", []):
+        st.toast(m)
     if usuario_actual() is None:
         header(con_marcas=False)
         page_login()

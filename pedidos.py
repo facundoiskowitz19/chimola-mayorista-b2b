@@ -297,10 +297,12 @@ def repetir_pedido(pedido: dict, df_publicadas) -> tuple[list[dict], list[str]]:
             continue
         cant = min(int(it["cantidad"]), int(v["stock"]))
         if cant <= 0:
-            avisos.append(f"{it['sku']}: sin stock")
+            avisos.append(f"{it['sku']}: sin disponibilidad hoy")
             continue
         if cant < int(it["cantidad"]):
-            avisos.append(f"{it['sku']}: solo quedan {cant} u. (pediste {it['cantidad']})")
+            # Nunca revelar el stock: solo que se superó la cantidad disponible.
+            avisos.append(f"{it['sku']}: pediste {it['cantidad']} u. y supera la cantidad "
+                          f"disponible — se cargó {cant}")
         items.append({"sku": v["sku"], "ean": v["ean"], "producto_cod": v["producto_cod"],
                       "producto_nombre": v["producto_nombre"], "color_cod": str(v["color_cod"]),
                       "color": v["color"], "talle": v["talle"], "cantidad": cant,

@@ -104,7 +104,8 @@ def test_repetir_pedido():
     items, avisos = pedidos.repetir_pedido(viejo, df)
     assert {i["sku"]: i["cantidad"] for i in items} == {"M211_U_2059": 3, "M211_U_2058": 5}
     assert items[0]["precio_unit"] == 32900                  # precio ACTUAL
-    assert any("YA_NO_EXISTE" in a for a in avisos) and any("solo quedan 5" in a for a in avisos)
+    assert any("YA_NO_EXISTE" in a for a in avisos) and any("se cargó 5" in a for a in avisos)
+    assert not any("quedan" in a or "stock" in a for a in avisos)  # nunca revelar stock al cliente
 
 
 def test_estados_validos():
