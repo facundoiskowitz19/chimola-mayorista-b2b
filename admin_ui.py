@@ -935,10 +935,13 @@ def _ficha_cliente(email: str) -> None:
             pv_rep = None
         if pv_rep:
             with st.expander(f"Reposición sugerida hoy — {pv_rep['pv_nombre']}"):
-                dias_rep = int(overrides.get_config().get("repo_dias_objetivo") or 21)
-                st.markdown(f"<p class='muted'>Lo que el sitio le sugeriría hoy a esta franquicia "
-                            f"para cubrir {dias_rep} días de venta (configurable en Config).</p>",
+                dias_def = int(overrides.get_config().get("repo_dias_objetivo") or 21)
+                st.markdown("<p class='muted'>Lo que el sitio le sugeriría hoy a esta franquicia "
+                            "(la velocidad de venta es siempre la de los últimos 30 días).</p>",
                             unsafe_allow_html=True)
+                dias_rep = st.pills("Días de venta a cubrir", sorted({7, 14, 21, 30, dias_def}),
+                                    default=dias_def, format_func=lambda d: f"{d} días",
+                                    key=f"rep_dias_{cod}") or dias_def
                 if st.button("Calcular", key=f"rep_calc_{cod}"):
                     with st.spinner("Calculando..."):
                         df_rep = catalog.con_precio(catalog.variantes_publicadas(),

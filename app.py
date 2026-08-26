@@ -1034,9 +1034,14 @@ TIPO_INCIDENCIA = {"ok": "Agregada", "ajustada": "Ajustada", "no_encontrada": "N
 def page_reposicion() -> None:
     """Reposición sugerida (fase 11) — solo franquicias con PV asociado."""
     cli = cliente_efectivo()
-    dias = int(overrides.get_config().get("repo_dias_objetivo") or 21)
+    dias_default = int(overrides.get_config().get("repo_dias_objetivo") or 21)
     t1, t2 = st.columns([1, 1.9], vertical_alignment="bottom")
     t1.markdown("## Reposición")
+    opciones_dias = sorted({7, 14, 21, 30, dias_default})
+    if "repo_dias" not in st.session_state:
+        st.session_state.repo_dias = dias_default
+    dias = st.pills("Días de venta a cubrir", opciones_dias, key="repo_dias",
+                    format_func=lambda d: f"{d} días") or dias_default
     df = df_catalogo()
     with st.spinner("Calculando la reposición sugerida..."):
         pv, sug = reposicion.sugerencias(int(cli["cliente_cod"]), df, dias)
@@ -1057,7 +1062,7 @@ def page_reposicion() -> None:
     tabla["stock_pv"] = tabla["stock_pv"].clip(lower=0)
     tabla = tabla.rename(columns={"sugerido": "cantidad"})
     edited = st.data_editor(
-        tabla, hide_index=True, use_container_width=True, key=f"repo_editor_{ver}",
+        tabla, hide_index=True, use_container_width=True, key=f"repo_editor_{ver}_{dias}",
         disabled=["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
                   "stock_pv", "precio"],
         column_config={
