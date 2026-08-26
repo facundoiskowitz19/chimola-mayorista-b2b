@@ -243,3 +243,27 @@ def test_mapeo_variantes():
     rows2 = fotos.mapeo_variantes(variantes, indice=idx,
                                   overrides_por_prod={"M211": {"fotos_color": {"VERDE": "M211 allcolors.jpg"}}})
     assert {r["sku"]: r for r in rows2}["M211_U_2"]["origen"] == "manual"
+
+
+# --- Fase 10: import de historial de Aleph ---
+def test_armar_pedido_import_aleph():
+    import aleph_import
+    cab = {"id": 10164, "tipo": 90, "numero": "A0004-00001565",
+           "fecha": dt.date(2016, 4, 4), "pordscto": 20.0, "lis_pre": 1}
+    items = [
+        {"producto": "1569", "preuni": 340.0, "cantidad": 4, "talle": "U", "color_cod": 1997, "item": 1},
+        {"producto": "1979", "preuni": 350.0, "cantidad": 2, "talle": "U", "color_cod": 1997, "item": 2},
+    ]
+    cliente = {"cliente_cod": 622, "cuit": "30714361984", "nombre_display": "DON BOSCO SRL"}
+    p = aleph_import.armar_pedido(cab, items, {"1569": "CARTERA TRIANGULAR PREMIUM"},
+                                  {1997: "UNICO"}, cliente, "bcaplan@lautin.com.ar", 99,
+                                  ahora=dt.datetime(2026, 8, 26, tzinfo=dt.timezone.utc))
+    assert p["np_aleph"] == "A0004-00001565" and p["estado"] == "procesado"
+    assert p["subtotal"] == 340 * 4 + 350 * 2 == 2060
+    assert p["descuento_pct"] == 20 and p["total"] == round(2060 * 0.8, 2)
+    assert p["unidades"] == 6 and p["numero"] == 99
+    assert p["items"][0]["sku"] == "1569_U_1997" and p["items"][0]["color"] == "UNICO"
+    assert p["items"][0]["producto_nombre"] == "CARTERA TRIANGULAR PREMIUM"
+    assert p["items"][1]["producto_nombre"] == "1979"   # sin nombre → código
+    assert p["historial"][0]["por"] == "import-aleph"
+    assert "NP A0004-00001565" in p["observaciones"] and p["fecha_str"] == "04/04/2016"

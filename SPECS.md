@@ -243,3 +243,16 @@ Port de la lógica del `imagenes.csv` del pipeline Woo (`pipeline/images.py`):
   (color | manual | portada | sin_foto) sobre lo filtrado — el equivalente del
   archivo que generaba el Woo.
 - La galería de la ficha usa el mismo fuzzy en «Ver fotos del color».
+
+
+## 14. Import de historial de Aleph (fase 10, 2026-08-26)
+
+En la ficha de cliente del admin, expander «Importar historial de Aleph»:
+trae los últimos N comprobantes de venta del cliente (NP tipo 90 y facturas
+tipo 1; excluye anulados y neto ≤ 0) desde el espejo `central_raw`
+(ventassql/itemvensql — BigQuery, nunca el SQL Server directo) y los crea
+como pedidos «procesados» con Excel + backup GCS, colgados del usuario del
+sitio asociado al cliente. IDEMPOTENTE por `np_aleph`: los ya importados se
+saltean (pedir N de nuevo no duplica). Módulo `aleph_import.py`
+(`armar_pedido()` pura y testeada). El precio guardado es el `preuni`
+histórico del comprobante; el descuento, el `pordscto` de la cabecera.

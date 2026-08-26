@@ -16,6 +16,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+import aleph_import
 import auth
 import catalog
 import config as appconfig
@@ -903,6 +904,27 @@ def _ficha_cliente(email: str) -> None:
                 st.markdown("<p class='muted'>Sin pedidos todavía.</p>", unsafe_allow_html=True)
         if ev is not None and ev.selection.rows:
             _detalle_pedido(lista[ev.selection.rows[0]])
+
+    if cod is not None:
+        # --- Importar historial de Aleph (fase 10) ---
+        if st.session_state.get("adm_import_msg"):
+            st.markdown("<div class='nota-acento'>" + "<br>".join(st.session_state.pop("adm_import_msg"))
+                        + "</div>", unsafe_allow_html=True)
+        with st.expander("Importar historial de Aleph"):
+            st.markdown("<p class='muted'>Trae los últimos N comprobantes de venta del cliente "
+                        "(NP y facturas, sin anulados) desde el espejo del ERP central y los crea "
+                        "como pedidos «procesados», con su Excel y backup. Los ya importados se "
+                        "saltean: pedir de nuevo NUNCA duplica.</p>", unsafe_allow_html=True)
+            i1, i2 = st.columns([1, 1.6], vertical_alignment="bottom")
+            n_imp = i1.number_input("Cantidad a traer", 1, 50, 3, key=f"imp_n_{cod}")
+            if i2.button("Importar de Aleph", key=f"imp_btn_{cod}", use_container_width=True):
+                with st.spinner("Leyendo Aleph e importando..."):
+                    try:
+                        msgs = aleph_import.importar(int(cod), int(n_imp))
+                    except Exception as ex:  # noqa: BLE001
+                        msgs = [f"Error importando: {ex}"]
+                st.session_state.adm_import_msg = msgs
+                st.rerun()
 
     # Acciones instantáneas, separadas al pie (no pasan por Guardar)
     st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:1rem 0 .4rem'></div>",
