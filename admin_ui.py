@@ -19,6 +19,7 @@ import streamlit.components.v1 as components
 import aleph_import
 import auth
 import catalog
+import reposicion
 import config as appconfig
 import db
 import email_notif
@@ -926,6 +927,41 @@ def _ficha_cliente(email: str) -> None:
                 st.session_state.adm_import_msg = msgs
                 st.rerun()
 
+    if cod is not None:
+        # --- Reposición sugerida (fase 11): solo franquicias con PV ---
+        try:
+            pv_rep = reposicion.pv_de_cliente(int(cod))
+        except Exception:  # noqa: BLE001
+            pv_rep = None
+        if pv_rep:
+            with st.expander(f"Reposición sugerida hoy — {pv_rep['pv_nombre']}"):
+                dias_rep = int(overrides.get_config().get("repo_dias_objetivo") or 21)
+                st.markdown(f"<p class='muted'>Lo que el sitio le sugeriría hoy a esta franquicia "
+                            f"para cubrir {dias_rep} días de venta (configurable en Config).</p>",
+                            unsafe_allow_html=True)
+                if st.button("Calcular", key=f"rep_calc_{cod}"):
+                    with st.spinner("Calculando..."):
+                        df_rep = catalog.con_precio(catalog.variantes_publicadas(),
+                                                    (e or {}).get("lista_precios") or 1)
+                        _, sug_rep = reposicion.sugerencias(int(cod), df_rep, dias_rep)
+                    st.session_state[f"rep_sug_{cod}"] = sug_rep
+                sug_rep = st.session_state.get(f"rep_sug_{cod}")
+                if sug_rep is not None:
+                    if len(sug_rep) == 0:
+                        st.markdown("<p class='muted'>Nada para reponer hoy.</p>",
+                                    unsafe_allow_html=True)
+                    else:
+                        vis = sug_rep[["producto_cod", "producto_nombre", "color", "talle",
+                                       "vendidas_30d", "stock_pv", "sugerido"]]
+                        st.dataframe(vis, hide_index=True, use_container_width=True,
+                                     column_config={"producto_cod": "Código",
+                                                    "producto_nombre": "Producto",
+                                                    "vendidas_30d": "Vendió 30d",
+                                                    "stock_pv": "Tiene", "sugerido": "Sugerido"})
+                        st.download_button("Descargar CSV", key=f"rep_csv_{cod}",
+                                           data=vis.to_csv(index=False).encode("utf-8"),
+                                           file_name=f"reposicion_{cod}.csv", mime="text/csv")
+
     # Acciones instantáneas, separadas al pie (no pasan por Guardar)
     st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:1rem 0 .4rem'></div>",
                 unsafe_allow_html=True)
@@ -1152,6 +1188,11 @@ def _sec_config() -> None:
         c2.markdown("<p class='muted' style='margin-top:-0.6rem'>Las listas de Aleph son sin IVA; se "
                     "muestra como línea aparte en carrito, Excel y email. 0 = ocultar</p>",
                     unsafe_allow_html=True)
+        repo = st.number_input("Reposición: días de venta a cubrir", min_value=7, max_value=90,
+                               step=1, value=int(cfg.get("repo_dias_objetivo") or 21))
+        st.markdown("<p class='muted' style='margin-top:-0.6rem'>La página «Reposición» de las "
+                    "franquicias sugiere cantidades para cubrir esta cantidad de días de venta</p>",
+                    unsafe_allow_html=True)
         banner = st.text_area("Banner para clientes", value=cfg.get("banner_texto") or "", height=80)
         st.markdown("<div class='nota-acento'>Así lo va a ver el cliente arriba del catálogo. "
                     "Se muestra en todas las páginas hasta que vacíes el campo.</div>",
@@ -1171,6 +1212,7 @@ def _sec_config() -> None:
                 "minimo_pedido_unidades": int(minimo) or None,
                 "iva_pct": float(iva),
                 "notificar_estados": bool(notificar),
+                "repo_dias_objetivo": int(repo),
             }, _admin_email())
             st.toast("Configuración guardada")
             st.rerun()

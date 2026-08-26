@@ -280,6 +280,8 @@ DEFAULTS_CONFIG = {
     "iva_pct": 21.0,
     # Mail al cliente + Chimola cuando un pedido cambia de estado (procesado/cancelado).
     "notificar_estados": True,
+    # Reposición sugerida (franquicias): días de venta a cubrir con el pedido.
+    "repo_dias_objetivo": 21,
 }
 
 

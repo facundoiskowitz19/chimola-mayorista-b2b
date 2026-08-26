@@ -23,6 +23,7 @@ import config
 import fotos
 import overrides
 import pedidos
+import reposicion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("app")
@@ -207,6 +208,11 @@ def nav() -> None:
     items = [("catalogo", "Catálogo")]
     if puede_pedir():
         items.append(("compra_rapida", "Compra rápida"))
+        try:   # Reposición: solo franquicias (clientes titulares de un PV)
+            if reposicion.pv_de_cliente(user.get("cliente_cod") or 0):
+                items.append(("reposicion", "Reposición"))
+        except Exception:  # noqa: BLE001 — sin BQ no rompemos la nav
+            pass
     items.append(("carrito", f"Carrito · {n_items} u."))
     items.append(("pedidos", "Mis pedidos"))
     if user.get("rol") == "admin":
@@ -1025,6 +1031,64 @@ TIPO_INCIDENCIA = {"ok": "Agregada", "ajustada": "Ajustada", "no_encontrada": "N
                    "sin_precio": "Sin precio", "ilegible": "Ilegible"}
 
 
+def page_reposicion() -> None:
+    """Reposición sugerida (fase 11) — solo franquicias con PV asociado."""
+    cli = cliente_efectivo()
+    dias = int(overrides.get_config().get("repo_dias_objetivo") or 21)
+    t1, t2 = st.columns([1, 1.9], vertical_alignment="bottom")
+    t1.markdown("## Reposición")
+    df = df_catalogo()
+    with st.spinner("Calculando la reposición sugerida..."):
+        pv, sug = reposicion.sugerencias(int(cli["cliente_cod"]), df, dias)
+    if pv is None:
+        st.markdown("<p class='muted'>Tu cuenta no tiene un punto de venta asociado.</p>",
+                    unsafe_allow_html=True)
+        return
+    t2.markdown(f"<p class='muted'>Según lo que vendió <b>{pv['pv_nombre']}</b> en los últimos "
+                f"30 días, cantidades sugeridas para cubrir {dias} días. Lo más urgente primero. "
+                "Ajustá lo que quieras y agregá al carrito.</p>", unsafe_allow_html=True)
+    if sug.empty:
+        st.markdown("<p class='muted'>Nada para reponer hoy: lo que vendés está cubierto o sin "
+                    "disponibilidad para reposición.</p>", unsafe_allow_html=True)
+        return
+    ver = st.session_state.get("repo_ver", 0)
+    tabla = sug[["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
+                 "stock_pv", "precio", "sugerido"]].copy()
+    tabla["stock_pv"] = tabla["stock_pv"].clip(lower=0)
+    tabla = tabla.rename(columns={"sugerido": "cantidad"})
+    edited = st.data_editor(
+        tabla, hide_index=True, use_container_width=True, key=f"repo_editor_{ver}",
+        disabled=["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
+                  "stock_pv", "precio"],
+        column_config={
+            "foto": st.column_config.ImageColumn("", width="small"),
+            "producto_cod": "Código", "producto_nombre": "Producto", "color": "Color",
+            "talle": "Talle",
+            "vendidas_30d": st.column_config.NumberColumn("Vendiste 30d", format="%d"),
+            "stock_pv": st.column_config.NumberColumn("Tenés", format="%d"),
+            "precio": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
+            "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1),
+        })
+    seleccion = []
+    for (_, v), (_, e) in zip(sug.iterrows(), edited.iterrows()):
+        q = int(e["cantidad"] or 0)
+        if q <= 0:
+            continue
+        q = min(q, int(v["stock"]))   # sin revelar stock: se acota en silencio
+        ub = int(v["ub"]) if "ub" in sug.columns and pd.notna(v.get("ub")) and v.get("ub") else 0
+        if ub > 1:
+            q = (q // ub) * ub
+        if q > 0:
+            seleccion.append((v, q))
+    items = [cr.item_desde_variante(v, q) for v, q in seleccion]
+    _totales_seleccion(items)
+    if st.button("Agregar reposición al carrito", type="primary", disabled=not items):
+        total = _agregar_items(items)
+        st.session_state.repo_ver = ver + 1
+        toast_pendiente(f"Agregaste {total} unidades al carrito.")
+        st.rerun()
+
+
 def page_compra_rapida() -> None:
     st.markdown("## Compra rápida")
     if not puede_pedir():
@@ -1161,7 +1225,7 @@ def main() -> None:
     page = st.session_state.get("page", "catalogo")
     {"catalogo": page_catalogo, "producto": page_producto, "carrito": page_carrito,
      "pedidos": page_pedidos, "compra_rapida": page_compra_rapida,
-     "admin": page_admin}.get(page, page_catalogo)()
+     "reposicion": page_reposicion, "admin": page_admin}.get(page, page_catalogo)()
     footer()
 
 

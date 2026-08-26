@@ -267,3 +267,32 @@ def test_armar_pedido_import_aleph():
     assert p["items"][1]["producto_nombre"] == "1979"   # sin nombre → código
     assert p["historial"][0]["por"] == "import-aleph"
     assert "NP A0004-00001565" in p["observaciones"] and p["fecha_str"] == "04/04/2016"
+
+
+# --- Fase 11: reposición sugerida (franquicias) ---
+def test_calcular_sugerido():
+    import reposicion as rp
+    assert rp.calcular_sugerido(2.0, 10, 21, 1, 999) == 32      # 42 − 10
+    assert rp.calcular_sugerido(2.0, -5, 21, 1, 999) == 42      # stock negativo → 0
+    assert rp.calcular_sugerido(2.0, 10, 21, 6, 999) == 36      # múltiplo U.B. hacia arriba
+    assert rp.calcular_sugerido(2.0, 10, 21, 1, 20) == 20       # cap al disponible
+    assert rp.calcular_sugerido(2.0, 10, 21, 6, 20) == 18       # cap respetando múltiplo
+    assert rp.calcular_sugerido(0.1, 50, 21, 1, 999) == 0       # cubierto → 0
+    assert rp.calcular_sugerido(2.0, 0, 21, 1, 0) == 0          # sin disponible → 0
+
+
+def test_cruzar_con_catalogo():
+    import reposicion as rp
+    cat = catalog.con_precio(_df(), 1)
+    vista = pd.DataFrame([
+        {"ean": "779", "producto_cod": "X", "color": "X", "talle": "X",
+         "stock_pv": 3, "vendidas_30d": 12, "vel_30d": 0.4, "cobertura_dias": 7.5},   # matchea por EAN
+        {"ean": "", "producto_cod": "M211", "color": "RAINBOW", "talle": "U",
+         "stock_pv": -2, "vendidas_30d": 6, "vel_30d": 0.2, "cobertura_dias": 2.0},   # matchea por prod/color/talle
+        {"ean": "999999999", "producto_cod": "NOEX", "color": "Z", "talle": "U",
+         "stock_pv": 1, "vendidas_30d": 1, "vel_30d": 0.03, "cobertura_dias": 30.0},  # no matchea
+    ])
+    out = rp.cruzar_con_catalogo(vista, cat)
+    assert set(out["sku"]) == {"M211_U_2059", "M211_U_2058"}
+    assert out.iloc[0]["sku"] == "M211_U_2058"   # cobertura 2.0 primero (urgente)
+    assert int(out[out["sku"] == "M211_U_2059"].iloc[0]["stock_pv"]) == 3

@@ -256,3 +256,28 @@ sitio asociado al cliente. IDEMPOTENTE por `np_aleph`: los ya importados se
 saltean (pedir N de nuevo no duplica). Módulo `aleph_import.py`
 (`armar_pedido()` pura y testeada). El precio guardado es el `preuni`
 histórico del comprobante; el descuento, el `pordscto` de la cabecera.
+
+
+## 15. Reposición sugerida — solo franquicias (fase 11, 2026-08-26)
+
+Página «Reposición» en el nav del cliente, visible SOLO para titulares de un
+punto de venta (`dim_pv.cliente_cod_titular`: Caballito 2663, Santa Fe 2721,
+Jujuy 2722, Mendoza 2723, Corrientes 2720, Nine 2735, Villa María 2739).
+Motor: `reposicion.py` sobre `v_reposicion_sku_omnicanal` (marts):
+
+    sugerido = ceil(velocidad_venta_30d × días_objetivo − stock_sucursal)
+               → redondeado ARRIBA al múltiplo U.B. → capeado al stock neto
+               vendible del sitio (sin mostrarlo nunca).
+
+- Gotchas de la vista: su `sku` es el EAN (cruce 1º por EAN, 2º por
+  producto+color+talle); `unidades_en_stock` puede venir negativa → se toma 0.
+- Tabla editable (foto, vendiste 30d, tenés, precio, cantidad precargada),
+  ordenada por urgencia (cobertura asc) → «Agregar reposición al carrito».
+- `repo_dias_objetivo` administrable en Config (default 21).
+- Admin: expander «Reposición sugerida hoy» en la ficha de la franquicia,
+  con la misma tabla y export CSV.
+- Cache: dim_pv 1 h; vista por PV 15 min. Funciones puras testeadas
+  (`calcular_sugerido`, `cruzar_con_catalogo`).
+- Usuarios de franquicia creados (passwords en `mayorista-seed-passwords`):
+  franquicia_{santafe,corrientes,nine,villamaria}_test@lautin.com.ar y
+  caballito_test@lautin.com.ar (+ jujuy/mendoza que ya existían).
