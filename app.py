@@ -1056,13 +1056,31 @@ def page_reposicion() -> None:
         st.markdown("<p class='muted'>Nada para reponer hoy: lo que vendés está cubierto o sin "
                     "disponibilidad para reposición.</p>", unsafe_allow_html=True)
         return
+    # Filtros de categoría y temporada sobre lo sugerido (mismas etiquetas del catálogo)
+    cats = sorted(x for x in sug["categoria"].dropna().unique() if str(x).strip())
+    temps = sorted(x for x in sug["temporada"].dropna().unique() if str(x).strip())
+    f_cat, f_temp = [], []
+    if len(cats) > 1 or len(temps) > 1:
+        fc1, fc2 = st.columns([1.4, 1])
+        if len(cats) > 1:
+            f_cat = fc1.pills("Categoría", cats, selection_mode="multi", key="repo_f_cat") or []
+        if len(temps) > 1:
+            f_temp = fc2.pills("Temporada", temps, selection_mode="multi", key="repo_f_temp") or []
+    if f_cat:
+        sug = sug[sug["categoria"].isin(f_cat)]
+    if f_temp:
+        sug = sug[sug["temporada"].isin(f_temp)]
+    if sug.empty:
+        st.markdown("<p class='muted'>Nada sugerido con esos filtros.</p>", unsafe_allow_html=True)
+        return
+    fkey = "".join(c for c in "-".join(sorted(f_cat) + sorted(f_temp)) if c.isalnum())[:48]
     ver = st.session_state.get("repo_ver", 0)
     tabla = sug[["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
                  "stock_pv", "precio", "sugerido"]].copy()
     tabla["stock_pv"] = tabla["stock_pv"].clip(lower=0)
     tabla = tabla.rename(columns={"sugerido": "cantidad"})
     edited = st.data_editor(
-        tabla, hide_index=True, use_container_width=True, key=f"repo_editor_{ver}_{dias}",
+        tabla, hide_index=True, use_container_width=True, key=f"repo_editor_{ver}_{dias}_{fkey}",
         disabled=["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
                   "stock_pv", "precio"],
         column_config={
