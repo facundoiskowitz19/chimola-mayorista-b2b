@@ -263,7 +263,7 @@ histórico del comprobante; el descuento, el `pordscto` de la cabecera.
 Página «Reposición» en el nav del cliente, visible SOLO para titulares de un
 punto de venta (`dim_pv.cliente_cod_titular`: Caballito 2663, Santa Fe 2721,
 Jujuy 2722, Mendoza 2723, Corrientes 2720, Nine 2735, Villa María 2739).
-Motor: `reposicion.py` sobre `v_reposicion_sku_omnicanal` (marts):
+Motor: `reposicion.py` sobre `reposicion_sku_omnicanal` (marts):
 
     sugerido = ceil(velocidad_venta_30d × días_objetivo − stock_sucursal)
                → redondeado ARRIBA al múltiplo U.B. → capeado al stock neto

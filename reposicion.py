@@ -1,7 +1,7 @@
 """Reposición sugerida para FRANQUICIAS (fase 11).
 
 Cruza el sell-out de la sucursal del cliente (marts
-`v_reposicion_sku_omnicanal`, calculada por el pipeline hermano) con el
+`reposicion_sku_omnicanal`, calculada por el pipeline hermano) con el
 catálogo vendible del sitio, y sugiere cantidades:
 
     sugerido = ceil(velocidad_30d × días_objetivo − stock_sucursal)
@@ -44,7 +44,7 @@ SELECT TRIM(sku) ean, TRIM(producto_cod) producto_cod, UPPER(TRIM(color)) color,
        SAFE_CAST(unidades_vendidas_30d AS INT64) vendidas_30d,
        CAST(velocidad_venta_diaria_30d AS FLOAT64) vel_30d,
        CAST(cobertura_dias AS FLOAT64) cobertura_dias
-FROM `{config.BQ_PROJECT}.{config.DS_MARTS}.v_reposicion_sku_omnicanal`
+FROM `{config.BQ_PROJECT}.{config.DS_MARTS}.reposicion_sku_omnicanal`
 WHERE pv_cod = @pv AND unidades_vendidas_30d > 0
 """
 

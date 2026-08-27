@@ -12,7 +12,7 @@ tables:
   # PRODUCTOS Y VARIANTES
   # ============================================================================
 
-  - name: franquicias_marts.v_stock_omnicanal
+  - name: franquicias_marts.stock_omnicanal
     kind: view
     purpose: |
       Vista base del catálogo B2B. 1 fila por variante (SKU) con producto,
@@ -45,7 +45,7 @@ tables:
     example_query: |
       SELECT sku, producto_cod, producto_nombre, marca, temporada, rubro,
              color, talle, precio_lista4, stock_ezeiza
-      FROM `chimola-490015.franquicias_marts.v_stock_omnicanal`
+      FROM `chimola-490015.franquicias_marts.stock_omnicanal`
       WHERE stock_ezeiza > 0
         AND marca = 'Chimola'
         AND temporada = 'AW26'

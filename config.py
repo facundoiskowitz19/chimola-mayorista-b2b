@@ -21,7 +21,7 @@ DS_MARTS = os.getenv("BQ_DS_MARTS", "franquicias_marts")
 DS_DWH = os.getenv("BQ_DS_DWH", "franquicias_dwh")
 DS_RAW = os.getenv("BQ_DS_RAW", "franquicias_raw")
 
-V_STOCK_OMNI = f"`{BQ_PROJECT}.{DS_MARTS}.v_stock_omnicanal`"
+V_STOCK_OMNI = f"`{BQ_PROJECT}.{DS_MARTS}.stock_omnicanal`"
 V_STOCK_CENTRAL = f"`{BQ_PROJECT}.{DS_MARTS}.v_stock_central_actual`"
 T_STOCK_RAW = f"`{BQ_PROJECT}.{DS_RAW}.stock`"
 T_ARTICULOSOL = f"`{BQ_PROJECT}.{DS_RAW}.articulosol`"

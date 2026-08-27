@@ -20,7 +20,7 @@ desplegado en Cloud Run.
 Cliente B2B (browser)
     ↓  login email+password → cookie JWT 24h
 Streamlit (Cloud Run, session-affinity)
-    ├─ BigQuery  franquicias_marts.v_stock_omnicanal + raw.stock (OC) + raw.articulosol (precios) + dwh.dim_cliente
+    ├─ BigQuery  franquicias_marts.stock_omnicanal + raw.stock (OC) + raw.articulosol (precios) + dwh.dim_cliente
     ├─ GCS       ecommerce-b2b-imagenes (fotos, signed URLs 1h)  /  chimola-mayorista-pedidos[-dev] (backup xlsx)
     ├─ Firestore usuarios · pedidos · carritos · login_attempts · contadores
     └─ SMTP      Gmail Workspace (secret email-smtp-credentials de chimola-490015)

@@ -66,7 +66,7 @@ Migrable a Next.js después reusando los módulos Python como API.
 ```
 Navegador ──cookie JWT (24h)──▶ Streamlit (Cloud Run, --session-affinity)
                                   │
-   app.py (UI + router)           ├─ catalog.py  → BQ readonly: v_stock_omnicanal + raw.stock (OC) + raw.articulosol (precio1..10)
+   app.py (UI + router)           ├─ catalog.py  → BQ readonly: stock_omnicanal + raw.stock (OC) + raw.articulosol (precio1..10)
    auth.py (bcrypt + JWT + rate   ├─ stock.py    → re-consulta BQ al confirmar (anti oversell)
             limit en Firestore)   ├─ fotos.py    → GCS ecommerce-b2b-imagenes (índice 1 list/h + signed URLs V4 via signBlob)
    db.py (Firestore)              ├─ pedidos.py  → Firestore `pedidos` + Excel (xlsxwriter) + backup GCS
@@ -95,7 +95,13 @@ Navegador ──cookie JWT (24h)──▶ Streamlit (Cloud Run, --session-affini
 
 ### Gotchas aprendidos (leer antes de tocar)
 
-- **`v_stock_omnicanal.sku` es el EAN**, no el SKU del sitio. El SKU
+- **Fuente de stock = tablas materializadas `franquicias_marts.stock_omnicanal` /
+  `reposicion_sku_omnicanal`** (desde 2026-08-27; antes las vistas `v_*_omnicanal`,
+  mismo schema). Las materializa el pipeline hermano **1×/día a las 08:30 ART**:
+  el sitio muestra el stock "de la mañana" todo el día (la cache de 30 min del
+  catálogo no cambia eso). Si Chimola necesita más frescura, es un cambio en
+  `sql-to-bq-franquicias` (scheduler), no acá.
+- **`stock_omnicanal.sku` es el EAN**, no el SKU del sitio. El SKU
   `{producto_cod}_{TALLE}_{color_cod}` se arma en la query (`catalog.py`).
 - **Franquicias usan lista 1, no 4** (`dim_cliente.lista_precios=1` para
   2720/2721/2722/2723/2735/2739). `precio_lista4` es el precio de venta al
@@ -200,7 +206,7 @@ Las mismas del ecosistema — copiadas de `sql-to-bq-franquicias/CLAUDE.md`:
    del pedido. Es la negociación por cliente. Refleja el `pordscto` que después
    va a la NP en Aleph.
 3. **Stock disponible para B2B**: solo depósito Ezeiza (`stock_ezeiza` en
-   `v_stock_omnicanal`). Si un producto solo tiene stock en sucursal, NO se
+   `stock_omnicanal`). Si un producto solo tiene stock en sucursal, NO se
    ofrece al mayorista. El pipeline Woo actual ya aplica esta regla.
 4. **Variantes**: cada SKU es `{producto_cod}_{talle}_{color_cod}`. La misma
    convención que usa el Woo para no romper cross-referencia.
