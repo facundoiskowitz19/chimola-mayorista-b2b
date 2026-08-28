@@ -228,6 +228,61 @@ def fotos_por_color(fotos: list[dict], color: str) -> list[dict]:
     return aprox or fotos
 
 
+# ---------------------------------------------------------------------------
+# "Encender el sitio": foto de la variante de color CLARO de cada producto
+# ---------------------------------------------------------------------------
+# Orden = preferencia (primero los más luminosos). Se matchea por palabra
+# dentro del nombre de color de Aleph (ej. "PALE PINK", "LIGHT BLUE", "OFF WHITE").
+COLORES_CLAROS = (
+    "WHITE", "BLANCO", "CRUDO", "IVORY", "MARFIL", "CREAM", "CREMA", "VAINILLA", "NATURAL",
+    "BEIGE", "NUDE", "ARENA", "OFF WHITE",
+    "PALE", "LIGHT", "LT ", "HIELO", "SKY", "CELESTE", "AQUA", "AERO", "VERDE AGUA",
+    "MINT", "MENTA", "LILA", "LILAC", "LAVANDA", "LAVANDER", "LAVENDER", "ORCHID",
+    "ROSA", "PINK", "ROSE", "SALMON", "DURAZNO", "CORAL", "STRAWBERRY", "FRUTILLA",
+    "MAIZ", "LEMON", "LIMON", "AMARILLO", "YELLOW", "LIME", "LIMA",
+    "SILVER", "PLATA", "PLATEADO", "TRANSPARENT", "HELADO", "ICE CREAM", "SMOOTHIE",
+)
+# Si aparece alguno de estos, el color NO es claro aunque contenga una palabra clara
+# (ej. "NUDE & NEGRO", "DARK PINK").
+COLORES_OSCUROS = ("DARK", "OSCURO", "DEEP", "BLACK", "NEGRO", "BORDO", "BURGUNDY",
+                   "CHOCOLATE", "MARRON", "BROWN", "NAVY", "NAVAL", "PETROLEO", "MILITAR",
+                   "OLIVA", "TINTO", "FULL")
+
+
+def _padded(color) -> str:
+    return " " + " ".join(str(color or "").upper().replace("&", " ").split()) + " "
+
+
+def es_color_claro(color: str | None) -> bool:
+    """PURA: True si el nombre de color de Aleph describe un color claro.
+    Match por palabra/frase completa (" PALE PINK " contiene " PALE ")."""
+    c = _padded(color)
+    if c.strip() == "" or any(f" {o} " in c for o in COLORES_OSCUROS):
+        return False
+    return any(f" {k.strip()} " in c for k in COLORES_CLAROS)
+
+
+def color_claro(colores: list[str]) -> str | None:
+    """PURA: el color más claro del producto (según el orden de preferencia),
+    o None si ninguna variante es clara."""
+    claros = [c for c in colores if es_color_claro(c)]
+    if not claros:
+        return None
+
+    def rank(c):
+        cp = _padded(c)
+        return next((i for i, k in enumerate(COLORES_CLAROS) if f" {k.strip()} " in cp),
+                    len(COLORES_CLAROS))
+    return sorted(claros, key=rank)[0]
+
+
+def foto_clara(producto_cod: str, colores: list[str]) -> str:
+    """URL de la foto de la variante clara del producto ("Encender el sitio");
+    si no hay color claro, la portada."""
+    c = color_claro(list(colores or []))
+    return miniatura(producto_cod, c) if c else foto_principal(producto_cod)
+
+
 def tiene_fotos(producto_cod: str) -> bool:
     return bool(indice_fotos().get(producto_cod.strip().upper()))
 

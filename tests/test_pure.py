@@ -296,3 +296,18 @@ def test_cruzar_con_catalogo():
     assert set(out["sku"]) == {"M211_U_2059", "M211_U_2058"}
     assert out.iloc[0]["sku"] == "M211_U_2058"   # cobertura 2.0 primero (urgente)
     assert int(out[out["sku"] == "M211_U_2059"].iloc[0]["stock_pv"]) == 3
+
+
+def test_es_color_claro():
+    from fotos import es_color_claro, color_claro
+    for c in ["WHITE", "BLANCO", "OFF WHITE", "BEIGE", "NUDE", "PALE PINK", "LIGHT BLUE", "LT GREY",
+              "CELESTE", "LILA", "MINT", "ROSA", "PINK AND GREEN", "PURPLE AND LIGHT BLUE", "Crudo"]:
+        assert es_color_claro(c), c
+    for c in ["BLACK", "NEGRO", "FULL BLACK", "CAMEL", "GRIS", "PURPLE", "BLUE", "DARK PINK",
+              "NUDE & NEGRO", "BROWN PINK", "UNICO", "COBALT", "CLIMA", "", None]:
+        assert not es_color_claro(c), c
+    # preferencia: el más luminoso primero
+    assert color_claro(["BLACK", "PALE PINK", "WHITE", "CELESTE"]) == "WHITE"
+    assert color_claro(["BLACK", "CELESTE", "PALE PINK"]) == "PALE PINK"
+    assert color_claro(["BLACK", "CAMEL"]) is None
+    assert color_claro([]) is None

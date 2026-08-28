@@ -398,11 +398,14 @@ def _quitar_filtro(campo, valor=None) -> None:
         st.session_state.f_busqueda = ""
     elif campo == "fotos":
         st.session_state.f_fotos = False
+    elif campo == "claros":
+        st.session_state.f_claros = False
     elif campo == "todos":
         for f in catalog.FILTROS:
             st.session_state[f"f_{f}"] = []
         st.session_state.f_busqueda = ""
         st.session_state.f_fotos = False
+        st.session_state.f_claros = False
     else:
         st.session_state[f"f_{campo}"] = [v for v in st.session_state.get(f"f_{campo}", []) if v != valor]
 
@@ -528,7 +531,11 @@ def page_catalogo() -> None:
                                   key=f"f_{f}", label_visibility="collapsed") or []
         st.markdown("")
         st.checkbox("Solo con foto", value=True, key="f_fotos")
+        st.toggle("Encender el sitio", key="f_claros",
+                  help="Muestra cada producto con la foto de su color más claro "
+                       "(blanco, beige, nude, rosa, celeste...). Apagado: foto principal.")
     solo_fotos = st.session_state.get("f_fotos", True)
+    claros = bool(st.session_state.get("f_claros", False))
 
     variantes = catalog.filtrar_variantes(df, sel, busqueda)
     prods = catalog.productos(variantes)
@@ -540,10 +547,11 @@ def page_catalogo() -> None:
         prods = prods.sort_values(["_d", "producto_cod"], ascending=[False, True]).drop(columns="_d")
 
     with main:
-        _grid_catalogo(df, prods, variantes, busqueda, sel, solo_fotos)
+        _grid_catalogo(df, prods, variantes, busqueda, sel, solo_fotos, claros)
 
 
-def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: bool) -> None:
+def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: bool,
+                   claros: bool = False) -> None:
     # Chips de filtros activos (handoff cambio 2)
     chips = []
     if busqueda:
@@ -553,6 +561,8 @@ def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: b
             chips.append((f, v, str(v)))
     if solo_fotos:
         chips.append(("fotos", None, "Solo con foto"))
+    if claros:
+        chips.append(("claros", None, "Sitio encendido"))
     anchos = [max(len(c[2]) * 0.058 + 0.3, 0.6) for c in chips] + ([0.62] if chips else []) + [2.2]
     ccols = st.columns(anchos, vertical_alignment="center")
     for (campo, valor, label), col in zip(chips, ccols):
@@ -582,8 +592,10 @@ def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: b
             with cols[i]:
                 with st.container(key=f"card_{p['producto_cod']}"):
                     # La imagen es un link a la ficha del producto (fase 8, T3)
+                    src = (fotos.foto_clara(p["producto_cod"], p["colores"]) if claros
+                           else fotos.foto_principal(p["producto_cod"]))
                     st.markdown(f"<a href='?p={p['producto_cod']}' target='_self'>"
-                                f"<img src='{fotos.foto_principal(p['producto_cod'])}' "
+                                f"<img src='{src}' "
                                 "style='width:100%; display:block; border-radius:2px'></a>",
                                 unsafe_allow_html=True)
                     st.markdown(
