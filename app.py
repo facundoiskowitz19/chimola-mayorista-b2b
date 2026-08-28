@@ -24,6 +24,7 @@ import fotos
 import overrides
 import pedidos
 import reposicion
+import odoo_export
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("app")
@@ -333,6 +334,29 @@ def cliente_efectivo() -> dict:
 
 def puede_pedir() -> bool:
     return bool(st.session_state.get("cliente"))
+
+
+def es_franquicia(cliente_cod) -> bool:
+    """Cliente titular de un punto de venta (dim_pv) → funciones de franquicia."""
+    try:
+        return bool(cliente_cod) and reposicion.pv_de_cliente(int(cliente_cod)) is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def boton_odoo(p: dict, key: str, col=None) -> None:
+    """Descarga del pedido en formato Odoo (dos hojas). Solo franquicias."""
+    if p.get("estado") == "cancelado" or not es_franquicia(p.get("cliente_cod")):
+        return
+    ov = overrides.get_clientes_overrides().get(int(p["cliente_cod"]), {})
+    cliente_odoo = ov.get("odoo_cliente") or p.get("cliente_nombre") or ""
+    (col or st).download_button("Exportar formato Odoo", key=key,
+                                data=odoo_export.generar_excel_odoo(p, cliente_odoo),
+                                file_name=odoo_export.nombre_archivo(p),
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                use_container_width=col is not None,
+                                help="Dos hojas: 'Sin talle' (talle único) e 'Indu' (con talle), "
+                                     "listas para la importación masiva de Odoo.")
 
 
 def guardar_cart(items: list[dict]) -> None:
@@ -777,6 +801,7 @@ def page_carrito() -> None:
                        "Descargá el Excel acá y avisá a Lautin.")
         st.download_button("Descargar Excel del pedido", data=xlsx, file_name=p["xlsx_filename"],
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
+        boton_odoo(p, key="odoo_conf")
         if st.button("Hacer otro pedido"):
             st.session_state.pop("pedido_ok")
             ir("catalogo")
@@ -1007,7 +1032,7 @@ def page_pedidos() -> None:
                                 "talle": "Talle", "cantidad": "Cant.",
                                 "precio_unit": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
                                 "subtotal": st.column_config.NumberColumn("Subtotal", format="$ %.0f")})
-    b1, b2, b3, _ = st.columns([1.1, 1.1, 1.1, 1.5])
+    b1, b2, b3, b4 = st.columns([1.1, 1.1, 1.1, 1.5])
     if pedidos.puede_cancelar(p, st.session_state.user) and \
             b3.button("Cancelar pedido", key=f"cx_{p['numero']}", use_container_width=True):
         _confirmar_cancelacion(p["numero"])
@@ -1034,6 +1059,7 @@ def page_pedidos() -> None:
         data = pedidos.generar_excel(p)
     b2.download_button("Descargar Excel", data=data, file_name=p["xlsx_filename"], use_container_width=True,
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    boton_odoo(p, key=f"odoo_{p['numero']}", col=b4)
 
 
 # ---------------------------------------------------------------------------
@@ -1175,7 +1201,15 @@ def page_compra_rapida() -> None:
             })
         seleccion = [(v, int(q)) for (_, v), q in zip(page_df.iterrows(), edited["cantidad"])
                      if int(q or 0) > 0]
-        if st.button("Agregar al carrito", type="primary", disabled=not seleccion, key="cr_add"):
+        ba, bx = st.columns([1, 1])
+        bx.download_button("Exportar Excel del filtro actual", key="cr_xlsx", use_container_width=True,
+                           data=cr.excel_plantilla(sub, {str(v["sku"]): q for v, q in seleccion}),
+                           file_name="compra_rapida.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           help="Todas las variantes del filtro (no solo esta página), con la columna "
+                                "Cantidad para completar en Excel y subir después en «Pegar códigos».")
+        if ba.button("Agregar al carrito", type="primary", disabled=not seleccion, key="cr_add",
+                     use_container_width=True):
             items, ajustes = [], []
             for v, q in seleccion:
                 pedido = int(q)
@@ -1221,9 +1255,24 @@ def page_compra_rapida() -> None:
                 st.dataframe(inc_df.rename(columns={"linea": "Línea", "codigo": "Código", "tipo": "Resultado",
                                                     "pedido": "Pedido", "cargado": "Cargado", "detalle": "Detalle"}),
                              hide_index=True, use_container_width=True)
+        archivo = st.file_uploader("…o subí el Excel exportado desde la tabla (columnas SKU/EAN y Cantidad)",
+                                   type=["xlsx"], key=f"cr_file_{st.session_state.get('cr_file_ver', 0)}")
+        texto_archivo = ""
+        if archivo is not None:
+            texto_archivo, err = cr.texto_desde_excel(archivo.getvalue())
+            if err:
+                st.error(err)
+            elif not texto_archivo:
+                st.warning("El archivo no tiene ninguna fila con Cantidad mayor a 0.")
+            else:
+                st.markdown(f"<p class='muted'>{len(texto_archivo.splitlines())} líneas con cantidad en el "
+                            "archivo.</p>", unsafe_allow_html=True)
         with st.form("cr_pegar", border=False):
             texto = st.text_area("Códigos", height=170, placeholder="M211_U_2059,3\n7798218194446,2")
             ok = st.form_submit_button("Procesar y agregar", type="primary")
+        if ok and texto_archivo and not texto.strip():
+            texto = texto_archivo
+            st.session_state.cr_file_ver = st.session_state.get("cr_file_ver", 0) + 1
         if ok and texto.strip():
             items, incidencias = cr.resolver_pegado(texto, df)
             total = _agregar_items(items) if items else 0

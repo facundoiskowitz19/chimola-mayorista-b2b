@@ -1030,6 +1030,9 @@ def _cliente_edicion(email: str, u: dict, cod, e) -> None:
             contacto_e = c2.text_input("Email de contacto", value=o.get("contacto_email") or "")
             cuit = st.text_input("CUIT", value=o.get("cuit") or "",
                                  placeholder=f"vacío = usa Aleph ({(e or {}).get('cuit') or '—'})")
+            odoo_cli = st.text_input("Nombre del cliente en Odoo (export de franquicias)",
+                                     value=o.get("odoo_cliente") or "",
+                                     placeholder="ej. Drago Tech, Soporte Drago Leonel — vacío = nombre de Aleph")
             notas = st.text_input("Notas", value=o.get("notas") or "")
             g1, g2 = st.columns(2)
             if g1.form_submit_button("Guardar", type="primary", use_container_width=True):
@@ -1039,6 +1042,7 @@ def _cliente_edicion(email: str, u: dict, cod, e) -> None:
                     "contacto_nombre": contacto_n.strip(),
                     "contacto_email": contacto_e.strip().lower(),
                     "cuit": cuit.strip() or None,
+                    "odoo_cliente": odoo_cli.strip(),
                     "notas": notas.strip(),
                 }, _admin_email())
                 st.session_state.adm_cli_edit = False

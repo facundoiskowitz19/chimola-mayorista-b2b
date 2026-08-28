@@ -327,3 +327,42 @@ def test_foto_card_por_modo():
     assert es_color_negro("FULL BLACK") and es_color_negro("NEGRO") and not es_color_negro("BLUE")
     assert colores_por_modo(["NAVE BLACK", "BLACK", "WHITE"], "negro") == ["BLACK", "NAVE BLACK"]
     assert colores_por_modo(["CELESTE", "WHITE", "BLACK"], "claro") == ["WHITE", "CELESTE"]
+
+
+def test_odoo_export_dos_hojas_sin_lineas_de_mas():
+    import io
+    import openpyxl
+    import odoo_export as oe
+    items = [
+        {"producto_cod": "M269", "color": "CAMEL", "talle": "U", "cantidad": 2},
+        {"producto_cod": "J23", "color": "AQUA", "talle": "6", "cantidad": 1},
+        {"producto_cod": "J23", "color": "AQUA", "talle": "8", "cantidad": 1},
+        {"producto_cod": "TX110", "color": "PINK", "talle": "U", "cantidad": 10},
+        {"producto_cod": "X", "color": "Y", "talle": "U", "cantidad": 0},   # se ignora
+    ]
+    sin, indu = oe.armar_filas(items, "Drago Tech, Soporte Drago Leonel")
+    assert sin == [["Drago Tech, Soporte Drago Leonel", "Comodín", "M269", "CAMEL", 2],
+                   ["", "Comodín", "TX110", "PINK", 10]]
+    assert indu == [["Drago Tech, Soporte Drago Leonel", 6, "", "J23", "AQUA", 1],
+                    ["", 8, "", "J23", "AQUA", 1]]
+    wb = openpyxl.load_workbook(io.BytesIO(oe.generar_excel_odoo({"numero": 7, "items": items}, "Drago")))
+    assert wb.sheetnames == ["Sin talle", "Indu"]
+    h1 = [list(r) for r in wb["Sin talle"].iter_rows(values_only=True)]
+    h2 = [list(r) for r in wb["Indu"].iter_rows(values_only=True)]
+    assert h1 == [oe.CAB_SIN_TALLE, ["Drago", "Comodín", "M269", "CAMEL", 2], [None, "Comodín", "TX110", "PINK", 10]]
+    assert h2 == [oe.CAB_INDU, ["Drago", 6, None, "J23", "AQUA", 1], [None, 8, None, "J23", "AQUA", 1]]
+    assert oe.nombre_archivo({"numero": 7}) == "odoo_pedido_000007.xlsx"
+
+
+def test_compra_rapida_excel_ida_y_vuelta():
+    import compra_rapida as cr
+    df = pd.DataFrame([
+        {"sku": "M211_U_2059", "ean": "779", "producto_cod": "M211", "producto_nombre": "Mochila",
+         "color": "AQUA", "talle": "U", "precio": 100.0},
+        {"sku": "J23_6_1", "ean": "", "producto_cod": "J23", "producto_nombre": "Jean",
+         "color": "AQUA", "talle": "6", "precio": 50.0},
+    ])
+    data = cr.excel_plantilla(df, {"M211_U_2059": 3})
+    texto, err = cr.texto_desde_excel(data)
+    assert err is None and texto == "M211_U_2059,3"
+    assert cr.texto_desde_excel(b"no es excel")[1]

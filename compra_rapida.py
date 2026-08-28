@@ -108,3 +108,55 @@ def resumen_incidencias(incidencias: list[dict]) -> dict[str, int]:
         "ajustadas": sum(1 for i in incidencias if i["tipo"] == "ajustada"),
         "sin_reconocer": sum(1 for i in incidencias if i["tipo"] in ("no_encontrada", "sin_precio", "ilegible")),
     }
+
+
+# ---------------------------------------------------------------------------
+# Excel de la compra rápida: exportar el filtro actual y re-importarlo editado
+# ---------------------------------------------------------------------------
+COLS_PLANTILLA = ["SKU", "EAN", "Código", "Producto", "Color", "Talle", "Precio lista", "Cantidad"]
+
+
+def excel_plantilla(df_variantes: pd.DataFrame, cantidades: dict[str, int] | None = None) -> bytes:
+    """Excel editable con las variantes del filtro actual (una fila por variante,
+    Cantidad precargada si ya la tipearon). Se puede completar offline y subir."""
+    import io
+    import xlsxwriter
+
+    cant = cantidades or {}
+    buf = io.BytesIO()
+    wb = xlsxwriter.Workbook(buf, {"in_memory": True})
+    ws = wb.add_worksheet("Compra rápida")
+    ws.write_row(0, 0, COLS_PLANTILLA)
+    for r, (_, v) in enumerate(df_variantes.iterrows(), start=1):
+        ws.write_row(r, 0, [str(v["sku"]), str(v.get("ean") or ""), str(v["producto_cod"]),
+                            str(v.get("producto_nombre") or ""), str(v.get("color") or ""),
+                            str(v.get("talle") or ""), float(v["precio"]) if pd.notna(v.get("precio")) else 0,
+                            int(cant.get(str(v["sku"]), 0))])
+    ws.set_column(0, 0, 18); ws.set_column(1, 1, 16); ws.set_column(3, 3, 34); ws.set_column(4, 7, 12)
+    ws.freeze_panes(1, 0)
+    wb.close()
+    return buf.getvalue()
+
+
+def texto_desde_excel(data: bytes) -> tuple[str, str | None]:
+    """Excel exportado (o cualquiera con columnas SKU/EAN y Cantidad) →
+    texto "codigo,cantidad" por línea para `resolver_pegado`. (texto, error)."""
+    import io
+    try:
+        df = pd.read_excel(io.BytesIO(data))
+    except Exception as e:  # noqa: BLE001
+        return "", f"No pude leer el archivo: {e}"
+    cols = {str(c).strip().lower(): c for c in df.columns}
+    col_cant = next((cols[k] for k in ("cantidad", "cant", "qty") if k in cols), None)
+    col_cod = next((cols[k] for k in ("sku", "ean", "codigo", "código") if k in cols), None)
+    if col_cant is None or col_cod is None:
+        return "", "El archivo necesita una columna SKU (o EAN) y una columna Cantidad."
+    lineas = []
+    for _, r in df.iterrows():
+        try:
+            c = int(float(r[col_cant])) if pd.notna(r[col_cant]) else 0
+        except (TypeError, ValueError):
+            continue
+        if c > 0 and pd.notna(r[col_cod]):
+            lineas.append(f"{str(r[col_cod]).strip()},{c}")
+    return "\n".join(lineas), None
