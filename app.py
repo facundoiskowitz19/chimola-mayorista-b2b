@@ -1160,6 +1160,28 @@ def page_reposicion() -> None:
         st.rerun()
 
 
+def _mostrar_resultado_cr(key: str) -> None:
+    """Contadores + reconciliación del último procesamiento (post-rerun)."""
+    # Resultado del procesamiento anterior (post-rerun: contadores + reconciliación)
+    if st.session_state.get(key):
+        resumen, incidencias, total_u = st.session_state.pop(key)
+        r1, r2, r3, _ = st.columns([1, 1, 1, 2])
+        r1.markdown(f"<div class='kicker'>Agregadas</div><h3 style='color:#006786'>{resumen['agregadas']}</h3>",
+                    unsafe_allow_html=True)
+        r2.markdown(f"<div class='kicker'>Ajustadas</div><h3>{resumen['ajustadas']}</h3>",
+                    unsafe_allow_html=True)
+        r3.markdown(f"<div class='kicker'>Sin reconocer</div><h3 style='color:#aa0b56'>{resumen['sin_reconocer']}</h3>",
+                    unsafe_allow_html=True)
+        if total_u:
+            st.success(f"{total_u} unidades agregadas al carrito.")
+        if incidencias:
+            inc_df = pd.DataFrame(incidencias)
+            inc_df["tipo"] = inc_df["tipo"].map(TIPO_INCIDENCIA)
+            st.dataframe(inc_df.rename(columns={"linea": "Línea", "codigo": "Código", "tipo": "Resultado",
+                                                "pedido": "Pedido", "cargado": "Cargado", "detalle": "Detalle"}),
+                         hide_index=True, use_container_width=True)
+
+
 def page_compra_rapida() -> None:
     st.markdown("## Compra rápida")
     if not puede_pedir():
@@ -1233,46 +1255,37 @@ def page_compra_rapida() -> None:
             toast_pendiente(f"Agregaste {total} unidades al carrito.")
             st.rerun()
 
+    with tab_tabla:
+        st.markdown("<div class='kicker' style='margin-top:.6rem'>Cargar el Excel que exportaste</div>",
+                    unsafe_allow_html=True)
+        up = st.file_uploader("Subí el archivo con la columna Cantidad completa", type=["xlsx"],
+                              key=f"cr_file_tabla_{st.session_state.get('cr_file_ver', 0)}",
+                              label_visibility="collapsed")
+        if up is not None:
+            texto_up, err = cr.texto_desde_excel(up.getvalue())
+            if err:
+                st.error(err)
+            elif not texto_up:
+                st.warning("El archivo no tiene ninguna fila con Cantidad mayor a 0.")
+            elif st.button(f"Cargar al carrito las {len(texto_up.splitlines())} líneas con cantidad",
+                           type="primary", key="cr_up_add"):
+                items, incidencias = cr.resolver_pegado(texto_up, df)
+                total = _agregar_items(items) if items else 0
+                toast_pendiente(f"Agregaste {total} unidades al carrito desde el archivo." if total
+                                else "No se agregó nada — revisá el detalle de las líneas.")
+                st.session_state.cr_resultado_tabla = (cr.resumen_incidencias(incidencias), incidencias, total)
+                st.session_state.cr_file_ver = st.session_state.get("cr_file_ver", 0) + 1
+                st.rerun()
+        _mostrar_resultado_cr("cr_resultado_tabla")
+
     with tab_pegar:
         st.markdown("<p class='muted'>Una línea por variante: <code>SKU,cantidad</code> o "
                     "<code>EAN,cantidad</code> (coma, punto y coma, tab o espacio). "
                     "Podés pegar directo desde Excel.</p>", unsafe_allow_html=True)
-        # Resultado del procesamiento anterior (post-rerun: contadores + reconciliación)
-        if st.session_state.get("cr_resultado"):
-            resumen, incidencias, total_u = st.session_state.pop("cr_resultado")
-            r1, r2, r3, _ = st.columns([1, 1, 1, 2])
-            r1.markdown(f"<div class='kicker'>Agregadas</div><h3 style='color:#006786'>{resumen['agregadas']}</h3>",
-                        unsafe_allow_html=True)
-            r2.markdown(f"<div class='kicker'>Ajustadas</div><h3>{resumen['ajustadas']}</h3>",
-                        unsafe_allow_html=True)
-            r3.markdown(f"<div class='kicker'>Sin reconocer</div><h3 style='color:#aa0b56'>{resumen['sin_reconocer']}</h3>",
-                        unsafe_allow_html=True)
-            if total_u:
-                st.success(f"{total_u} unidades agregadas al carrito.")
-            if incidencias:
-                inc_df = pd.DataFrame(incidencias)
-                inc_df["tipo"] = inc_df["tipo"].map(TIPO_INCIDENCIA)
-                st.dataframe(inc_df.rename(columns={"linea": "Línea", "codigo": "Código", "tipo": "Resultado",
-                                                    "pedido": "Pedido", "cargado": "Cargado", "detalle": "Detalle"}),
-                             hide_index=True, use_container_width=True)
-        archivo = st.file_uploader("…o subí el Excel exportado desde la tabla (columnas SKU/EAN y Cantidad)",
-                                   type=["xlsx"], key=f"cr_file_{st.session_state.get('cr_file_ver', 0)}")
-        texto_archivo = ""
-        if archivo is not None:
-            texto_archivo, err = cr.texto_desde_excel(archivo.getvalue())
-            if err:
-                st.error(err)
-            elif not texto_archivo:
-                st.warning("El archivo no tiene ninguna fila con Cantidad mayor a 0.")
-            else:
-                st.markdown(f"<p class='muted'>{len(texto_archivo.splitlines())} líneas con cantidad en el "
-                            "archivo.</p>", unsafe_allow_html=True)
+        _mostrar_resultado_cr("cr_resultado")
         with st.form("cr_pegar", border=False):
             texto = st.text_area("Códigos", height=170, placeholder="M211_U_2059,3\n7798218194446,2")
             ok = st.form_submit_button("Procesar y agregar", type="primary")
-        if ok and texto_archivo and not texto.strip():
-            texto = texto_archivo
-            st.session_state.cr_file_ver = st.session_state.get("cr_file_ver", 0) + 1
         if ok and texto.strip():
             items, incidencias = cr.resolver_pegado(texto, df)
             total = _agregar_items(items) if items else 0
