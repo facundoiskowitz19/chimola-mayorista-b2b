@@ -262,25 +262,74 @@ def es_color_claro(color: str | None) -> bool:
     return any(f" {k.strip()} " in c for k in COLORES_CLAROS)
 
 
+def _rank_claro(color: str) -> int:
+    cp = _padded(color)
+    return next((i for i, k in enumerate(COLORES_CLAROS) if f" {k.strip()} " in cp),
+                len(COLORES_CLAROS))
+
+
 def color_claro(colores: list[str]) -> str | None:
     """PURA: el color más claro del producto (según el orden de preferencia),
     o None si ninguna variante es clara."""
-    claros = [c for c in colores if es_color_claro(c)]
-    if not claros:
-        return None
+    claros = sorted((c for c in colores if es_color_claro(c)), key=_rank_claro)
+    return claros[0] if claros else None
 
-    def rank(c):
-        cp = _padded(c)
-        return next((i for i, k in enumerate(COLORES_CLAROS) if f" {k.strip()} " in cp),
-                    len(COLORES_CLAROS))
-    return sorted(claros, key=rank)[0]
+
+# Modo "apagado": la variante NEGRA del producto. "BLACK"/"NEGRO" exactos primero,
+# después las compuestas ("FULL BLACK", "BLACK MAT", "NAVE BLACK"...).
+COLORES_NEGROS = ("BLACK", "NEGRO")
+
+
+def es_color_negro(color: str | None) -> bool:
+    c = _padded(color)
+    return any(f" {k} " in c for k in COLORES_NEGROS)
+
+
+def _rank_negro(color: str) -> int:
+    cu = _padded(color).strip()
+    return 0 if cu in COLORES_NEGROS else (1 if cu in ("FULL BLACK", "NEGRO FULL", "NATURAL BLACK") else 2)
+
+
+def colores_por_modo(colores: list[str], modo: str) -> list[str]:
+    """PURA: colores del producto que califican para el modo ('claro' | 'negro'),
+    ordenados por preferencia."""
+    if modo == "claro":
+        return sorted((c for c in colores if es_color_claro(c)), key=_rank_claro)
+    return sorted((c for c in colores if es_color_negro(c)), key=_rank_negro)
+
+
+def foto_card_filename(producto_cod: str, colores: list[str], modo: str,
+                       filenames: list[str] | None = None,
+                       overrides_color: dict | None = None) -> tuple[str | None, bool]:
+    """(filename, match) de la foto para la card del catálogo en el modo dado.
+    match=True SOLO si existe foto de una variante de ese tono (no la portada).
+    Sin firmar URLs: sirve para ordenar todo el catálogo barato."""
+    prod = producto_cod.strip().upper()
+    files = filenames if filenames is not None else indice_fotos().get(prod, [])
+    if not files:
+        return None, False
+    candidatos = colores_por_modo(list(colores or []), modo)
+    if candidatos:
+        ov = overrides_color if overrides_color is not None else _overrides_fotos(prod)
+        mapa = foto_por_color(prod, candidatos, files, ov)
+        for c in candidatos:
+            fn = mapa.get(norm(c))
+            if fn:
+                return fn, True
+    pf = parsear_fotos(prod, files)
+    return (pf[0]["filename"] if pf else None), False
+
+
+def foto_card(producto_cod: str, colores: list[str], modo: str) -> str:
+    """URL (firmada) de la foto de la card en el modo dado; portada si no hay
+    variante de ese tono; placeholder si el producto no tiene fotos."""
+    fn, _ = foto_card_filename(producto_cod, colores, modo)
+    return url_foto(producto_cod, fn) if fn else PLACEHOLDER
 
 
 def foto_clara(producto_cod: str, colores: list[str]) -> str:
-    """URL de la foto de la variante clara del producto ("Encender el sitio");
-    si no hay color claro, la portada."""
-    c = color_claro(list(colores or []))
-    return miniatura(producto_cod, c) if c else foto_principal(producto_cod)
+    """URL de la foto de la variante clara del producto ("Encender el sitio")."""
+    return foto_card(producto_cod, colores, "claro")
 
 
 def tiene_fotos(producto_cod: str) -> bool:

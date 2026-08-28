@@ -311,3 +311,19 @@ def test_es_color_claro():
     assert color_claro(["BLACK", "CELESTE", "PALE PINK"]) == "PALE PINK"
     assert color_claro(["BLACK", "CAMEL"]) is None
     assert color_claro([]) is None
+
+
+def test_foto_card_por_modo():
+    from fotos import foto_card_filename, colores_por_modo, es_color_negro
+    files = ["X1 BLACK (1).jpg", "X1 BLACK (2).jpg", "X1 PALE PINK (1).jpg", "X1 CAMEL (1).jpg"]
+    cols = ["BLACK", "PALE PINK", "CAMEL"]
+    assert foto_card_filename("X1", cols, "claro", files, {}) == ("X1 PALE PINK (1).jpg", True)
+    assert foto_card_filename("X1", cols, "negro", files, {}) == ("X1 BLACK (1).jpg", True)
+    # sin variante del tono → portada, match False
+    assert foto_card_filename("X1", ["CAMEL"], "claro", files, {}) == ("X1 BLACK (1).jpg", False)
+    # variante clara existe en catálogo pero SIN foto → no cuenta como match
+    assert foto_card_filename("X1", ["BLACK", "WHITE"], "claro", files, {})[1] is False
+    assert foto_card_filename("X1", cols, "claro", [], {}) == (None, False)
+    assert es_color_negro("FULL BLACK") and es_color_negro("NEGRO") and not es_color_negro("BLUE")
+    assert colores_por_modo(["NAVE BLACK", "BLACK", "WHITE"], "negro") == ["BLACK", "NAVE BLACK"]
+    assert colores_por_modo(["CELESTE", "WHITE", "BLACK"], "claro") == ["WHITE", "CELESTE"]

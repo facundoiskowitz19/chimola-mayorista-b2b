@@ -541,10 +541,18 @@ def page_catalogo() -> None:
     prods = catalog.productos(variantes)
     if solo_fotos and not prods.empty:
         prods = prods[prods["producto_cod"].map(fotos.tiene_fotos)]
-    if not prods.empty and "destacado" in variantes.columns:
-        dest = variantes.groupby("producto_cod")["destacado"].first()
-        prods = prods.assign(_d=prods["producto_cod"].map(dest).fillna(False))
-        prods = prods.sort_values(["_d", "producto_cod"], ascending=[False, True]).drop(columns="_d")
+    if not prods.empty:
+        # Orden: destacados → productos con foto de la variante del modo
+        # (encendido = color claro, apagado = negro) → el resto por código.
+        modo = "claro" if claros else "negro"
+        dest = (variantes.groupby("producto_cod")["destacado"].first()
+                if "destacado" in variantes.columns else None)
+        prods = prods.assign(
+            _d=prods["producto_cod"].map(dest).fillna(False) if dest is not None else False,
+            _m=[fotos.foto_card_filename(c, cols, modo)[1]
+                for c, cols in zip(prods["producto_cod"], prods["colores"])])
+        prods = prods.sort_values(["_d", "_m", "producto_cod"],
+                                  ascending=[False, False, True]).drop(columns=["_d", "_m"])
 
     with main:
         _grid_catalogo(df, prods, variantes, busqueda, sel, solo_fotos, claros)
@@ -592,8 +600,7 @@ def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: b
             with cols[i]:
                 with st.container(key=f"card_{p['producto_cod']}"):
                     # La imagen es un link a la ficha del producto (fase 8, T3)
-                    src = (fotos.foto_clara(p["producto_cod"], p["colores"]) if claros
-                           else fotos.foto_principal(p["producto_cod"]))
+                    src = fotos.foto_card(p["producto_cod"], p["colores"], "claro" if claros else "negro")
                     st.markdown(f"<a href='?p={p['producto_cod']}' target='_self'>"
                                 f"<img src='{src}' "
                                 "style='width:100%; display:block; border-radius:2px'></a>",
