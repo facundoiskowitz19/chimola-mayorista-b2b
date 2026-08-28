@@ -542,15 +542,18 @@ def page_catalogo() -> None:
     if solo_fotos and not prods.empty:
         prods = prods[prods["producto_cod"].map(fotos.tiene_fotos)]
     if not prods.empty:
-        # Orden: destacados → productos con foto de la variante del modo
-        # (encendido = color claro, apagado = negro) → el resto por código.
+        # Orden: destacados → (SOLO sin filtros ni búsqueda) productos con foto de
+        # la variante del modo (encendido = color claro, apagado = negro) → resto
+        # por código. Con filtros activos el switch solo cambia las fotos de lo
+        # que ya se ve, sin reordenar.
         modo = "claro" if claros else "negro"
+        hay_filtros = bool(busqueda) or any(sel.get(f) for f in catalog.FILTROS)
         dest = (variantes.groupby("producto_cod")["destacado"].first()
                 if "destacado" in variantes.columns else None)
         prods = prods.assign(
             _d=prods["producto_cod"].map(dest).fillna(False) if dest is not None else False,
-            _m=[fotos.foto_card_filename(c, cols, modo)[1]
-                for c, cols in zip(prods["producto_cod"], prods["colores"])])
+            _m=False if hay_filtros else [fotos.foto_card_filename(c, cols, modo)[1]
+                                          for c, cols in zip(prods["producto_cod"], prods["colores"])])
         prods = prods.sort_values(["_d", "_m", "producto_cod"],
                                   ascending=[False, False, True]).drop(columns=["_d", "_m"])
 
