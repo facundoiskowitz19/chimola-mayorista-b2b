@@ -108,6 +108,11 @@ st.markdown("""
     background:transparent; }
   div[data-testid="stImage"] img { border-radius:2px; }
   div[class*="st-key-card_"] div[data-testid="stImage"] img { object-fit:cover; aspect-ratio:1/1; background:#e9e7e6; }
+  /* Rail de filtros pegajoso: la COLUMNA es el sticky (flex item dentro de la
+     fila, que es alta como el grid → tiene recorrido para acompañar el scroll) */
+  div[data-testid="stColumn"]:has(div[class*="st-key-cat_rail"]) {
+    position: sticky; top: .75rem; align-self: flex-start;
+    max-height: calc(100vh - 1.5rem); overflow-y: auto; overflow-x: hidden; }
   .card-title { font-weight:600; font-size:1.12rem; margin-top:.45rem; line-height:1.15; color:var(--text);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .card-sub { color:var(--faint); font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; margin-top:.1rem; }
@@ -540,20 +545,19 @@ def page_catalogo() -> None:
     opciones = catalog.opciones_filtros(df, sel_prev)
     rail, main = st.columns([1, 3.4], gap="large")
     sel = {}
-    with rail:
+    with rail, st.container(key="cat_rail"):
         busqueda = st.text_input("Buscar", key="f_busqueda", placeholder="código, nombre, EAN, color")
         for f in catalog.FILTROS:
             if not opciones[f] and not sel_prev[f]:
                 sel[f] = []
                 continue
+            # saneo: una selección que quedó sin match se despega sola
+            st.session_state[f"f_{f}"] = [v for v in st.session_state.get(f"f_{f}", [])
+                                          if v in opciones[f]]
             st.markdown(f"<div class='kicker' style='margin:.7rem 0 .1rem'>{LABELS_F[f]}</div>",
                         unsafe_allow_html=True)
-            if f == "color":   # demasiados valores para pills
-                sel[f] = st.multiselect(LABELS_F[f], opciones[f], key=f"f_{f}", placeholder="Todos",
-                                        label_visibility="collapsed")
-            else:
-                sel[f] = st.pills(LABELS_F[f], opciones[f], selection_mode="multi",
-                                  key=f"f_{f}", label_visibility="collapsed") or []
+            sel[f] = st.multiselect(LABELS_F[f], opciones[f], key=f"f_{f}", placeholder="Todos",
+                                    label_visibility="collapsed")
         st.markdown("")
         st.checkbox("Solo con foto", value=True, key="f_fotos")
         st.toggle("Encender el sitio", key="f_claros",
