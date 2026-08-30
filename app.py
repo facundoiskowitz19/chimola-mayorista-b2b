@@ -216,6 +216,7 @@ def nav() -> None:
             pass
     items.append(("carrito", f"Carrito · {n_items} u."))
     items.append(("pedidos", "Mis pedidos"))
+    items.append(("cuenta", "Mi cuenta"))
     if user.get("rol") == "admin":
         try:
             sp = pedidos.contar_por_estado().get("confirmado", 0)
@@ -1195,6 +1196,63 @@ def _mostrar_resultado_cr(key: str) -> None:
                          hide_index=True, use_container_width=True)
 
 
+def page_cuenta() -> None:
+    """Mi cuenta: datos del cliente (solo lectura) + contacto y password editables."""
+    user = st.session_state.user
+    cli = st.session_state.get("cliente")
+    st.markdown("## Mi cuenta")
+    c1, c2 = st.columns([1.25, 1], gap="large")
+    with c1:
+        st.markdown(f"<div class='kicker'>Tu usuario</div><p class='muted' style='margin:.2rem 0 1rem'>"
+                    f"{user['email']} · rol {user.get('rol', 'cliente')}</p>", unsafe_allow_html=True)
+        if cli:
+            filas = [("Razón social", cli.get("nombre_display") or cli.get("nombre") or "—"),
+                     ("Cliente", str(cli.get("cliente_cod") or "—")),
+                     ("Lista de precios", str(cli.get("lista_precios") or "—")),
+                     ("Descuento cabecera", f"{float(cli.get('descuento') or 0):g}%"),
+                     ("CUIT", cli.get("cuit") or "—")]
+            st.markdown("".join(f"<div style='padding:.35rem 0;border-bottom:1px solid #d8d5d2'>"
+                                f"<span class='muted'>{k}</span> &nbsp; <b>{v}</b></div>"
+                                for k, v in filas), unsafe_allow_html=True)
+            st.markdown("<p class='muted' style='margin-top:.6rem'>Estos datos vienen de Lautin — "
+                        "si algo está mal, avisá por WhatsApp.</p>", unsafe_allow_html=True)
+            st.markdown("<div class='kicker' style='margin-top:1rem'>Contacto para pedidos</div>",
+                        unsafe_allow_html=True)
+            with st.form("cuenta_contacto", border=False):
+                nom_c = st.text_input("Persona de contacto", value=cli.get("contacto_nombre") or "",
+                                      placeholder="Nombre y apellido")
+                mail_c = st.text_input("Email de contacto",
+                                       value=cli.get("contacto_email") or user.get("email", ""))
+                if st.form_submit_button("Guardar contacto", type="primary"):
+                    nom_c, mail_c = nom_c.strip(), mail_c.strip().lower()
+                    overrides.set_cliente_override(int(cli["cliente_cod"]),
+                                                   {"contacto_nombre": nom_c, "contacto_email": mail_c},
+                                                   user["email"])
+                    st.session_state.cliente = {**cli, "contacto_nombre": nom_c, "contacto_email": mail_c}
+                    toast_pendiente("Contacto guardado.")
+                    st.rerun()
+        else:
+            st.markdown("<p class='muted'>Tu usuario no tiene cliente asociado.</p>", unsafe_allow_html=True)
+    with c2:
+        st.markdown("<div class='kicker'>Cambiar password</div>", unsafe_allow_html=True)
+        with st.form("cuenta_pwd", border=False, clear_on_submit=True):
+            actual = st.text_input("Password actual", type="password")
+            n1 = st.text_input("Password nueva (mínimo 8 caracteres)", type="password")
+            n2 = st.text_input("Repetir la password nueva", type="password")
+            cambiar = st.form_submit_button("Cambiar password", use_container_width=True)
+        if cambiar:
+            u = auth.get_usuario(user["email"])
+            if not auth.verify_password(actual, (u or {}).get("password_hash")):
+                st.error("La password actual no es correcta.")
+            elif len(n1) < 8:
+                st.error("La password nueva debe tener al menos 8 caracteres.")
+            elif n1 != n2:
+                st.error("Las passwords nuevas no coinciden.")
+            else:
+                auth.cambiar_password(user["email"], n1)
+                st.success("Password actualizada — usala en tu próximo ingreso.")
+
+
 def page_compra_rapida() -> None:
     st.markdown("## Compra rápida")
     if not puede_pedir():
@@ -1208,11 +1266,16 @@ def page_compra_rapida() -> None:
     with tab_tabla:
         c1, c2, c3, c4 = st.columns([1.8, 1, 1.1, 1.3])
         busq = c1.text_input("Buscar", key="cr_busq", placeholder="código, nombre, EAN, color")
-        marca = c2.multiselect("Marca", sorted(df["marca"].dropna().unique()), key="cr_marca", placeholder="Todas")
-        cats = (sorted(df["categoria"].dropna().unique()) if "categoria" in df.columns else [])
-        categoria = c3.multiselect("Categoría", cats, key="cr_cat", placeholder="Todas")
-        tipo = c4.multiselect("Tipo de producto", sorted(df["rubro"].dropna().unique()),
-                              key="cr_rubro", placeholder="Todos")
+        # Facetado dependiente: cada filtro solo ofrece opciones con match en los otros.
+        sel_prev = {"marca": st.session_state.get("cr_marca", []),
+                    "categoria": st.session_state.get("cr_cat", []),
+                    "rubro": st.session_state.get("cr_rubro", [])}
+        ops = catalog.opciones_filtros(df, sel_prev)
+        for k, campo in (("cr_marca", "marca"), ("cr_cat", "categoria"), ("cr_rubro", "rubro")):
+            st.session_state[k] = [v for v in st.session_state.get(k, []) if v in ops[campo]]
+        marca = c2.multiselect("Marca", ops["marca"], key="cr_marca", placeholder="Todas")
+        categoria = c3.multiselect("Categoría", ops["categoria"], key="cr_cat", placeholder="Todas")
+        tipo = c4.multiselect("Tipo de producto", ops["rubro"], key="cr_rubro", placeholder="Todos")
         sub = catalog.filtrar_variantes(df, {"marca": marca, "categoria": categoria, "rubro": tipo},
                                         busq).copy()
         st.markdown(f"<p class='muted'>{len(sub)} variantes con stock y precio · scrolleá la tabla, "
@@ -1367,7 +1430,7 @@ def main() -> None:
     nav()
     page = st.session_state.get("page", "catalogo")
     {"catalogo": page_catalogo, "producto": page_producto, "carrito": page_carrito,
-     "pedidos": page_pedidos, "compra_rapida": page_compra_rapida,
+     "pedidos": page_pedidos, "compra_rapida": page_compra_rapida, "cuenta": page_cuenta,
      "reposicion": page_reposicion, "admin": page_admin}.get(page, page_catalogo)()
     footer()
 
