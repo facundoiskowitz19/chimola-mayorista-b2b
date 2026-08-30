@@ -216,7 +216,7 @@ def nav() -> None:
             pass
     items.append(("carrito", f"Carrito · {n_items} u."))
     items.append(("pedidos", "Mis pedidos"))
-    items.append(("cuenta", "Mi cuenta"))
+    items.append(("cuenta", "Mis datos"))
     if user.get("rol") == "admin":
         try:
             sp = pedidos.contar_por_estado().get("confirmado", 0)
@@ -1197,10 +1197,10 @@ def _mostrar_resultado_cr(key: str) -> None:
 
 
 def page_cuenta() -> None:
-    """Mi cuenta: datos del cliente (solo lectura) + contacto y password editables."""
+    """Mis datos: datos del cliente (solo lectura) + contacto y password editables."""
     user = st.session_state.user
     cli = st.session_state.get("cliente")
-    st.markdown("## Mi cuenta")
+    st.markdown("## Mis datos")
     c1, c2 = st.columns([1.25, 1], gap="large")
     with c1:
         st.markdown(f"<div class='kicker'>Tu usuario</div><p class='muted' style='margin:.2rem 0 1rem'>"
