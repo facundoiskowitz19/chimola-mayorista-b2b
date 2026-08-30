@@ -134,6 +134,7 @@ def excel_plantilla(df_variantes: pd.DataFrame, cantidades: dict[str, int] | Non
       descuento cabecera en %, TOTAL, IVA informativo) + listado dinámico de
       SOLO lo elegido (FILTER sobre Cantidad > 0; requiere Excel moderno).
     - Reimportable tal cual: la carga lee SKU/EAN + Cantidad de la hoja 1.
+    - Hojas protegidas (sin password): solo la columna Cantidad es editable.
     """
     import io
     import xlsxwriter
@@ -152,6 +153,7 @@ def excel_plantilla(df_variantes: pd.DataFrame, cantidades: dict[str, int] | Non
     wb = xlsxwriter.Workbook(buf, {"in_memory": True})
     hdr = wb.add_format({"bold": True, "bottom": 1})
     plata = wb.add_format({"num_format": "$ #,##0"})
+    editable = wb.add_format({"locked": False, "bg_color": "#FFF9E6"})
     ws = wb.add_worksheet("Compra rápida")
     if minis:
         ws.write(0, 0, "", hdr)
@@ -165,7 +167,7 @@ def excel_plantilla(df_variantes: pd.DataFrame, cantidades: dict[str, int] | Non
                              str(v.get("producto_nombre") or ""), str(v.get("color") or ""),
                              str(v.get("talle") or "")])
         ws.write_number(r, off + 6, precio, plata)
-        ws.write_number(r, off + 7, q)
+        ws.write_number(r, off + 7, q, editable)
         ws.write_formula(r, off + 8, f"={C['Precio lista']}{r+1}*{C['Cantidad']}{r+1}",
                          plata, precio * q)
         url = links.get(sku)
@@ -180,6 +182,11 @@ def excel_plantilla(df_variantes: pd.DataFrame, cantidades: dict[str, int] | Non
     ws.set_column(off, off, 18); ws.set_column(off + 1, off + 1, 15)
     ws.set_column(off + 3, off + 3, 34); ws.set_column(off + 4, off + 8, 11)
     ws.freeze_panes(1, 0)
+    # Todo bloqueado salvo Cantidad (celdas resaltadas). Sin password: es un
+    # cinturón, no una caja fuerte — la reimportación lee los valores igual.
+    ws.protect("", {"select_locked_cells": True, "select_unlocked_cells": True,
+                    "sort": True, "autofilter": True, "format_columns": True,
+                    "format_rows": True})
 
     # ---- hoja Pedido: totales del cliente + solo lo elegido ----
     wp = wb.add_worksheet("Pedido")
@@ -209,6 +216,7 @@ def excel_plantilla(df_variantes: pd.DataFrame, cantidades: dict[str, int] | Non
     wp.write_dynamic_array_formula(fila_h + 2, 0, fila_h + 2, 0,
                                    f'=FILTER({rango_t},{rango_c}>0,"")')
     wp.set_column(0, 0, 30); wp.set_column(1, 8, 14); wp.set_column(3, 3, 34)
+    wp.protect("", {"select_locked_cells": True, "select_unlocked_cells": True})
     wb.close()
     return buf.getvalue()
 

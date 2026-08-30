@@ -1206,11 +1206,15 @@ def page_compra_rapida() -> None:
     tab_tabla, tab_pegar = st.tabs(["Tabla con miniaturas", "Pegar códigos"])
 
     with tab_tabla:
-        c1, c2, c3 = st.columns([2, 1.2, 1.2])
+        c1, c2, c3, c4 = st.columns([1.8, 1, 1.1, 1.3])
         busq = c1.text_input("Buscar", key="cr_busq", placeholder="código, nombre, EAN, color")
         marca = c2.multiselect("Marca", sorted(df["marca"].dropna().unique()), key="cr_marca", placeholder="Todas")
-        rubro = c3.multiselect("Rubro", sorted(df["rubro"].dropna().unique()), key="cr_rubro", placeholder="Todos")
-        sub = catalog.filtrar_variantes(df, {"marca": marca, "rubro": rubro}, busq).copy()
+        cats = (sorted(df["categoria"].dropna().unique()) if "categoria" in df.columns else [])
+        categoria = c3.multiselect("Categoría", cats, key="cr_cat", placeholder="Todas")
+        tipo = c4.multiselect("Tipo de producto", sorted(df["rubro"].dropna().unique()),
+                              key="cr_rubro", placeholder="Todos")
+        sub = catalog.filtrar_variantes(df, {"marca": marca, "categoria": categoria, "rubro": tipo},
+                                        busq).copy()
         st.markdown(f"<p class='muted'>{len(sub)} variantes con stock y precio · scrolleá la tabla, "
                     "cargá cantidades y tocá Agregar</p>", unsafe_allow_html=True)
         # Scroll infinito: una sola tabla con TODO el filtro (Streamlit la virtualiza).
@@ -1245,7 +1249,7 @@ def page_compra_rapida() -> None:
                            help="Todas las variantes del filtro, con link a la foto de cada variante, "
                                 "subtotales con tu lista de precios y la hoja «Pedido» (solo lo elegido "
                                 "+ totales con tu descuento). Completá Cantidad y subilo de nuevo acá.")
-        firma_f = (busq, tuple(marca), tuple(rubro))
+        firma_f = (busq, tuple(marca), tuple(categoria), tuple(tipo))
         if bf.button("Preparar Excel con fotos", key="cr_prep_fotos", use_container_width=True,
                      help="Igual al export, con la miniatura de cada variante embebida. Hasta 600 "
                           "filas (afiná los filtros); la primera vez tarda un rato en bajar las fotos."):

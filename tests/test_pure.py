@@ -394,6 +394,9 @@ def test_excel_plantilla_v2():
     assert any("IVA 21%" in t for t in textos)
     assert any("FILTER" in getattr(c.value, "text", str(c.value))
                for fila in wp.iter_rows() for c in fila if c.value is not None)
+    # protegido: solo Cantidad editable
+    assert ws.protection.sheet and wp.protection.sheet
+    assert ws["H2"].protection.locked is False and ws["G2"].protection.locked
     # se reimporta tal cual (lee la hoja 1)
     assert cr.texto_desde_excel(data) == ("A_U_1,3", None)
     # con miniaturas, la columna A queda para la imagen y las fórmulas corren una col
