@@ -1186,31 +1186,28 @@ def page_reposicion() -> None:
                for (_, v), (_, e) in zip(sug.iterrows(), edited.iterrows())}
     links_r = {str(r["sku"]): u for _, r in sug.iterrows()
                if (u := fotos.url_variante_publica(r["producto_cod"], r["color"]))}
-    ba, bx, bf = st.columns([1, 1, 1])
-    bx.download_button("Exportar Excel del filtro actual", key="rp_xlsx", use_container_width=True,
-                       data=cr.excel_plantilla(sug, cants_r, cliente=cli, iva_pct=iva_x,
-                                               links_foto=links_r),
-                       file_name="reposicion.xlsx",
-                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                       help="Las variantes sugeridas del filtro, con la Cantidad precargada con lo "
-                            "sugerido, link a la foto y la hoja «Pedido» con tus totales. Editalo "
-                            "offline y subilo de nuevo acá abajo.")
+    ba, bx = st.columns([1, 1])
     firma_r = (dias, fkey)
-    if bf.button("Preparar Excel con fotos", key="rp_prep_fotos", use_container_width=True,
-                 help="Igual al export, con la miniatura de cada variante embebida. Hasta 600 filas."):
-        if len(sug) > 600:
-            st.warning(f"El filtro tiene {len(sug)} variantes y el Excel con fotos acepta hasta "
-                       "600 — afiná los filtros.")
-        else:
+    if bx.button("Exportar Excel del filtro actual", key="rp_xlsx_btn", use_container_width=True,
+                 help="Con la miniatura de cada variante embebida (hasta 600 filas; con más, va sin "
+                      "fotos) y la Cantidad precargada con lo sugerido. Editalo offline y subilo "
+                      "de nuevo acá abajo."):
+        con_fotos = len(sug) <= 600
+        minis = None
+        if con_fotos:
             with st.spinner(f"Armando el Excel con {len(sug)} miniaturas..."):
                 minis = _miniaturas_excel(sug)
-            st.session_state.rp_xlsx_fotos = (firma_r, cr.excel_plantilla(
-                sug, cants_r, cliente=cli, iva_pct=iva_x, links_foto=links_r, miniaturas=minis))
-    listo_r = st.session_state.get("rp_xlsx_fotos")
+        else:
+            st.warning(f"El filtro tiene {len(sug)} variantes y el máximo con fotos es 600 — "
+                       "te lo doy sin fotos (afiná los filtros si las querés).")
+        st.session_state.rp_xlsx = (firma_r, cr.excel_plantilla(
+            sug, cants_r, cliente=cli, iva_pct=iva_x, links_foto=links_r,
+            miniaturas=minis), con_fotos)
+    listo_r = st.session_state.get("rp_xlsx")
     if listo_r and listo_r[0] == firma_r:
-        bf.download_button("Descargar Excel con fotos", data=listo_r[1], key="rp_xlsx_fotos_dl",
-                           use_container_width=True, file_name="reposicion_fotos.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        bx.download_button("Descargar Excel (con fotos)" if listo_r[2] else "Descargar Excel (sin fotos)",
+                           data=listo_r[1], key="rp_xlsx_dl", use_container_width=True,
+                           file_name="reposicion.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     if ba.button("Agregar reposición al carrito", type="primary", disabled=not items,
                  key="rp_add", use_container_width=True):
         total = _agregar_items(items)
@@ -1389,32 +1386,28 @@ def page_compra_rapida() -> None:
         iva_x = float(overrides.get_config().get("iva_pct") or 0)
         cants_x = {str(v["sku"]): q for v, q in seleccion}
         links_x = {str(r["sku"]): r["foto"] for _, r in sub.iterrows() if r["foto"]}
-        ba, bx, bf = st.columns([1, 1, 1])
-        bx.download_button("Exportar Excel del filtro actual", key="cr_xlsx", use_container_width=True,
-                           data=cr.excel_plantilla(sub, cants_x, cliente=cli_x, iva_pct=iva_x,
-                                                   links_foto=links_x),
-                           file_name="compra_rapida.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           help="Todas las variantes del filtro, con link a la foto de cada variante, "
-                                "subtotales con tu lista de precios y la hoja «Pedido» (solo lo elegido "
-                                "+ totales con tu descuento). Completá Cantidad y subilo de nuevo acá.")
+        ba, bx = st.columns([1, 1])
         firma_f = (busq, tuple(marca), tuple(categoria), tuple(tipo), tuple(temporada))
-        if bf.button("Preparar Excel con fotos", key="cr_prep_fotos", use_container_width=True,
-                     help="Igual al export, con la miniatura de cada variante embebida. Hasta 600 "
-                          "filas (afiná los filtros); la primera vez tarda un rato en bajar las fotos."):
-            if len(sub) > 600:
-                st.warning(f"El filtro tiene {len(sub)} variantes y el Excel con fotos acepta hasta "
-                           "600 — afiná la búsqueda o los filtros.")
-            else:
+        if bx.button("Exportar Excel del filtro actual", key="cr_xlsx_btn", use_container_width=True,
+                     help="Con la miniatura de cada variante embebida (hasta 600 filas; con más, va "
+                          "sin fotos). Cantidad editable, totales con tu descuento, link a cada foto. "
+                          "Completalo offline y subilo de nuevo acá abajo."):
+            con_fotos = len(sub) <= 600
+            minis = None
+            if con_fotos:
                 with st.spinner(f"Armando el Excel con {len(sub)} miniaturas..."):
                     minis = _miniaturas_excel(sub)
-                st.session_state.cr_xlsx_fotos = (firma_f, cr.excel_plantilla(
-                    sub, cants_x, cliente=cli_x, iva_pct=iva_x, links_foto=links_x, miniaturas=minis))
-        listo = st.session_state.get("cr_xlsx_fotos")
+            else:
+                st.warning(f"El filtro tiene {len(sub)} variantes y el máximo con fotos es 600 — "
+                           "te lo doy sin fotos (afiná los filtros si las querés).")
+            st.session_state.cr_xlsx = (firma_f, cr.excel_plantilla(
+                sub, cants_x, cliente=cli_x, iva_pct=iva_x, links_foto=links_x,
+                miniaturas=minis), con_fotos)
+        listo = st.session_state.get("cr_xlsx")
         if listo and listo[0] == firma_f:
-            bf.download_button("Descargar Excel con fotos", data=listo[1], key="cr_xlsx_fotos_dl",
-                               use_container_width=True, file_name="compra_rapida_fotos.xlsx",
-                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            bx.download_button("Descargar Excel (con fotos)" if listo[2] else "Descargar Excel (sin fotos)",
+                               data=listo[1], key="cr_xlsx_dl", use_container_width=True,
+                               file_name="compra_rapida.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         if ba.button("Agregar al carrito", type="primary", disabled=not seleccion, key="cr_add",
                      use_container_width=True):
             items, ajustes = [], []
