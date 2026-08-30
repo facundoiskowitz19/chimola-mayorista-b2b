@@ -141,52 +141,52 @@
     </div>
   </div></section>
 
-  <!-- 3 · Ficha de producto -->
+  <!-- 3 · Compra rápida desde el catálogo -->
   <section class="slide"><div class="split">
     <div>
       <div class="kicker reveal">Para clientes y franquicias</div>
-      <h2 class="reveal">Ficha de producto</h2>
+      <h2 class="reveal">Comprá sin salir del catálogo</h2>
       <ul class="puntos">
-        <li class="reveal"><b>Galería por color</b>: las miniaturas cambian el visor principal.</li>
-        <li class="reveal"><b>Matriz color × talle</b> para cargar cantidades de todas las variantes de una vez.</li>
-        <li class="reveal">Respeta la <b>unidad de bulto</b> (múltiplo mínimo) de cada producto.</li>
-        <li class="reveal">Avisa si se pide más de lo disponible — sin revelar el stock.</li>
+        <li class="reveal"><b>“Cargar cantidades”</b> abre el panel de compra ahí mismo, en la vista de la categoría.</li>
+        <li class="reveal">Cantidades por variante <b>sin perder los filtros ni el scroll</b>.</li>
+        <li class="reveal">Total en vivo y directo al carrito.</li>
+        <li class="reveal">Ideal para recorrer una categoría entera cargando a medida que mirás.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Catálogo</span></div>
+      <img src="img/02b_panel_inline.png" alt="Panel de compra en el catálogo"></div>
+  </div></section>
+
+  <!-- 4 · Matriz color × talle -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Para clientes y franquicias</div>
+      <h2 class="reveal">Talles y colores: la grilla</h2>
+      <ul class="puntos">
+        <li class="reveal">Cuando el producto tiene <b>talle y color</b>, la carga es una <b>matriz</b>: una fila por color, una columna por talle.</li>
+        <li class="reveal">Todas las variantes del producto <b>de una sola vez</b>.</li>
+        <li class="reveal">Respeta la <b>unidad de bulto</b> y avisa si se pide de más — sin revelar el stock.</li>
+        <li class="reveal">Arriba, la galería: las miniaturas cambian el visor por color.</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Producto</span></div>
-      <img src="img/02_ficha.png" alt="Ficha de producto"></div>
+      <img src="img/02_matriz.png" alt="Matriz color por talle"></div>
   </div></section>
 
-  <!-- 4 · Precios por cliente -->
+  <!-- 5 · Carrito: precios del cliente + confirmación -->
   <section class="slide"><div class="split">
     <div>
       <div class="kicker reveal">Para clientes y franquicias</div>
       <h2 class="reveal">Cada cliente ve sus precios</h2>
       <ul class="puntos">
-        <li class="reveal">Cada cuenta está atada a un cliente de Aleph: ve <b>su lista de precios</b> (1 a 10).</li>
-        <li class="reveal">El <b>descuento de cabecera</b> negociado se aplica al total, como en la NP.</li>
-        <li class="reveal"><b>IVA informativo</b> (21%) en carrito, Excel y email — las listas mayoristas son sin IVA.</li>
-        <li class="reveal">El stock <b>nunca se muestra</b> a los clientes; el sitio lo cuida por atrás.</li>
+        <li class="reveal">Cada cuenta está atada a un cliente de Aleph: <b>su lista de precios</b> y su <b>descuento de cabecera</b>, como en la NP.</li>
+        <li class="reveal">IVA informativo — las listas mayoristas son sin IVA.</li>
+        <li class="reveal">El stock <b>nunca se muestra</b>; el sitio valida contra BigQuery al confirmar (nada de sobreventa).</li>
+        <li class="reveal">Confirmar genera el <b>Excel numerado</b> del pedido y avisa a Lautin.</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Carrito</span></div>
       <img src="img/03_carrito.png" alt="Carrito con totales"></div>
-  </div></section>
-
-  <!-- 5 · Carrito y confirmación -->
-  <section class="slide"><div class="split">
-    <div>
-      <div class="kicker reveal">Para clientes y franquicias</div>
-      <h2 class="reveal">Confirmar pedido = Excel + email</h2>
-      <ul class="puntos">
-        <li class="reveal">Al confirmar se <b>revalida el stock</b> contra BigQuery (nada de sobreventa).</li>
-        <li class="reveal">Se genera el <b>Excel del pedido</b> con el formato de Chimola, numerado.</li>
-        <li class="reveal"><b>Email automático</b> al cliente y a Lautin, con el Excel adjunto.</li>
-        <li class="reveal">Copia de respaldo de cada pedido en Google Cloud Storage.</li>
-      </ul>
-    </div>
-    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>Email automático — pedido confirmado</span></div>
-      <img src="img/04_confirmacion.png" alt="Email de confirmación con el Excel adjunto"></div>
   </div></section>
 
   <!-- 6 · Compra rápida -->
@@ -221,52 +221,52 @@
       <img src="img/06_reposicion.png" alt="Reposición sugerida"></div>
   </div></section>
 
-  <!-- 8 · Mis pedidos + Odoo -->
+  <!-- 8 · El cliente ve todo lo que pidió -->
   <section class="slide"><div class="split">
     <div>
       <div class="kicker reveal">Para clientes y franquicias</div>
-      <h2 class="reveal">Mis pedidos + export Odoo</h2>
+      <h2 class="reveal">El cliente ve todo lo que pidió</h2>
       <ul class="puntos">
-        <li class="reveal">Historial completo: <b>repetir pedido</b>, re-descargar el Excel, ver estados.</li>
-        <li class="reveal">El cliente puede <b>cancelar</b> mientras Lautin no lo procesó — avisa por email.</li>
-        <li class="reveal"><b>Exportar formato Odoo</b> (franquicias): dos hojas listas para la importación masiva.</li>
-        <li class="reveal">“Sin talle” con Comodín e “Indu” con una fila por talle — sin ninguna línea de más.</li>
+        <li class="reveal">En su portal: <b>historial completo</b> con estado de cada pedido (confirmado / procesado / cancelado).</li>
+        <li class="reveal">Detalle línea por línea: <b>productos, cantidades, precios y totales</b>.</li>
+        <li class="reveal"><b>Repetir pedido</b>, re-descargar el Excel, cancelar mientras Lautin no lo procesó.</li>
+        <li class="reveal">Franquicias: <b>export formato Odoo</b> (dos hojas listas para la importación masiva).</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Mis pedidos</span></div>
       <img src="img/07_pedidos.png" alt="Mis pedidos"></div>
   </div></section>
 
-  <!-- 9 · Admin catálogo y clientes -->
+  <!-- 9 · Admin: así se edita un producto -->
   <section class="slide"><div class="split">
     <div>
       <div class="kicker reveal">Para el equipo<span class="badge">Admin</span></div>
-      <h2 class="reveal">Catálogo y clientes, administrables</h2>
+      <h2 class="reveal">Así se edita un producto</h2>
       <ul class="puntos">
-        <li class="reveal"><b>Publicar / ocultar / destacar</b> productos, solo o en lote por tipo, temporada o categoría.</li>
-        <li class="reveal">Pisar lo de Aleph cuando haga falta: <b>nombre, precios por lista, stock por variante, U.B.</b></li>
+        <li class="reveal">Todo lo de Aleph se puede <b>pisar cuando haga falta</b>: nombre, descripción, precios por lista, U.B.</li>
+        <li class="reveal"><b>Variantes en tabla editable</b>: stock manual, ocultar u ajustar precio por variante.</li>
         <li class="reveal"><b>Fotos por color</b>: asignación automática + corrección manual.</li>
-        <li class="reveal">Clientes: descuentos, listas, contacto, <b>usuarios y reset de password</b>.</li>
+        <li class="reveal">Publicar / ocultar / destacar — solo o <b>en lote</b> por tipo, temporada o categoría.</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Administración</span></div>
-      <img src="img/08_admin_catalogo.png" alt="Admin catálogo"></div>
+      <img src="img/08_admin_editor.png" alt="Editor de producto del admin"></div>
   </div></section>
 
-  <!-- 10 · Admin pedidos y config -->
+  <!-- 10 · Admin: toda la info del cliente -->
   <section class="slide"><div class="split">
     <div>
       <div class="kicker reveal">Para el equipo<span class="badge">Admin</span></div>
-      <h2 class="reveal">Pedidos, emails y configuración</h2>
+      <h2 class="reveal">Todo el cliente, en una ficha</h2>
       <ul class="puntos">
-        <li class="reveal">Pedidos con <b>estados y timeline</b> (confirmado → procesado / cancelado).</li>
-        <li class="reveal">Cada cambio de estado <b>notifica por email</b> — plantillas editables con vista previa.</li>
-        <li class="reveal"><b>Import del historial de Aleph</b>: los últimos N comprobantes del cliente, sin duplicar.</li>
-        <li class="reveal">KPIs de inicio y configuración global (IVA, destinos de email, días de reposición).</li>
+        <li class="reveal">Datos de Aleph + ajustes del sitio: <b>descuento, lista de precios, contacto, CUIT, nombre en Odoo</b>.</li>
+        <li class="reveal"><b>Sus pedidos y estados</b>, con el detalle de cada uno.</li>
+        <li class="reveal">Usuarios de acceso: alta, <b>reset de password</b>, activar/desactivar.</li>
+        <li class="reveal"><b>Import del historial de Aleph</b> (sin duplicar) y reposición sugerida de su punto de venta.</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Administración</span></div>
-      <img src="img/09_admin_pedidos.png" alt="Admin pedidos"></div>
+      <img src="img/10_admin_cliente.png" alt="Ficha de cliente del admin"></div>
   </div></section>
 
   <!-- 11 · Cierre -->
@@ -293,9 +293,13 @@
     slides.forEach((s, j) => s.classList.toggle("active", j === i));
     progreso.style.width = ((i + 1) / slides.length * 100) + "%";
     contador.textContent = (i + 1) + " / " + slides.length;
-    history.replaceState(null, "", "#" + (i + 1));
+    history.replaceState(null, "", location.pathname + location.search + "#" + (i + 1));
   }
   ir(i);
+  addEventListener("hashchange", () => {
+    const n = (parseInt(location.hash.slice(1)) || 1) - 1;
+    if (n !== i) ir(n);
+  });
 
   addEventListener("keydown", e => {
     if (["ArrowRight", "ArrowDown", " ", "PageDown"].includes(e.key)) { e.preventDefault(); ir(i + 1); }
