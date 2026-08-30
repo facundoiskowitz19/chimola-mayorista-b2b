@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sitio Mayorista B2B — Lautin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --papel: #f3f2f2; --tinta: #201e1d; --cian: #0088b0; --cian-oscuro: #006786;
+    --cian-tinte: #e9f8ff; --magenta: #d6006c; --muted: #6f6a66; --borde: #d8d5d2;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: var(--papel); color: var(--tinta);
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif; }
+  .deck { position: relative; width: 100%; height: 100%; }
+
+  /* ---------- slides ---------- */
+  .slide { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 4.5vh 5vw; opacity: 0; pointer-events: none; transform: translateY(18px);
+    transition: opacity .55s ease, transform .55s ease; }
+  .slide.active { opacity: 1; pointer-events: auto; transform: none; }
+
+  /* revelado escalonado del contenido del slide activo */
+  .reveal { opacity: 0; transform: translateY(16px); transition: opacity .6s ease, transform .6s ease; }
+  .active .reveal { opacity: 1; transform: none; }
+  .active .reveal:nth-child(1) { transition-delay: .10s; }
+  .active .reveal:nth-child(2) { transition-delay: .22s; }
+  .active .reveal:nth-child(3) { transition-delay: .34s; }
+  .active .reveal:nth-child(4) { transition-delay: .46s; }
+  .active .reveal:nth-child(5) { transition-delay: .58s; }
+  .active .reveal:nth-child(6) { transition-delay: .70s; }
+
+  .kicker { font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: var(--cian);
+    font-weight: 600; margin-bottom: 14px; }
+  h1 { font-size: clamp(40px, 5.6vw, 74px); line-height: 1.04; font-weight: 700; }
+  h2 { font-size: clamp(28px, 3.3vw, 46px); line-height: 1.08; font-weight: 700; margin-bottom: 18px; }
+  .sub { font-size: clamp(16px, 1.5vw, 21px); color: var(--muted); margin-top: 18px; max-width: 34ch; }
+
+  /* layout funcionalidad: texto izquierda, captura derecha */
+  .split { display: grid; grid-template-columns: minmax(320px, 30fr) 46fr; gap: 4.5vw;
+    align-items: center; width: 100%; max-width: 1750px; }
+  ul.puntos { list-style: none; margin-top: 6px; }
+  ul.puntos li { position: relative; padding: 9px 0 9px 26px; font-size: clamp(15px, 1.35vw, 20px);
+    line-height: 1.4; border-bottom: 1px solid var(--borde); }
+  ul.puntos li:last-child { border-bottom: 0; }
+  ul.puntos li::before { content: ""; position: absolute; left: 2px; top: 1.05em; width: 9px; height: 9px;
+    background: var(--cian); border-radius: 1px; }
+  ul.puntos b { color: var(--cian-oscuro); }
+
+  .badge { display: inline-block; font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    font-weight: 700; color: #fff; background: var(--tinta); padding: 4px 10px; border-radius: 2px;
+    margin-left: 10px; vertical-align: middle; }
+
+  /* marco tipo navegador para las capturas */
+  .browser { background: #fff; border: 1px solid var(--borde); border-radius: 4px; overflow: hidden;
+    box-shadow: 0 22px 60px rgba(32, 30, 29, .16); }
+  .active .browser { animation: asoma .8s ease .15s both; }
+  @keyframes asoma { from { opacity: 0; transform: translateY(26px) scale(.975); }
+                     to { opacity: 1; transform: none; } }
+  .browser .bar { display: flex; align-items: center; gap: 6px; padding: 9px 12px;
+    background: #efedec; border-bottom: 1px solid var(--borde); }
+  .browser .bar i { width: 10px; height: 10px; border-radius: 50%; background: #d4d0cd; }
+  .browser .bar span { margin-left: 10px; font-size: 12px; color: var(--muted);
+    font-family: ui-monospace, Menlo, monospace; letter-spacing: .02em; }
+  .browser img { display: block; width: 100%; height: auto; }
+
+  /* crossfade apagado/encendido en el slide de catálogo */
+  .xfade { position: relative; }
+  .xfade img + img { position: absolute; inset: 0; opacity: 0; animation: prende 7s ease-in-out infinite; }
+  @keyframes prende { 0%, 45% { opacity: 0; } 50%, 95% { opacity: 1; } 100% { opacity: 0; } }
+  .xfade .tag { position: absolute; right: 14px; top: 14px; font-size: 11px; letter-spacing: .13em;
+    text-transform: uppercase; font-weight: 700; background: var(--cian); color: #fff;
+    padding: 5px 11px; border-radius: 2px; opacity: 0; animation: prende 7s ease-in-out infinite; }
+
+  /* portada y cierre */
+  .centro { text-align: center; flex-direction: column; }
+  .logo { height: 58px; margin-bottom: 34px; }
+  .active .logo { animation: logoIn 1s ease both; }
+  @keyframes logoIn { from { opacity: 0; transform: translateY(-14px); letter-spacing: .2em; }
+                      to { opacity: 1; transform: none; } }
+  .linea { width: 68px; height: 3px; background: var(--cian); margin: 26px auto; border-radius: 2px; }
+  .hint { position: absolute; bottom: 4.5vh; left: 0; right: 0; text-align: center; font-size: 13.5px;
+    color: var(--muted); letter-spacing: .04em; }
+  .url { font-family: ui-monospace, Menlo, monospace; font-size: clamp(13px, 1.2vw, 17px);
+    color: var(--cian-oscuro); background: var(--cian-tinte); padding: 8px 16px; border-radius: 2px;
+    display: inline-block; margin-top: 10px; }
+
+  /* cromo del deck */
+  .progreso { position: fixed; top: 0; left: 0; height: 3px; background: var(--cian); width: 0;
+    transition: width .45s ease; z-index: 10; }
+  .contador { position: fixed; right: 22px; bottom: 16px; font-size: 13px; color: var(--muted);
+    letter-spacing: .08em; z-index: 10; font-variant-numeric: tabular-nums; }
+  .marca { position: fixed; left: 22px; bottom: 14px; z-index: 10; height: 20px; opacity: .8; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .slide, .reveal, .browser, .logo, .progreso { transition: none !important; animation: none !important; }
+    .reveal { opacity: 1; transform: none; }
+    .xfade img + img, .xfade .tag { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="progreso" id="progreso"></div>
+<img class="marca" src="img/logo_lautin.png" alt="">
+<div class="contador" id="contador"></div>
+
+<div class="deck" id="deck">
+
+  <!-- 1 · Portada -->
+  <section class="slide centro">
+    <img class="logo" src="img/logo_lautin.png" alt="Lautin" style="height:74px">
+    <div class="kicker reveal">Chimola · Lima — venta exclusiva mayorista</div>
+    <h1 class="reveal">Sitio Mayorista B2B</h1>
+    <div class="linea reveal"></div>
+    <p class="sub reveal" style="max-width:46ch; margin:0 auto">Catálogo con fotos y stock real, pedidos
+      en tres clicks y administración completa — hecho a medida sobre los datos de Aleph.</p>
+    <div class="hint">→ o click para avanzar &nbsp;·&nbsp; F pantalla completa</div>
+  </section>
+
+  <!-- 2 · Catálogo -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Para clientes y franquicias</div>
+      <h2 class="reveal">Catálogo con fotos y stock real</h2>
+      <ul class="puntos">
+        <li class="reveal">Solo variantes <b>con stock físico en Ezeiza</b> — lo que se ve, se puede pedir.</li>
+        <li class="reveal">Filtros por <b>categoría, tipo, marca, temporada, color y talle</b> + búsqueda por código, nombre o EAN.</li>
+        <li class="reveal">Destacados primero y scroll continuo, sin páginas.</li>
+        <li class="reveal">Switch <b>“Encender el sitio”</b>: cada producto muestra la foto de su color más claro.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Catálogo</span></div>
+      <div class="xfade">
+        <img src="img/01_catalogo.png" alt="Catálogo">
+        <img src="img/01b_encendido.png" alt="Catálogo encendido">
+        <div class="tag">Sitio encendido</div>
+      </div>
+    </div>
+  </div></section>
+
+  <!-- 3 · Ficha de producto -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Para clientes y franquicias</div>
+      <h2 class="reveal">Ficha de producto</h2>
+      <ul class="puntos">
+        <li class="reveal"><b>Galería por color</b>: las miniaturas cambian el visor principal.</li>
+        <li class="reveal"><b>Matriz color × talle</b> para cargar cantidades de todas las variantes de una vez.</li>
+        <li class="reveal">Respeta la <b>unidad de bulto</b> (múltiplo mínimo) de cada producto.</li>
+        <li class="reveal">Avisa si se pide más de lo disponible — sin revelar el stock.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Producto</span></div>
+      <img src="img/02_ficha.png" alt="Ficha de producto"></div>
+  </div></section>
+
+  <!-- 4 · Precios por cliente -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Para clientes y franquicias</div>
+      <h2 class="reveal">Cada cliente ve sus precios</h2>
+      <ul class="puntos">
+        <li class="reveal">Cada cuenta está atada a un cliente de Aleph: ve <b>su lista de precios</b> (1 a 10).</li>
+        <li class="reveal">El <b>descuento de cabecera</b> negociado se aplica al total, como en la NP.</li>
+        <li class="reveal"><b>IVA informativo</b> (21%) en carrito, Excel y email — las listas mayoristas son sin IVA.</li>
+        <li class="reveal">El stock <b>nunca se muestra</b> a los clientes; el sitio lo cuida por atrás.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Carrito</span></div>
+      <img src="img/03_carrito.png" alt="Carrito con totales"></div>
+  </div></section>
+
+  <!-- 5 · Carrito y confirmación -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Para clientes y franquicias</div>
+      <h2 class="reveal">Confirmar pedido = Excel + email</h2>
+      <ul class="puntos">
+        <li class="reveal">Al confirmar se <b>revalida el stock</b> contra BigQuery (nada de sobreventa).</li>
+        <li class="reveal">Se genera el <b>Excel del pedido</b> con el formato de Chimola, numerado.</li>
+        <li class="reveal"><b>Email automático</b> al cliente y a Lautin, con el Excel adjunto.</li>
+        <li class="reveal">Copia de respaldo de cada pedido en Google Cloud Storage.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>Email automático — pedido confirmado</span></div>
+      <img src="img/04_confirmacion.png" alt="Email de confirmación con el Excel adjunto"></div>
+  </div></section>
+
+  <!-- 6 · Compra rápida -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Para clientes y franquicias</div>
+      <h2 class="reveal">Compra rápida</h2>
+      <ul class="puntos">
+        <li class="reveal">Tabla con miniaturas y filtros: <b>cantidades directo sobre la lista</b>.</li>
+        <li class="reveal"><b>Pegar códigos</b> desde Excel (SKU o EAN + cantidad) y listo.</li>
+        <li class="reveal"><b>Exportar Excel del filtro actual</b>, completarlo offline y volver a subirlo.</li>
+        <li class="reveal">Reconciliación línea por línea: agregadas, ajustadas, sin reconocer.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Compra rápida</span></div>
+      <img src="img/05_compra_rapida.png" alt="Compra rápida"></div>
+  </div></section>
+
+  <!-- 7 · Reposición -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Solo franquicias</div>
+      <h2 class="reveal">Reposición sugerida</h2>
+      <ul class="puntos">
+        <li class="reveal">Cruza <b>lo que vendió el punto de venta</b> (últimos 30 días) con lo disponible en Ezeiza.</li>
+        <li class="reveal">Selector de <b>días a cubrir: 7 / 14 / 21 / 30</b> — recalcula al instante.</li>
+        <li class="reveal">Filtros por categoría y temporada; lo más urgente primero.</li>
+        <li class="reveal">Cantidades sugeridas editables y <b>un click al carrito</b>.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Reposición</span></div>
+      <img src="img/06_reposicion.png" alt="Reposición sugerida"></div>
+  </div></section>
+
+  <!-- 8 · Mis pedidos + Odoo -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Para clientes y franquicias</div>
+      <h2 class="reveal">Mis pedidos + export Odoo</h2>
+      <ul class="puntos">
+        <li class="reveal">Historial completo: <b>repetir pedido</b>, re-descargar el Excel, ver estados.</li>
+        <li class="reveal">El cliente puede <b>cancelar</b> mientras Lautin no lo procesó — avisa por email.</li>
+        <li class="reveal"><b>Exportar formato Odoo</b> (franquicias): dos hojas listas para la importación masiva.</li>
+        <li class="reveal">“Sin talle” con Comodín e “Indu” con una fila por talle — sin ninguna línea de más.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Mis pedidos</span></div>
+      <img src="img/07_pedidos.png" alt="Mis pedidos"></div>
+  </div></section>
+
+  <!-- 9 · Admin catálogo y clientes -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Para el equipo<span class="badge">Admin</span></div>
+      <h2 class="reveal">Catálogo y clientes, administrables</h2>
+      <ul class="puntos">
+        <li class="reveal"><b>Publicar / ocultar / destacar</b> productos, solo o en lote por tipo, temporada o categoría.</li>
+        <li class="reveal">Pisar lo de Aleph cuando haga falta: <b>nombre, precios por lista, stock por variante, U.B.</b></li>
+        <li class="reveal"><b>Fotos por color</b>: asignación automática + corrección manual.</li>
+        <li class="reveal">Clientes: descuentos, listas, contacto, <b>usuarios y reset de password</b>.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Administración</span></div>
+      <img src="img/08_admin_catalogo.png" alt="Admin catálogo"></div>
+  </div></section>
+
+  <!-- 10 · Admin pedidos y config -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Para el equipo<span class="badge">Admin</span></div>
+      <h2 class="reveal">Pedidos, emails y configuración</h2>
+      <ul class="puntos">
+        <li class="reveal">Pedidos con <b>estados y timeline</b> (confirmado → procesado / cancelado).</li>
+        <li class="reveal">Cada cambio de estado <b>notifica por email</b> — plantillas editables con vista previa.</li>
+        <li class="reveal"><b>Import del historial de Aleph</b>: los últimos N comprobantes del cliente, sin duplicar.</li>
+        <li class="reveal">KPIs de inicio y configuración global (IVA, destinos de email, días de reposición).</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Administración</span></div>
+      <img src="img/09_admin_pedidos.png" alt="Admin pedidos"></div>
+  </div></section>
+
+  <!-- 11 · Cierre -->
+  <section class="slide centro">
+    <img class="logo" src="img/logo_lautin.png" alt="Lautin">
+    <div class="kicker reveal">Probalo hoy</div>
+    <h1 class="reveal" style="font-size:clamp(32px,4.2vw,56px)">Un solo lugar para comprarle a Lautin</h1>
+    <div class="linea reveal"></div>
+    <p class="sub reveal" style="max-width:52ch; margin:0 auto">Ambiente de prueba funcionando con datos
+      reales de Aleph. Próximo paso: cuentas para todos los clientes y salida a producción.</p>
+    <div class="reveal"><span class="url">mayorista-b2b-dev-vhnuyigzqa-uc.a.run.app</span></div>
+  </section>
+
+</div>
+
+<script>
+  const slides = [...document.querySelectorAll(".slide")];
+  const progreso = document.getElementById("progreso");
+  const contador = document.getElementById("contador");
+  let i = Math.min(Math.max((parseInt(location.hash.slice(1)) || 1) - 1, 0), slides.length - 1);
+
+  function ir(n) {
+    i = Math.min(Math.max(n, 0), slides.length - 1);
+    slides.forEach((s, j) => s.classList.toggle("active", j === i));
+    progreso.style.width = ((i + 1) / slides.length * 100) + "%";
+    contador.textContent = (i + 1) + " / " + slides.length;
+    history.replaceState(null, "", "#" + (i + 1));
+  }
+  ir(i);
+
+  addEventListener("keydown", e => {
+    if (["ArrowRight", "ArrowDown", " ", "PageDown"].includes(e.key)) { e.preventDefault(); ir(i + 1); }
+    else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); ir(i - 1); }
+    else if (e.key === "Home") ir(0);
+    else if (e.key === "End") ir(slides.length - 1);
+    else if (e.key.toLowerCase() === "f") {
+      document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    }
+  });
+  addEventListener("click", e => {
+    if (e.target.closest("a")) return;
+    (e.clientX < innerWidth * 0.18) ? ir(i - 1) : ir(i + 1);
+  });
+  let x0 = null;
+  addEventListener("touchstart", e => x0 = e.touches[0].clientX, { passive: true });
+  addEventListener("touchend", e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 45) ir(i + (dx < 0 ? 1 : -1));
+    x0 = null;
+  }, { passive: true });
+</script>
+</body>
+</html>
