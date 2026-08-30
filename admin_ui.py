@@ -840,7 +840,7 @@ def _ficha_cliente(email: str) -> None:
         _dato(d[1], "Descuento cabecera", f"{e['descuento']:g}%", e["descuento_origen"])
         _dato(d[2], "CUIT", e.get("cuit") or "—", e.get("cuit_origen"))
         _dato(d[3], "Ubicación", f"{e.get('localidad') or '—'} · {e.get('provincia_desc') or ''}")
-        contacto = " · ".join(filter(None, [e.get("contacto_nombre"), e.get("contacto_email")]))
+        contacto = " · ".join(filter(None, [e.get("contacto_nombre"), e.get("contacto_email"), e.get("contacto_telefono")]))
         st.markdown(f"<div class='kicker' style='margin-top:.5rem'>Contacto</div>"
                     f"{contacto or '<span class=muted>sin cargar — se pide al confirmar un pedido</span>'}",
                     unsafe_allow_html=True)
@@ -1028,6 +1028,8 @@ def _cliente_edicion(email: str, u: dict, cod, e) -> None:
             c1, c2 = st.columns(2)
             contacto_n = c1.text_input("Persona de contacto", value=o.get("contacto_nombre") or "")
             contacto_e = c2.text_input("Email de contacto", value=o.get("contacto_email") or "")
+            contacto_t = st.text_input("Teléfono de contacto", value=o.get("contacto_telefono") or "",
+                                       placeholder="+54 9 ...")
             cuit = st.text_input("CUIT", value=o.get("cuit") or "",
                                  placeholder=f"vacío = usa Aleph ({(e or {}).get('cuit') or '—'})")
             odoo_cli = st.text_input("Nombre del cliente en Odoo (export de franquicias)",
@@ -1041,6 +1043,7 @@ def _cliente_edicion(email: str, u: dict, cod, e) -> None:
                     "lista_precios": int(lista) if usar_lista else None,
                     "contacto_nombre": contacto_n.strip(),
                     "contacto_email": contacto_e.strip().lower(),
+                    "contacto_telefono": contacto_t.strip(),
                     "cuit": cuit.strip() or None,
                     "odoo_cliente": odoo_cli.strip(),
                     "notas": notas.strip(),
@@ -1134,7 +1137,7 @@ def _detalle_pedido(p: dict) -> None:
     st.markdown(f"<p class='muted'>{p['fecha_str']} · <b>{p['cliente_nombre']}</b> (cliente {p['cliente_cod']}) · "
                 f"{p['usuario_email']} · {p['unidades']} u. · <b>{_fmt(p['total'])}</b> "
                 f"(desc. {p['descuento_pct']:g}%)</p>", unsafe_allow_html=True)
-    contacto_p = " · ".join(filter(None, [p.get("contacto_nombre"), p.get("contacto_email")]))
+    contacto_p = " · ".join(filter(None, [p.get("contacto_nombre"), p.get("contacto_email"), p.get("contacto_telefono")]))
     if contacto_p:
         st.markdown(f"<p class='muted'>Contacto del pedido: {contacto_p}</p>", unsafe_allow_html=True)
     if p.get("observaciones"):

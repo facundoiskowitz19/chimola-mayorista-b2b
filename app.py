@@ -903,23 +903,30 @@ def page_carrito() -> None:
             contacto_email = st.text_input("Email de contacto",
                                            value=cli.get("contacto_email")
                                            or st.session_state.user.get("email", ""))
+            contacto_tel = st.text_input("Teléfono de contacto",
+                                         value=cli.get("contacto_telefono") or "",
+                                         placeholder="+54 9 ...")
             obs = st.text_area("Observaciones para Lautin (opcional)", height=90)
             confirmar = st.form_submit_button("Confirmar pedido", type="primary", use_container_width=True,
                                               disabled=not puede_pedir())
         if confirmar and not st.session_state.get("confirmando"):
             contacto_nombre = contacto_nombre.strip()
             contacto_email = contacto_email.strip().lower()
+            contacto_tel = contacto_tel.strip()
             if contacto_email and ("@" not in contacto_email or " " in contacto_email):
                 st.error("El email de contacto no parece válido.")
                 st.stop()
             # Persistir el contacto para la próxima (merge: no toca descuento/lista)
             if (contacto_nombre != (cli.get("contacto_nombre") or "")
-                    or contacto_email != (cli.get("contacto_email") or "")):
+                    or contacto_email != (cli.get("contacto_email") or "")
+                    or contacto_tel != (cli.get("contacto_telefono") or "")):
                 overrides.set_cliente_override(int(cli["cliente_cod"]),
                                                {"contacto_nombre": contacto_nombre,
-                                                "contacto_email": contacto_email},
+                                                "contacto_email": contacto_email,
+                                                "contacto_telefono": contacto_tel},
                                                st.session_state.user.get("email", ""))
-            cli = {**cli, "contacto_nombre": contacto_nombre, "contacto_email": contacto_email}
+            cli = {**cli, "contacto_nombre": contacto_nombre, "contacto_email": contacto_email,
+                   "contacto_telefono": contacto_tel}
             st.session_state.confirmando = True
             try:
                 with st.spinner("Validando stock y generando el pedido..."):
@@ -1223,12 +1230,16 @@ def page_cuenta() -> None:
                                       placeholder="Nombre y apellido")
                 mail_c = st.text_input("Email de contacto",
                                        value=cli.get("contacto_email") or user.get("email", ""))
+                tel_c = st.text_input("Teléfono de contacto", value=cli.get("contacto_telefono") or "",
+                                      placeholder="+54 9 ...")
                 if st.form_submit_button("Guardar contacto", type="primary"):
-                    nom_c, mail_c = nom_c.strip(), mail_c.strip().lower()
+                    nom_c, mail_c, tel_c = nom_c.strip(), mail_c.strip().lower(), tel_c.strip()
                     overrides.set_cliente_override(int(cli["cliente_cod"]),
-                                                   {"contacto_nombre": nom_c, "contacto_email": mail_c},
+                                                   {"contacto_nombre": nom_c, "contacto_email": mail_c,
+                                                    "contacto_telefono": tel_c},
                                                    user["email"])
-                    st.session_state.cliente = {**cli, "contacto_nombre": nom_c, "contacto_email": mail_c}
+                    st.session_state.cliente = {**cli, "contacto_nombre": nom_c, "contacto_email": mail_c,
+                                                "contacto_telefono": tel_c}
                     toast_pendiente("Contacto guardado.")
                     st.rerun()
         else:

@@ -243,6 +243,7 @@ def confirmar_pedido(usuario: dict, cliente: dict, items: list[dict], observacio
         "cliente_cuit": cliente.get("cuit") or "",
         "contacto_nombre": cliente.get("contacto_nombre") or "",
         "contacto_email": cliente.get("contacto_email") or "",
+        "contacto_telefono": cliente.get("contacto_telefono") or "",
         "usuario_email": usuario["email"],
         "lista_precios": int(cliente.get("lista_precios") or 1),
         "items": [{k: it.get(k) for k in ("sku", "ean", "producto_cod", "producto_nombre", "color_cod",
