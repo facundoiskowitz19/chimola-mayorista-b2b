@@ -680,10 +680,25 @@ def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: b
 
     if len(prods) > len(sub):
         m1, m2, m3 = st.columns([1, 2, 1])
-        if m2.button(f"Mostrar más — viste {len(sub)} de {len(prods)} productos",
+        if m2.button(f"Cargando más… — viste {len(sub)} de {len(prods)} productos",
                      key="cat_mas", use_container_width=True):
             st.session_state.cat_n = n + config.ITEMS_POR_PAGINA
             st.rerun()
+        # Scroll infinito: cuando el botón entra en pantalla (600px antes), se
+        # auto-clickea. Queda visible como indicador y fallback manual. El
+        # observer se re-arma en cada rerun (este iframe se re-renderiza).
+        components.html("""<script>
+          const doc = window.parent.document;
+          const btn = doc.querySelector('.st-key-cat_mas button');
+          if (btn) {
+            const obs = new IntersectionObserver((entradas) => {
+              entradas.forEach(e => {
+                if (e.isIntersecting) { obs.disconnect(); btn.click(); }
+              });
+            }, { root: null, rootMargin: '600px' });
+            obs.observe(btn);
+          }
+        </script>""", height=0)
     else:
         st.markdown(f"<p class='muted' style='text-align:center'>Esos son los {len(prods)} productos "
                     "del filtro.</p>", unsafe_allow_html=True)
