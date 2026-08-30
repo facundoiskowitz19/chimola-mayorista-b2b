@@ -179,7 +179,11 @@ def excel_plantilla(df_variantes: pd.DataFrame, cantidades: dict[str, int] | Non
             ws.insert_image(r, 0, f"{sku}.jpg", {"image_data": io.BytesIO(b),
                                                  "x_offset": 3, "y_offset": 3,
                                                  "object_position": 1})
-    ws.set_column(off, off, 18); ws.set_column(off + 1, off + 1, 15)
+    # SKU y EAN quedan OCULTOS: no molestan a la vista pero la reimportación
+    # («subí el archivo tal cual») los sigue leyendo.
+    ws.set_column(off, off, 18, None, {"hidden": True})
+    ws.set_column(off + 1, off + 1, 15, None, {"hidden": True})
+    ws.set_column(off + 2, off + 2, 12)
     ws.set_column(off + 3, off + 3, 34); ws.set_column(off + 4, off + 8, 11)
     ws.freeze_panes(1, 0)
     # Todo bloqueado salvo Cantidad (celdas resaltadas). Sin password: es un

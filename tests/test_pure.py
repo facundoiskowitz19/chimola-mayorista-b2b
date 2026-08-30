@@ -394,6 +394,9 @@ def test_excel_plantilla_v2():
     assert any("IVA 21%" in t for t in textos)
     assert any("FILTER" in getattr(c.value, "text", str(c.value))
                for fila in wp.iter_rows() for c in fila if c.value is not None)
+    # SKU y EAN ocultos (pero presentes: la reimportación los usa)
+    assert ws.column_dimensions["A"].hidden and ws.column_dimensions["B"].hidden
+    assert not ws.column_dimensions["C"].hidden
     # protegido: solo Cantidad editable
     assert ws.protection.sheet and wp.protection.sheet
     assert ws["H2"].protection.locked is False and ws["G2"].protection.locked
