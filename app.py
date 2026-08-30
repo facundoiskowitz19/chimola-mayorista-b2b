@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+import hashlib
+
 import streamlit.components.v1 as components
 
 import admin_ui
@@ -1220,23 +1222,31 @@ def page_reposicion() -> None:
         st.rerun()
     st.markdown("<div class='kicker' style='margin-top:.6rem'>Cargar el Excel que exportaste</div>",
                 unsafe_allow_html=True)
-    up = st.file_uploader("Subí el archivo con la columna Cantidad como la quieras pedir",
-                          type=["xlsx"], key=f"rp_file_{st.session_state.get('rp_file_ver', 0)}",
-                          label_visibility="collapsed")
+    up = st.file_uploader("Subí el archivo con la columna Cantidad completa", type=["xlsx"],
+                          key="rp_file", label_visibility="collapsed")
     if up is not None:
-        texto_up, err = cr.texto_desde_excel(up.getvalue())
+        data_up = up.getvalue()
+        hash_up = hashlib.md5(data_up).hexdigest()
+        ya_cargado = st.session_state.get("rp_file_hash") == hash_up
+        texto_up, err = cr.texto_desde_excel(data_up)
         if err:
             st.error(err)
         elif not texto_up:
             st.warning("El archivo no tiene ninguna fila con Cantidad mayor a 0.")
-        elif st.button(f"Cargar al carrito las {len(texto_up.splitlines())} líneas con cantidad",
-                       type="primary", key="rp_up_add"):
+        elif ya_cargado:
+            st.markdown("<p class='muted'>Ese archivo ya se cargó al carrito — modificalo o subí "
+                        "otro.</p>", unsafe_allow_html=True)
+            procesar = st.button("Cargarlo al carrito de nuevo", key="rp_up_otra_vez")
+        else:
+            procesar = st.button(f"Cargar al carrito las {len(texto_up.splitlines())} líneas con cantidad",
+                                 type="primary", key="rp_up_add")
+        if up is not None and not err and texto_up and procesar:
             items_up, incidencias = cr.resolver_pegado(texto_up, df)
             total = _agregar_items(items_up) if items_up else 0
             toast_pendiente(f"Agregaste {total} unidades al carrito desde el archivo." if total
                             else "No se agregó nada — revisá el detalle de las líneas.")
             st.session_state.rp_resultado = (cr.resumen_incidencias(incidencias), incidencias, total)
-            st.session_state.rp_file_ver = st.session_state.get("rp_file_ver", 0) + 1
+            st.session_state.rp_file_hash = hash_up
             st.rerun()
     _mostrar_resultado_cr("rp_resultado")
 
@@ -1441,22 +1451,30 @@ def page_compra_rapida() -> None:
         st.markdown("<div class='kicker' style='margin-top:.6rem'>Cargar el Excel que exportaste</div>",
                     unsafe_allow_html=True)
         up = st.file_uploader("Subí el archivo con la columna Cantidad completa", type=["xlsx"],
-                              key=f"cr_file_tabla_{st.session_state.get('cr_file_ver', 0)}",
-                              label_visibility="collapsed")
+                              key="cr_tabla_file", label_visibility="collapsed")
         if up is not None:
-            texto_up, err = cr.texto_desde_excel(up.getvalue())
+            data_up = up.getvalue()
+            hash_up = hashlib.md5(data_up).hexdigest()
+            ya_cargado = st.session_state.get("cr_tabla_file_hash") == hash_up
+            texto_up, err = cr.texto_desde_excel(data_up)
             if err:
                 st.error(err)
             elif not texto_up:
                 st.warning("El archivo no tiene ninguna fila con Cantidad mayor a 0.")
-            elif st.button(f"Cargar al carrito las {len(texto_up.splitlines())} líneas con cantidad",
-                           type="primary", key="cr_up_add"):
-                items, incidencias = cr.resolver_pegado(texto_up, df)
-                total = _agregar_items(items) if items else 0
+            elif ya_cargado:
+                st.markdown("<p class='muted'>Ese archivo ya se cargó al carrito — modificalo o subí "
+                            "otro.</p>", unsafe_allow_html=True)
+                procesar = st.button("Cargarlo al carrito de nuevo", key="cr_tabla_up_otra_vez")
+            else:
+                procesar = st.button(f"Cargar al carrito las {len(texto_up.splitlines())} líneas con cantidad",
+                                     type="primary", key="cr_tabla_up_add")
+            if up is not None and not err and texto_up and procesar:
+                items_up, incidencias = cr.resolver_pegado(texto_up, df)
+                total = _agregar_items(items_up) if items_up else 0
                 toast_pendiente(f"Agregaste {total} unidades al carrito desde el archivo." if total
                                 else "No se agregó nada — revisá el detalle de las líneas.")
                 st.session_state.cr_resultado_tabla = (cr.resumen_incidencias(incidencias), incidencias, total)
-                st.session_state.cr_file_ver = st.session_state.get("cr_file_ver", 0) + 1
+                st.session_state.cr_tabla_file_hash = hash_up
                 st.rerun()
         _mostrar_resultado_cr("cr_resultado_tabla")
 
