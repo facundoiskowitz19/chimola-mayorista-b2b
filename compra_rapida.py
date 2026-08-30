@@ -113,27 +113,102 @@ def resumen_incidencias(incidencias: list[dict]) -> dict[str, int]:
 # ---------------------------------------------------------------------------
 # Excel de la compra rápida: exportar el filtro actual y re-importarlo editado
 # ---------------------------------------------------------------------------
-COLS_PLANTILLA = ["SKU", "EAN", "Código", "Producto", "Color", "Talle", "Precio lista", "Cantidad"]
+COLS_PLANTILLA = ["SKU", "EAN", "Código", "Producto", "Color", "Talle",
+                  "Precio lista", "Cantidad", "Subtotal", "Foto"]
 
 
-def excel_plantilla(df_variantes: pd.DataFrame, cantidades: dict[str, int] | None = None) -> bytes:
-    """Excel editable con las variantes del filtro actual (una fila por variante,
-    Cantidad precargada si ya la tipearon). Se puede completar offline y subir."""
+def _letra(idx: int) -> str:
+    return chr(ord("A") + idx)
+
+
+def excel_plantilla(df_variantes: pd.DataFrame, cantidades: dict[str, int] | None = None,
+                    cliente: dict | None = None, iva_pct: float = 0.0,
+                    links_foto: dict[str, str] | None = None,
+                    miniaturas: dict[str, bytes] | None = None) -> bytes:
+    """Excel editable del filtro actual, listo para completar offline y resubir.
+
+    - Hoja «Compra rápida»: una fila por variante, Cantidad editable, Subtotal
+      con fórmula (precio de la lista DEL CLIENTE × cantidad) y link «ver foto».
+      Si `miniaturas` ({sku: bytes JPEG}), embebe la imagen en la columna A.
+    - Hoja «Pedido»: totales en función del cliente (unidades, subtotal,
+      descuento cabecera en %, TOTAL, IVA informativo) + listado dinámico de
+      SOLO lo elegido (FILTER sobre Cantidad > 0; requiere Excel moderno).
+    - Reimportable tal cual: la carga lee SKU/EAN + Cantidad de la hoja 1.
+    """
     import io
     import xlsxwriter
 
     cant = cantidades or {}
+    links = links_foto or {}
+    minis = miniaturas or {}
+    cli = cliente or {}
+    desc = float(cli.get("descuento") or 0)
+    lista = int(cli.get("lista_precios") or 1)
+    off = 1 if minis else 0            # columna A reservada para la imagen
+    C = {n: _letra(off + i) for i, n in enumerate(COLS_PLANTILLA)}
+    n = len(df_variantes)
+
     buf = io.BytesIO()
     wb = xlsxwriter.Workbook(buf, {"in_memory": True})
+    hdr = wb.add_format({"bold": True, "bottom": 1})
+    plata = wb.add_format({"num_format": "$ #,##0"})
     ws = wb.add_worksheet("Compra rápida")
-    ws.write_row(0, 0, COLS_PLANTILLA)
+    if minis:
+        ws.write(0, 0, "", hdr)
+        ws.set_column(0, 0, 8.5)
+    ws.write_row(0, off, COLS_PLANTILLA, hdr)
     for r, (_, v) in enumerate(df_variantes.iterrows(), start=1):
-        ws.write_row(r, 0, [str(v["sku"]), str(v.get("ean") or ""), str(v["producto_cod"]),
-                            str(v.get("producto_nombre") or ""), str(v.get("color") or ""),
-                            str(v.get("talle") or ""), float(v["precio"]) if pd.notna(v.get("precio")) else 0,
-                            int(cant.get(str(v["sku"]), 0))])
-    ws.set_column(0, 0, 18); ws.set_column(1, 1, 16); ws.set_column(3, 3, 34); ws.set_column(4, 7, 12)
+        sku = str(v["sku"])
+        q = int(cant.get(sku, 0))
+        precio = float(v["precio"]) if pd.notna(v.get("precio")) else 0.0
+        ws.write_row(r, off, [sku, str(v.get("ean") or ""), str(v["producto_cod"]),
+                             str(v.get("producto_nombre") or ""), str(v.get("color") or ""),
+                             str(v.get("talle") or "")])
+        ws.write_number(r, off + 6, precio, plata)
+        ws.write_number(r, off + 7, q)
+        ws.write_formula(r, off + 8, f"={C['Precio lista']}{r+1}*{C['Cantidad']}{r+1}",
+                         plata, precio * q)
+        url = links.get(sku)
+        if url:
+            ws.write_url(r, off + 9, url, string="ver foto")
+        b = minis.get(sku)
+        if b:
+            ws.set_row(r, 34)
+            ws.insert_image(r, 0, f"{sku}.jpg", {"image_data": io.BytesIO(b),
+                                                 "x_offset": 3, "y_offset": 3,
+                                                 "object_position": 1})
+    ws.set_column(off, off, 18); ws.set_column(off + 1, off + 1, 15)
+    ws.set_column(off + 3, off + 3, 34); ws.set_column(off + 4, off + 8, 11)
     ws.freeze_panes(1, 0)
+
+    # ---- hoja Pedido: totales del cliente + solo lo elegido ----
+    wp = wb.add_worksheet("Pedido")
+    kick = wb.add_format({"bold": True})
+    tot_u = sum(int(cant.get(str(v["sku"]), 0)) for _, v in df_variantes.iterrows())
+    tot_s = sum(int(cant.get(str(v["sku"]), 0)) * (float(v["precio"]) if pd.notna(v.get("precio")) else 0)
+                for _, v in df_variantes.iterrows())
+    wp.write(0, 0, f"Pedido de {cli.get('nombre_display') or cli.get('nombre') or 'cliente'}", kick)
+    wp.write(1, 0, f"Lista de precios {lista} · descuento cabecera {desc:g}%")
+    rango_c = f"'Compra rápida'!{C['Cantidad']}2:{C['Cantidad']}{n+1}"
+    rango_s = f"'Compra rápida'!{C['Subtotal']}2:{C['Subtotal']}{n+1}"
+    filas_tot = [("Unidades", f"=SUM({rango_c})", tot_u, None),
+                 (f"Subtotal (lista {lista}, sin IVA)", f"=SUM({rango_s})", tot_s, plata),
+                 (f"Descuento cabecera {desc:g}%", f"=-B5*{desc}/100", -tot_s * desc / 100, plata),
+                 ("TOTAL", "=B5+B6", tot_s * (1 - desc / 100), plata)]
+    if iva_pct:
+        filas_tot += [(f"IVA {iva_pct:g}% (informativo)", f"=B7*{iva_pct}/100",
+                       tot_s * (1 - desc / 100) * iva_pct / 100, plata),
+                      ("Total c/IVA", "=B7+B8", tot_s * (1 - desc / 100) * (1 + iva_pct / 100), plata)]
+    for i, (lbl, f, valor, fmt) in enumerate(filas_tot, start=3):
+        wp.write(i, 0, lbl, kick if lbl.startswith("TOTAL") else None)
+        wp.write_formula(i, 1, f, fmt, valor)
+    fila_h = len(filas_tot) + 4
+    wp.write(fila_h, 0, "Solo lo elegido (Cantidad > 0) — se completa al abrir en Excel:", kick)
+    wp.write_row(fila_h + 1, 0, COLS_PLANTILLA[:9], hdr)
+    rango_t = f"'Compra rápida'!{C['SKU']}2:{C['Subtotal']}{n+1}"
+    wp.write_dynamic_array_formula(fila_h + 2, 0, fila_h + 2, 0,
+                                   f'=FILTER({rango_t},{rango_c}>0,"")')
+    wp.set_column(0, 0, 30); wp.set_column(1, 8, 14); wp.set_column(3, 3, 34)
     wb.close()
     return buf.getvalue()
 
@@ -143,20 +218,31 @@ def texto_desde_excel(data: bytes) -> tuple[str, str | None]:
     texto "codigo,cantidad" por línea para `resolver_pegado`. (texto, error)."""
     import io
     try:
-        df = pd.read_excel(io.BytesIO(data))
+        xl = pd.ExcelFile(io.BytesIO(data))
     except Exception as e:  # noqa: BLE001
         return "", f"No pude leer el archivo: {e}"
-    cols = {str(c).strip().lower(): c for c in df.columns}
-    col_cant = next((cols[k] for k in ("cantidad", "cant", "qty") if k in cols), None)
-    col_cod = next((cols[k] for k in ("sku", "ean", "codigo", "código") if k in cols), None)
-    if col_cant is None or col_cod is None:
-        return "", "El archivo necesita una columna SKU (o EAN) y una columna Cantidad."
-    lineas = []
-    for _, r in df.iterrows():
+    alguna_hoja_valida = False
+    for hoja in xl.sheet_names:
         try:
-            c = int(float(r[col_cant])) if pd.notna(r[col_cant]) else 0
-        except (TypeError, ValueError):
+            df = xl.parse(hoja)
+        except Exception:  # noqa: BLE001
             continue
-        if c > 0 and pd.notna(r[col_cod]):
-            lineas.append(f"{str(r[col_cod]).strip()},{c}")
-    return "\n".join(lineas), None
+        cols = {str(c).strip().lower(): c for c in df.columns}
+        col_cant = next((cols[k] for k in ("cantidad", "cant", "qty") if k in cols), None)
+        col_cod = next((cols[k] for k in ("sku", "ean", "codigo", "código") if k in cols), None)
+        if col_cant is None or col_cod is None:
+            continue
+        alguna_hoja_valida = True
+        lineas = []
+        for _, r in df.iterrows():
+            try:
+                c = int(float(r[col_cant])) if pd.notna(r[col_cant]) else 0
+            except (TypeError, ValueError):
+                continue
+            if c > 0 and pd.notna(r[col_cod]):
+                lineas.append(f"{str(r[col_cod]).strip()},{c}")
+        if lineas:
+            return "\n".join(lineas), None
+    if alguna_hoja_valida:
+        return "", None
+    return "", "El archivo necesita una columna SKU (o EAN) y una columna Cantidad."
