@@ -1127,24 +1127,28 @@ def page_reposicion() -> None:
         st.markdown("<p class='muted'>Nada para reponer hoy: lo que vendés está cubierto o sin "
                     "disponibilidad para reposición.</p>", unsafe_allow_html=True)
         return
-    # Filtros de categoría y temporada sobre lo sugerido (mismas etiquetas del catálogo)
-    cats = sorted(x for x in sug["categoria"].dropna().unique() if str(x).strip())
-    temps = sorted(x for x in sug["temporada"].dropna().unique() if str(x).strip())
-    f_cat, f_temp = [], []
-    if len(cats) > 1 or len(temps) > 1:
-        fc1, fc2 = st.columns([1.4, 1])
-        if len(cats) > 1:
-            f_cat = fc1.pills("Categoría", cats, selection_mode="multi", key="repo_f_cat") or []
-        if len(temps) > 1:
-            f_temp = fc2.pills("Temporada", temps, selection_mode="multi", key="repo_f_temp") or []
-    if f_cat:
-        sug = sug[sug["categoria"].isin(f_cat)]
-    if f_temp:
-        sug = sug[sug["temporada"].isin(f_temp)]
+    # Mismos filtros que Compra rápida (facetado dependiente) + Temporada
+    c1, c2, c3, c4, c5 = st.columns([1.5, 1, 1, 1.2, 1])
+    busq_r = c1.text_input("Buscar", key="rp_busq", placeholder="código, nombre, EAN, color")
+    sel_prev = {"marca": st.session_state.get("rp_marca", []),
+                "categoria": st.session_state.get("rp_cat", []),
+                "rubro": st.session_state.get("rp_rubro", []),
+                "temporada": st.session_state.get("rp_temp", [])}
+    ops = catalog.opciones_filtros(sug, sel_prev)
+    for k, campo in (("rp_marca", "marca"), ("rp_cat", "categoria"),
+                     ("rp_rubro", "rubro"), ("rp_temp", "temporada")):
+        st.session_state[k] = [v for v in st.session_state.get(k, []) if v in ops[campo]]
+    marca_r = c2.multiselect("Marca", ops["marca"], key="rp_marca", placeholder="Todas")
+    cat_r = c3.multiselect("Categoría", ops["categoria"], key="rp_cat", placeholder="Todas")
+    tipo_r = c4.multiselect("Tipo de producto", ops["rubro"], key="rp_rubro", placeholder="Todos")
+    temp_r = c5.multiselect("Temporada", ops["temporada"], key="rp_temp", placeholder="Todas")
+    sug = catalog.filtrar_variantes(sug, {"marca": marca_r, "categoria": cat_r,
+                                          "rubro": tipo_r, "temporada": temp_r}, busq_r)
     if sug.empty:
         st.markdown("<p class='muted'>Nada sugerido con esos filtros.</p>", unsafe_allow_html=True)
         return
-    fkey = "".join(c for c in "-".join(sorted(f_cat) + sorted(f_temp)) if c.isalnum())[:48]
+    fkey = "".join(ch for ch in "-".join([busq_r] + sorted(marca_r + cat_r + tipo_r + temp_r))
+                   if ch.isalnum())[:48]
     ver = st.session_state.get("repo_ver", 0)
     tabla = sug[["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
                  "stock_pv", "precio", "sugerido"]].copy()
@@ -1176,11 +1180,64 @@ def page_reposicion() -> None:
             seleccion.append((v, q))
     items = [cr.item_desde_variante(v, q) for v, q in seleccion]
     _totales_seleccion(items)
-    if st.button("Agregar reposición al carrito", type="primary", disabled=not items):
+    # Export/import Excel, igual que Compra rápida (Cantidad precargada con lo sugerido)
+    iva_x = float(overrides.get_config().get("iva_pct") or 0)
+    cants_r = {str(v["sku"]): int(e["cantidad"] or 0)
+               for (_, v), (_, e) in zip(sug.iterrows(), edited.iterrows())}
+    links_r = {str(r["sku"]): u for _, r in sug.iterrows()
+               if (u := fotos.url_variante_publica(r["producto_cod"], r["color"]))}
+    ba, bx, bf = st.columns([1, 1, 1])
+    bx.download_button("Exportar Excel del filtro actual", key="rp_xlsx", use_container_width=True,
+                       data=cr.excel_plantilla(sug, cants_r, cliente=cli, iva_pct=iva_x,
+                                               links_foto=links_r),
+                       file_name="reposicion.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                       help="Las variantes sugeridas del filtro, con la Cantidad precargada con lo "
+                            "sugerido, link a la foto y la hoja «Pedido» con tus totales. Editalo "
+                            "offline y subilo de nuevo acá abajo.")
+    firma_r = (dias, fkey)
+    if bf.button("Preparar Excel con fotos", key="rp_prep_fotos", use_container_width=True,
+                 help="Igual al export, con la miniatura de cada variante embebida. Hasta 600 filas."):
+        if len(sug) > 600:
+            st.warning(f"El filtro tiene {len(sug)} variantes y el Excel con fotos acepta hasta "
+                       "600 — afiná los filtros.")
+        else:
+            with st.spinner(f"Armando el Excel con {len(sug)} miniaturas..."):
+                minis = _miniaturas_excel(sug)
+            st.session_state.rp_xlsx_fotos = (firma_r, cr.excel_plantilla(
+                sug, cants_r, cliente=cli, iva_pct=iva_x, links_foto=links_r, miniaturas=minis))
+    listo_r = st.session_state.get("rp_xlsx_fotos")
+    if listo_r and listo_r[0] == firma_r:
+        bf.download_button("Descargar Excel con fotos", data=listo_r[1], key="rp_xlsx_fotos_dl",
+                           use_container_width=True, file_name="reposicion_fotos.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    if ba.button("Agregar reposición al carrito", type="primary", disabled=not items,
+                 key="rp_add", use_container_width=True):
         total = _agregar_items(items)
         st.session_state.repo_ver = ver + 1
         toast_pendiente(f"Agregaste {total} unidades al carrito.")
         st.rerun()
+    st.markdown("<div class='kicker' style='margin-top:.6rem'>Cargar el Excel que exportaste</div>",
+                unsafe_allow_html=True)
+    up = st.file_uploader("Subí el archivo con la columna Cantidad como la quieras pedir",
+                          type=["xlsx"], key=f"rp_file_{st.session_state.get('rp_file_ver', 0)}",
+                          label_visibility="collapsed")
+    if up is not None:
+        texto_up, err = cr.texto_desde_excel(up.getvalue())
+        if err:
+            st.error(err)
+        elif not texto_up:
+            st.warning("El archivo no tiene ninguna fila con Cantidad mayor a 0.")
+        elif st.button(f"Cargar al carrito las {len(texto_up.splitlines())} líneas con cantidad",
+                       type="primary", key="rp_up_add"):
+            items_up, incidencias = cr.resolver_pegado(texto_up, df)
+            total = _agregar_items(items_up) if items_up else 0
+            toast_pendiente(f"Agregaste {total} unidades al carrito desde el archivo." if total
+                            else "No se agregó nada — revisá el detalle de las líneas.")
+            st.session_state.rp_resultado = (cr.resumen_incidencias(incidencias), incidencias, total)
+            st.session_state.rp_file_ver = st.session_state.get("rp_file_ver", 0) + 1
+            st.rerun()
+    _mostrar_resultado_cr("rp_resultado")
 
 
 def _miniaturas_excel(sub: pd.DataFrame) -> dict[str, bytes]:
@@ -1290,20 +1347,23 @@ def page_compra_rapida() -> None:
     tab_tabla, tab_pegar = st.tabs(["Tabla con miniaturas", "Pegar códigos"])
 
     with tab_tabla:
-        c1, c2, c3, c4 = st.columns([1.8, 1, 1.1, 1.3])
+        c1, c2, c3, c4, c5 = st.columns([1.5, 1, 1, 1.2, 1])
         busq = c1.text_input("Buscar", key="cr_busq", placeholder="código, nombre, EAN, color")
         # Facetado dependiente: cada filtro solo ofrece opciones con match en los otros.
         sel_prev = {"marca": st.session_state.get("cr_marca", []),
                     "categoria": st.session_state.get("cr_cat", []),
-                    "rubro": st.session_state.get("cr_rubro", [])}
+                    "rubro": st.session_state.get("cr_rubro", []),
+                    "temporada": st.session_state.get("cr_temp", [])}
         ops = catalog.opciones_filtros(df, sel_prev)
-        for k, campo in (("cr_marca", "marca"), ("cr_cat", "categoria"), ("cr_rubro", "rubro")):
+        for k, campo in (("cr_marca", "marca"), ("cr_cat", "categoria"),
+                         ("cr_rubro", "rubro"), ("cr_temp", "temporada")):
             st.session_state[k] = [v for v in st.session_state.get(k, []) if v in ops[campo]]
         marca = c2.multiselect("Marca", ops["marca"], key="cr_marca", placeholder="Todas")
         categoria = c3.multiselect("Categoría", ops["categoria"], key="cr_cat", placeholder="Todas")
         tipo = c4.multiselect("Tipo de producto", ops["rubro"], key="cr_rubro", placeholder="Todos")
-        sub = catalog.filtrar_variantes(df, {"marca": marca, "categoria": categoria, "rubro": tipo},
-                                        busq).copy()
+        temporada = c5.multiselect("Temporada", ops["temporada"], key="cr_temp", placeholder="Todas")
+        sub = catalog.filtrar_variantes(df, {"marca": marca, "categoria": categoria, "rubro": tipo,
+                                             "temporada": temporada}, busq).copy()
         st.markdown(f"<p class='muted'>{len(sub)} variantes con stock y precio · scrolleá la tabla, "
                     "cargá cantidades y tocá Agregar</p>", unsafe_allow_html=True)
         # Scroll infinito: una sola tabla con TODO el filtro (Streamlit la virtualiza).
@@ -1338,7 +1398,7 @@ def page_compra_rapida() -> None:
                            help="Todas las variantes del filtro, con link a la foto de cada variante, "
                                 "subtotales con tu lista de precios y la hoja «Pedido» (solo lo elegido "
                                 "+ totales con tu descuento). Completá Cantidad y subilo de nuevo acá.")
-        firma_f = (busq, tuple(marca), tuple(categoria), tuple(tipo))
+        firma_f = (busq, tuple(marca), tuple(categoria), tuple(tipo), tuple(temporada))
         if bf.button("Preparar Excel con fotos", key="cr_prep_fotos", use_container_width=True,
                      help="Igual al export, con la miniatura de cada variante embebida. Hasta 600 "
                           "filas (afiná los filtros); la primera vez tarda un rato en bajar las fotos."):
