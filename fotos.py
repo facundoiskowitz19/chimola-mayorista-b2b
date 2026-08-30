@@ -151,6 +151,54 @@ def _public_url(blob_name: str) -> str:
     return f"https://storage.googleapis.com/{config.BUCKET_FOTOS}/{quote(blob_name)}"
 
 
+def url_foto_publica(producto_cod: str, filename: str) -> str:
+    """URL pública de una foto (no vence — para links en Excel y tablas largas).
+    El bucket es público hoy (lo usa el Woo); si algún día se cierra, esto
+    debe migrar a otro esquema."""
+    return _public_url(f"{config.FOTOS_PREFIX.rstrip('/')}/{producto_cod.strip().upper()}/{filename}")
+
+
+def foto_variante_filename(producto_cod: str, color: str | None = None) -> str | None:
+    """Filename de la foto de la variante: la de SU color, o la portada."""
+    prod = producto_cod.strip().upper()
+    files = indice_fotos().get(prod, [])
+    if not files:
+        return None
+    if color:
+        mapa = foto_por_color(prod, [color], files, _overrides_fotos(prod))
+        fn = mapa.get(norm(color))
+        if fn:
+            return fn
+    pf = parsear_fotos(prod, files)
+    return pf[0]["filename"] if pf else None
+
+
+@lru_cache(maxsize=16384)
+def url_variante_publica(producto_cod: str, color: str | None = None) -> str:
+    """URL pública de la foto de la variante ('' si el producto no tiene fotos)."""
+    fn = foto_variante_filename(producto_cod, color)
+    return url_foto_publica(producto_cod, fn) if fn else ""
+
+
+@lru_cache(maxsize=8192)
+def miniatura_jpeg(producto_cod: str, filename: str, px: int = 56) -> bytes | None:
+    """Miniatura JPEG chica (~3-5 KB) para embeber en Excel. Cache de proceso."""
+    import io as _io
+
+    from PIL import Image
+    try:
+        blob_name = f"{config.FOTOS_PREFIX.rstrip('/')}/{producto_cod.strip().upper()}/{filename}"
+        data = _storage().bucket(config.BUCKET_FOTOS).blob(blob_name).download_as_bytes()
+        im = Image.open(_io.BytesIO(data)).convert("RGB")
+        im.thumbnail((px, px))
+        out = _io.BytesIO()
+        im.save(out, "JPEG", quality=72)
+        return out.getvalue()
+    except Exception as e:  # noqa: BLE001
+        log.warning("Miniatura %s/%s: %s", producto_cod, filename, e)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Parsing de nombres → fotos ordenadas y agrupadas por color
 # ---------------------------------------------------------------------------
@@ -412,19 +460,10 @@ def _overrides_fotos(producto_cod: str) -> dict:
 
 
 def miniatura(producto_cod: str, color: str | None = None) -> str:
-    """URL de la miniatura de una VARIANTE: la foto de SU color (matching
-    automático o asignación manual del admin); si no se pudo asociar, la
-    portada del producto."""
-    prod = producto_cod.strip().upper()
-    files = indice_fotos().get(prod, [])
-    if not files:
-        return PLACEHOLDER
-    if color:
-        mapa = foto_por_color(producto_cod, [color], files, _overrides_fotos(producto_cod))
-        fn = mapa.get(norm(color))
-        if fn:
-            return url_foto(producto_cod, fn)
-    return foto_principal(producto_cod)
+    """URL (firmada) de la miniatura de una VARIANTE: la foto de SU color
+    (matching automático o asignación manual del admin); portada si no."""
+    fn = foto_variante_filename(producto_cod, color)
+    return url_foto(producto_cod.strip().upper(), fn) if fn else PLACEHOLDER
 
 
 def mapeo_variantes(variantes: list[dict], indice: dict[str, list[str]] | None = None,

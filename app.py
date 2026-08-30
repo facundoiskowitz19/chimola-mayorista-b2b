@@ -1160,6 +1160,19 @@ def page_reposicion() -> None:
         st.rerun()
 
 
+def _miniaturas_excel(sub: pd.DataFrame) -> dict[str, bytes]:
+    """{sku: JPEG chico} para el Excel con fotos (descarga en paralelo; cache en fotos)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def una(r):
+        fn = (fotos.foto_variante_filename(r["producto_cod"], r["color"])
+              if fotos.tiene_fotos(r["producto_cod"]) else None)
+        return str(r["sku"]), (fotos.miniatura_jpeg(r["producto_cod"], fn) if fn else None)
+
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        return {sku: img for sku, img in ex.map(una, (r for _, r in sub.iterrows())) if img}
+
+
 def _mostrar_resultado_cr(key: str) -> None:
     """Contadores + reconciliación del último procesamiento (post-rerun)."""
     # Resultado del procesamiento anterior (post-rerun: contadores + reconciliación)
@@ -1198,22 +1211,18 @@ def page_compra_rapida() -> None:
         marca = c2.multiselect("Marca", sorted(df["marca"].dropna().unique()), key="cr_marca", placeholder="Todas")
         rubro = c3.multiselect("Rubro", sorted(df["rubro"].dropna().unique()), key="cr_rubro", placeholder="Todos")
         sub = catalog.filtrar_variantes(df, {"marca": marca, "rubro": rubro}, busq).copy()
-        por_pag = 25
-        n_pag = max(1, -(-len(sub) // por_pag))
-        cpag, cinfo = st.columns([1, 3])
-        pag = int(cpag.number_input("Página", 1, n_pag, 1, key="cr_pag"))
-        cinfo.markdown(f"<p class='muted'>{len(sub)} variantes con stock y precio · página {pag}/{n_pag} · "
-                       "cargá cantidades y tocá Agregar</p>", unsafe_allow_html=True)
-        page_df = sub.iloc[(pag - 1) * por_pag: pag * por_pag].copy()
-        page_df["foto"] = page_df.apply(
-            lambda r: fotos.miniatura(r["producto_cod"], r["color"]) if fotos.tiene_fotos(r["producto_cod"]) else "",
-            axis=1)
-        page_df["cantidad"] = 0
+        st.markdown(f"<p class='muted'>{len(sub)} variantes con stock y precio · scrolleá la tabla, "
+                    "cargá cantidades y tocá Agregar</p>", unsafe_allow_html=True)
+        # Scroll infinito: una sola tabla con TODO el filtro (Streamlit la virtualiza).
+        # Fotos con URL pública del bucket: firmar miles de URLs sería una llamada por foto.
+        sub["foto"] = [fotos.url_variante_publica(pcod, c)
+                       for pcod, c in zip(sub["producto_cod"], sub["color"])]
+        sub["cantidad"] = 0
         ver = st.session_state.get("cr_ver", 0)
         # Sin columna de stock: el cliente nunca ve cuánto queda.
         edited = st.data_editor(
-            page_df[["foto", "producto_cod", "producto_nombre", "color", "talle", "precio", "cantidad"]],
-            hide_index=True, use_container_width=True, key=f"cr_editor_{pag}_{ver}",
+            sub[["foto", "producto_cod", "producto_nombre", "color", "talle", "precio", "cantidad"]],
+            hide_index=True, use_container_width=True, height=620, key=f"cr_editor_{ver}",
             disabled=["foto", "producto_cod", "producto_nombre", "color", "talle", "precio"],
             column_config={
                 "foto": st.column_config.ImageColumn("", width="small"),
@@ -1221,15 +1230,38 @@ def page_compra_rapida() -> None:
                 "precio": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
                 "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1, format="%d"),
             })
-        seleccion = [(v, int(q)) for (_, v), q in zip(page_df.iterrows(), edited["cantidad"])
+        seleccion = [(v, int(q)) for (_, v), q in zip(sub.iterrows(), edited["cantidad"])
                      if int(q or 0) > 0]
-        ba, bx = st.columns([1, 1])
+        cli_x = cliente_efectivo()
+        iva_x = float(overrides.get_config().get("iva_pct") or 0)
+        cants_x = {str(v["sku"]): q for v, q in seleccion}
+        links_x = {str(r["sku"]): r["foto"] for _, r in sub.iterrows() if r["foto"]}
+        ba, bx, bf = st.columns([1, 1, 1])
         bx.download_button("Exportar Excel del filtro actual", key="cr_xlsx", use_container_width=True,
-                           data=cr.excel_plantilla(sub, {str(v["sku"]): q for v, q in seleccion}),
+                           data=cr.excel_plantilla(sub, cants_x, cliente=cli_x, iva_pct=iva_x,
+                                                   links_foto=links_x),
                            file_name="compra_rapida.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           help="Todas las variantes del filtro (no solo esta página), con la columna "
-                                "Cantidad para completar en Excel y subir después en «Pegar códigos».")
+                           help="Todas las variantes del filtro, con link a la foto de cada variante, "
+                                "subtotales con tu lista de precios y la hoja «Pedido» (solo lo elegido "
+                                "+ totales con tu descuento). Completá Cantidad y subilo de nuevo acá.")
+        firma_f = (busq, tuple(marca), tuple(rubro))
+        if bf.button("Preparar Excel con fotos", key="cr_prep_fotos", use_container_width=True,
+                     help="Igual al export, con la miniatura de cada variante embebida. Hasta 600 "
+                          "filas (afiná los filtros); la primera vez tarda un rato en bajar las fotos."):
+            if len(sub) > 600:
+                st.warning(f"El filtro tiene {len(sub)} variantes y el Excel con fotos acepta hasta "
+                           "600 — afiná la búsqueda o los filtros.")
+            else:
+                with st.spinner(f"Armando el Excel con {len(sub)} miniaturas..."):
+                    minis = _miniaturas_excel(sub)
+                st.session_state.cr_xlsx_fotos = (firma_f, cr.excel_plantilla(
+                    sub, cants_x, cliente=cli_x, iva_pct=iva_x, links_foto=links_x, miniaturas=minis))
+        listo = st.session_state.get("cr_xlsx_fotos")
+        if listo and listo[0] == firma_f:
+            bf.download_button("Descargar Excel con fotos", data=listo[1], key="cr_xlsx_fotos_dl",
+                               use_container_width=True, file_name="compra_rapida_fotos.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         if ba.button("Agregar al carrito", type="primary", disabled=not seleccion, key="cr_add",
                      use_container_width=True):
             items, ajustes = [], []

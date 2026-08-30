@@ -366,3 +366,51 @@ def test_compra_rapida_excel_ida_y_vuelta():
     texto, err = cr.texto_desde_excel(data)
     assert err is None and texto == "M211_U_2059,3"
     assert cr.texto_desde_excel(b"no es excel")[1]
+
+
+def test_excel_plantilla_v2():
+    import io
+
+    import openpyxl
+    import compra_rapida as cr
+    df = pd.DataFrame([
+        {"sku": "A_U_1", "ean": "779", "producto_cod": "A", "producto_nombre": "Prod A",
+         "color": "AQUA", "talle": "U", "precio": 100.0},
+        {"sku": "B_4_2", "ean": "", "producto_cod": "B", "producto_nombre": "Prod B",
+         "color": "PINK", "talle": "4", "precio": 50.0},
+    ])
+    cli = {"nombre_display": "Cliente Test", "lista_precios": 1, "descuento": 20.0}
+    data = cr.excel_plantilla(df, {"A_U_1": 3}, cliente=cli, iva_pct=21.0,
+                              links_foto={"A_U_1": "https://x/foto.jpg"})
+    wb = openpyxl.load_workbook(io.BytesIO(data))
+    assert wb.sheetnames == ["Compra rápida", "Pedido"]
+    ws = wb["Compra rápida"]
+    assert [c.value for c in ws[1]] == cr.COLS_PLANTILLA
+    assert ws["I2"].value == "=G2*H2" and ws["H2"].value == 3
+    assert ws["J2"].hyperlink.target == "https://x/foto.jpg"
+    wp = wb["Pedido"]
+    textos = [str(c.value) for fila in wp.iter_rows() for c in fila if c.value is not None]
+    assert any("descuento cabecera 20%" in t for t in textos)
+    assert any("IVA 21%" in t for t in textos)
+    assert any("FILTER" in getattr(c.value, "text", str(c.value))
+               for fila in wp.iter_rows() for c in fila if c.value is not None)
+    # se reimporta tal cual (lee la hoja 1)
+    assert cr.texto_desde_excel(data) == ("A_U_1,3", None)
+    # con miniaturas, la columna A queda para la imagen y las fórmulas corren una col
+    from PIL import Image
+    b = io.BytesIO(); Image.new("RGB", (4, 4), "red").save(b, "JPEG")
+    data2 = cr.excel_plantilla(df, {}, cliente=cli, miniaturas={"A_U_1": b.getvalue()})
+    ws2 = openpyxl.load_workbook(io.BytesIO(data2))["Compra rápida"]
+    assert ws2["B1"].value == "SKU" and ws2["J2"].value == "=H2*I2"
+
+
+def test_texto_desde_excel_multihoja():
+    import io
+
+    import xlsxwriter
+    import compra_rapida as cr
+    b = io.BytesIO(); wb = xlsxwriter.Workbook(b, {"in_memory": True})
+    s1 = wb.add_worksheet("Resumen"); s1.write_row(0, 0, ["nota"]); s1.write(1, 0, "hola")
+    s2 = wb.add_worksheet("Datos"); s2.write_row(0, 0, ["SKU", "Cantidad"]); s2.write_row(1, 0, ["X_U_1", 2])
+    wb.close()
+    assert cr.texto_desde_excel(b.getvalue()) == ("X_U_1,2", None)
