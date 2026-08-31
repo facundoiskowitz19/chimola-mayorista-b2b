@@ -317,10 +317,13 @@ def confirmar_pedido(usuario: dict, cliente: dict, items: list[dict], observacio
     db.pedidos_col().document(f"{numero:06d}").set(pedido)
     log.info("Pedido %s confirmado: cliente=%s total=%s items=%d", numero, pedido["cliente_cod"],
              pedido["total"], len(items))
+    # Vaciar el carrito YA, antes del email: el SMTP tarda segundos y si el
+    # script se interrumpe ahí, el pedido existiría con el carrito lleno
+    # (bug real: pedido duplicable). El email es lo último y best-effort.
+    vaciar_carrito(usuario["email"])
 
     pedido["email"] = email_notif.enviar_confirmacion(pedido, xlsx, pedido["xlsx_filename"])
     db.pedidos_col().document(f"{numero:06d}").update({"email": pedido["email"]})
-    vaciar_carrito(usuario["email"])
     return pedido, xlsx
 
 
