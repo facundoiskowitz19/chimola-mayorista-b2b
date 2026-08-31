@@ -79,17 +79,6 @@
   .xfade .fase1b { animation: apaga 7s ease-in-out infinite; }
   .xfade.lento img + img, .xfade.lento .fase2, .xfade.lento .fase1b { animation-duration: 13s; }
 
-  .xfade3 { position: relative; }
-  .xfade3 img + img { position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: cover; opacity: 0; }
-  @keyframes v3a { 0%, 29% { opacity: 1; } 33%, 96% { opacity: 0; } 100% { opacity: 1; } }
-  @keyframes v3b { 0%, 29% { opacity: 0; } 33%, 62% { opacity: 1; } 66%, 100% { opacity: 0; } }
-  @keyframes v3c { 0%, 62% { opacity: 0; } 66%, 96% { opacity: 1; } 100% { opacity: 0; } }
-  .xfade3 .v3b { animation: v3b 16s ease-in-out infinite; }
-  .xfade3 .v3c { animation: v3c 16s ease-in-out infinite; }
-  .xfade3 .fase { opacity: 0; }
-  .xfade3 .fase.v3a { animation: v3a 16s ease-in-out infinite; opacity: 1; }
-
   .centro { text-align: center; flex-direction: column; }
   .logo { height: 58px; margin-bottom: 34px; }
   .active .logo { animation: logoIn 1s ease both; }
@@ -162,17 +151,14 @@
         <li class="reveal"><b>«Cargar cantidades»</b> despliega el panel en la misma vista.</li>
         <li class="reveal">Cantidades por variante <b>sin perder los filtros ni el scroll</b>.</li>
         <li class="reveal">Total en vivo, con el descuento del cliente.</li>
-        <li class="reveal">Al agregar, un aviso lo confirma y el carrito se actualiza.</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin / Catálogo</span></div>
-      <div class="xfade3 figura">
-        <img src="img/02c_panel_catalogo.png" alt="Panel de carga en el catálogo">
-        <img class="v3b" src="img/02c2_cantidades.png" alt="Cantidades cargadas con total en vivo">
-        <img class="v3c" src="img/02d_agregado.png" alt="Agregado al carrito con aviso">
-        <div class="fase v3a">Panel de carga · variantes por color</div>
-        <div class="fase v3b">Cantidades y total en vivo</div>
-        <div class="fase v3c">Agregado · aviso y carrito actualizado</div>
+      <div class="xfade lento figura">
+        <img src="img/02c_panel_catalogo.png" alt="Panel de carga: producto con variantes de color">
+        <img src="img/02d_panel_talle_color.png" alt="Panel de carga: producto con variantes de talle y color">
+        <div class="fase fase1b">Producto con variantes de color</div>
+        <div class="fase fase2">Producto con variantes de talle y color</div>
       </div></div>
   </div></section>
 
