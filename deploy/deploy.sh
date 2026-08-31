@@ -20,7 +20,7 @@ case "$ENV" in
     BUCKET_PEDIDOS=chimola-mayorista-pedidos
     # PROD: definir PEDIDOS_EMAIL_TO con Chimola (ej: pedidos@lautin.com.ar)
     EMAIL_VARS="EMAIL_OVERRIDE_TO=,PEDIDOS_EMAIL_TO=${PEDIDOS_EMAIL_TO:?Definí PEDIDOS_EMAIL_TO para PROD}"
-    MAX_INSTANCES=5 ;;
+    MAX_INSTANCES=1 ;;   # ídem DEV: Streamlit exige instancia única
   *) echo "env debe ser dev|prod"; exit 1 ;;
 esac
 REGION=us-central1
