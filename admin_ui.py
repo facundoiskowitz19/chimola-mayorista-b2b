@@ -1191,6 +1191,46 @@ def _detalle_pedido(p: dict) -> None:
                                            if p.get("xlsx_gcs_path") else pedidos.generar_excel(p)),
                             file_name=p["xlsx_filename"], key=f"dl_{p['numero']}", use_container_width=True)
 
+    # --- Modificar pedido: SOLO en estado confirmado (antes de procesar) ---
+    if p["estado"] == "confirmado":
+        with st.expander("Modificar pedido (avisa al cliente)"):
+            st.markdown("<p class='muted'>Cambiá cantidades o marcá «Quitar» (0 también quita). "
+                        "Solo se puede antes de marcarlo procesado. Al guardar se recalculan los "
+                        "totales, se regenera el Excel y <b>se le avisa al cliente por email</b>.</p>",
+                        unsafe_allow_html=True)
+            base = pd.DataFrame([{
+                "sku": str(it["sku"]), "producto_cod": it["producto_cod"],
+                "producto_nombre": it.get("producto_nombre", ""), "color": it.get("color", ""),
+                "talle": it.get("talle", ""), "precio_unit": float(it["precio_unit"]),
+                "cantidad": int(it["cantidad"]), "quitar": False,
+            } for it in p["items"]])
+            med = st.data_editor(
+                base, hide_index=True, use_container_width=True, key=f"adm_mod_{p['numero']}",
+                disabled=["sku", "producto_cod", "producto_nombre", "color", "talle", "precio_unit"],
+                column_config={
+                    "sku": None, "producto_cod": "Código", "producto_nombre": "Producto",
+                    "color": "Color", "talle": "Talle",
+                    "precio_unit": st.column_config.NumberColumn("Precio", format="$ %.0f"),
+                    "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1),
+                    "quitar": st.column_config.CheckboxColumn("Quitar"),
+                })
+            if st.button("Guardar cambios y avisar al cliente", type="primary",
+                         key=f"adm_mod_ok_{p['numero']}"):
+                cants = {str(r["sku"]): (0 if bool(r["quitar"]) else int(r["cantidad"] or 0))
+                         for _, r in med.iterrows()}
+                try:
+                    nuevo = pedidos.modificar_pedido(int(p["numero"]), cants, _admin_email())
+                    em = nuevo.get("email_modificado") or {}
+                    st.session_state.pop(f"adm_mod_{p['numero']}", None)
+                    st.toast(f"Pedido {p['numero']} modificado"
+                             + (" · cliente avisado" if em.get("enviado") else " · email no salió"))
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+    else:
+        st.markdown("<p class='muted'>Un pedido procesado o cancelado ya no se modifica — para "
+                    "cambios, coordinalo por fuera o cancelá y rehacé.</p>", unsafe_allow_html=True)
+
 
 # ---------------------------------------------------------------------------
 # Config
@@ -1286,7 +1326,7 @@ def _pedido_ejemplo() -> dict:
 
 EVENTO_LABEL = {"confirmacion": "Confirmación de pedido",
                 "procesado": "Cambio a procesado",
-                "cancelado": "Cancelación"}
+                "cancelado": "Cancelación", "modificado": "Modificación"}
 
 VARIABLES_EMAIL = ("numero", "cliente", "cliente_cod", "usuario", "contacto", "fecha", "unidades",
                    "subtotal", "descuento_pct", "descuento_monto", "total", "iva_pct", "iva_monto",

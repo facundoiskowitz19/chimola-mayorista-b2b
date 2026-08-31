@@ -342,6 +342,59 @@ def cambiar_estado(numero: int, nuevo: str, por: str, notificar: bool | None = N
     return pedido
 
 
+def items_modificados(items: list[dict], cantidades: dict[str, int]) -> list[dict]:
+    """PURA: aplica nuevas cantidades por SKU (<=0 elimina la línea) y recalcula
+    subtotales. ValueError si el pedido quedaría vacío."""
+    out = []
+    for it in items:
+        q = int(cantidades.get(str(it["sku"]), it["cantidad"]))
+        if q <= 0:
+            continue
+        out.append({**it, "cantidad": q, "subtotal": round(float(it["precio_unit"]) * q, 2)})
+    if not out:
+        raise ValueError("El pedido quedaría vacío — cancelalo en su lugar.")
+    return out
+
+
+def modificar_pedido(numero: int, cantidades: dict[str, int], por: str,
+                     notificar: bool = True) -> dict:
+    """Admin: cambia cantidades / quita líneas de un pedido CONFIRMADO (nunca
+    procesado ni cancelado), recalcula totales, regenera el Excel (mismo
+    archivo en GCS), registra `modificado` en el historial y avisa al cliente."""
+    ref = db.pedidos_col().document(f"{int(numero):06d}")
+    snap = ref.get()
+    if not snap.exists:
+        raise ValueError(f"Pedido {numero} no existe")
+    p = snap.to_dict()
+    if p.get("estado") != "confirmado":
+        raise ValueError("Solo se puede modificar un pedido en estado confirmado "
+                         "(los procesados ya están en preparación).")
+    nuevos = items_modificados(p["items"], cantidades)
+    if [(i["sku"], i["cantidad"]) for i in nuevos] == [(i["sku"], i["cantidad"]) for i in p["items"]]:
+        raise ValueError("No hay cambios para guardar — las cantidades quedaron igual.")
+    p["items"] = nuevos
+    tot = calcular_totales(p["items"], float(p.get("descuento_pct") or 0),
+                           float(p.get("iva_pct") or 0))
+    p.update({k: tot[k] for k in ("unidades", "subtotal", "descuento_monto", "total",
+                                  "iva_monto", "total_con_iva")})
+    evento = {"estado": "modificado", "por": por, "en": dt.datetime.now(dt.timezone.utc)}
+    try:
+        p["xlsx_gcs_path"] = subir_backup(gcs_path(p), generar_excel(p))
+    except Exception as e:  # noqa: BLE001 — el Excel se puede regenerar on-demand
+        log.warning("Backup del pedido modificado %s: %s", numero, e)
+    ref.update({"items": p["items"], "unidades": p["unidades"], "subtotal": p["subtotal"],
+                "descuento_monto": p["descuento_monto"], "total": p["total"],
+                "iva_monto": p["iva_monto"], "total_con_iva": p["total_con_iva"],
+                "xlsx_gcs_path": p.get("xlsx_gcs_path"),
+                "historial": firestore.ArrayUnion([evento])})
+    log.info("Pedido %s modificado por %s", numero, por)
+    if notificar:
+        res = email_notif.enviar_cambio_estado(p, "modificado", por)
+        ref.update({"email_modificado": res})
+        p["email_modificado"] = res
+    return p
+
+
 def puede_cancelar(pedido: dict, usuario: dict) -> bool:
     """El cliente puede cancelar SU pedido solo mientras el equipo no lo procesó
     (estado 'confirmado'). Los admin cancelan por su lado sin este límite."""

@@ -420,3 +420,22 @@ def test_texto_desde_excel_multihoja():
     s2 = wb.add_worksheet("Datos"); s2.write_row(0, 0, ["SKU", "Cantidad"]); s2.write_row(1, 0, ["X_U_1", 2])
     wb.close()
     assert cr.texto_desde_excel(b.getvalue()) == ("X_U_1,2", None)
+
+
+def test_items_modificados():
+    import pedidos as pe
+    items = [{"sku": "A", "precio_unit": 100.0, "cantidad": 3, "subtotal": 300.0},
+             {"sku": "B", "precio_unit": 50.0, "cantidad": 2, "subtotal": 100.0}]
+    out = pe.items_modificados(items, {"A": 1})          # baja A a 1, B queda
+    assert [(i["sku"], i["cantidad"], i["subtotal"]) for i in out] == [("A", 1, 100.0), ("B", 2, 100.0)]
+    out = pe.items_modificados(items, {"B": 0})          # 0 quita la línea
+    assert [i["sku"] for i in out] == ["A"]
+    with pytest.raises(ValueError):
+        pe.items_modificados(items, {"A": 0, "B": 0})    # vacío → error
+    assert items[0]["cantidad"] == 3                     # no muta el original
+
+
+def test_template_modificado():
+    import email_notif as en
+    assert "modificado" in en.EVENTOS and "modificado" in en.DEFAULT_TEMPLATES
+    assert "{detalle}" in en.DEFAULT_TEMPLATES["modificado"]["cuerpo"]

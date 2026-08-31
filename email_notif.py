@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 XLSX_MIME = ("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-EVENTOS = ("confirmacion", "procesado", "cancelado")
+EVENTOS = ("confirmacion", "procesado", "cancelado", "modificado")
 
 DEFAULT_TEMPLATES = {
     "confirmacion": {
@@ -48,6 +48,18 @@ DEFAULT_TEMPLATES = {
                    "Fecha del pedido: {fecha} · {unidades} u. · total {total}\n\n"
                    "El equipo de Lautin procesó tu pedido y ya está en preparación.\n"
                    "El detalle está en el Excel que recibiste al confirmarlo.\n\n— Mayorista Lautin"),
+    },
+    "modificado": {
+        "formato": "texto",
+        "asunto": "[Mayorista Lautin] Tu pedido N° {numero} fue modificado",
+        "cuerpo": ("Pedido N° {numero} — {cliente} (cliente {cliente_cod})\n"
+                   "Fecha del pedido: {fecha}\n\n"
+                   "Lautin ajustó tu pedido. Este es el detalle VIGENTE:\n\n{detalle}\n\n"
+                   "Unidades: {unidades}\n"
+                   "Subtotal (lista {lista_precios}, sin IVA): {subtotal}\n"
+                   "Descuento cabecera {descuento_pct}%: -{descuento_monto}\n"
+                   "TOTAL: {total}\n{lineas_iva}"
+                   "\nSi algo no cierra, respondé este mail o contactá a Lautin.\n\n— Mayorista Lautin"),
     },
     "cancelado": {
         "formato": "texto",
