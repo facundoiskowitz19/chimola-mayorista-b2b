@@ -60,7 +60,8 @@ DEFAULT_TEMPLATES = {
                    "Subtotal (lista {lista_precios}, sin IVA): {subtotal}\n"
                    "Descuento cabecera {descuento_pct}%: -{descuento_monto}\n"
                    "TOTAL: {total}\n{lineas_iva}"
-                   "\nSi algo no cierra, respondé este mail o contactá a Lautin.\n\n— Mayorista Lautin"),
+                   "\nEl Excel actualizado del pedido va adjunto.\n"
+                   "Si algo no cierra, respondé este mail o contactá a Lautin.\n\n— Mayorista Lautin"),
     },
     "cancelado": {
         "formato": "texto",
@@ -209,6 +210,11 @@ def enviar_cambio_estado(pedido: dict, nuevo: str, por: str) -> dict:
     """Cambio de estado (procesado/cancelado). Best-effort, nunca levanta."""
     evento = nuevo if nuevo in EVENTOS else "procesado"
     return _enviar(pedido, render_email(evento, pedido, por))
+
+
+def enviar_modificacion(pedido: dict, xlsx_bytes: bytes, filename: str, por: str) -> dict:
+    """Pedido modificado por Lautin: aviso con el diff + el Excel actualizado adjunto."""
+    return _enviar(pedido, render_email("modificado", pedido, por), adjunto=(xlsx_bytes, filename))
 
 
 def enviar_prueba(evento: str, pedido: dict, destinatario: str) -> dict:

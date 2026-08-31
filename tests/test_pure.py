@@ -439,6 +439,8 @@ def test_template_modificado():
     import email_notif as en
     assert "modificado" in en.EVENTOS and "modificado" in en.DEFAULT_TEMPLATES
     assert "{detalle}" in en.DEFAULT_TEMPLATES["modificado"]["cuerpo"]
+    assert "adjunto" in en.DEFAULT_TEMPLATES["modificado"]["cuerpo"]
+    assert callable(en.enviar_modificacion)
 
 
 def test_resumen_cambios():

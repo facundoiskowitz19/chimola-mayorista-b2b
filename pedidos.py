@@ -149,7 +149,8 @@ def generar_excel(pedido: dict) -> bytes:
     # --- Detalle ---
     wd = wb.add_worksheet("Detalle")
     cols = [("Producto", 12), ("Descripción", 36), ("Color", 16), ("Cód. color", 10), ("Talle", 8),
-            ("SKU", 20), ("EAN", 16), ("Cantidad", 10), ("Precio unit. lista", 16), ("Subtotal", 16)]
+            ("SKU", 20), ("EAN", 16), ("Cantidad", 10), ("Precio unit. lista", 16), ("Subtotal", 16),
+            ("Foto", 10), ("Imagen", 9)]
     for c, (name, w) in enumerate(cols):
         wd.set_column(c, c, w)
         wd.write(0, c, name, hdr)
@@ -168,6 +169,23 @@ def generar_excel(pedido: dict) -> bytes:
         wd.write(i, 7, it["cantidad"], intf)
         wd.write(i, 8, it["precio_unit"], money)
         wd.write_formula(i, 9, f"=H{i + 1}*I{i + 1}", money, it["subtotal"])
+        # Foto de la variante: link público + miniatura embebida (best-effort:
+        # el Excel del pedido JAMÁS falla por una foto).
+        try:
+            import fotos as _fotos
+            fn = (_fotos.foto_variante_filename(it["producto_cod"], it.get("color"))
+                  if _fotos.tiene_fotos(it["producto_cod"]) else None)
+            if fn:
+                wd.write_url(i, 10, _fotos.url_foto_publica(it["producto_cod"], fn),
+                             string="ver foto")
+                mini = _fotos.miniatura_jpeg(it["producto_cod"], fn)
+                if mini:
+                    wd.set_row(i, 34)
+                    wd.insert_image(i, 11, f"{it['sku']}.jpg",
+                                    {"image_data": io.BytesIO(mini), "x_offset": 3,
+                                     "y_offset": 3, "object_position": 1})
+        except Exception:  # noqa: BLE001
+            pass
     n = len(pedido["items"])
     wd.write(n + 2, 6, "Totales", bold)
     wd.write_formula(n + 2, 7, f"=SUM(H2:H{n + 1})", intf, pedido["unidades"])
@@ -409,8 +427,9 @@ def modificar_pedido(numero: int, cantidades: dict[str, int], por: str,
                                   "iva_monto", "total_con_iva")})
     evento = {"estado": "modificado", "por": por, "en": dt.datetime.now(dt.timezone.utc),
               "detalle": p["cambios_texto"]}
+    xlsx = generar_excel(p)
     try:
-        p["xlsx_gcs_path"] = subir_backup(gcs_path(p), generar_excel(p))
+        p["xlsx_gcs_path"] = subir_backup(gcs_path(p), xlsx)
     except Exception as e:  # noqa: BLE001 — el Excel se puede regenerar on-demand
         log.warning("Backup del pedido modificado %s: %s", numero, e)
     ref.update({"items": p["items"], "unidades": p["unidades"], "subtotal": p["subtotal"],
@@ -420,7 +439,7 @@ def modificar_pedido(numero: int, cantidades: dict[str, int], por: str,
                 "historial": firestore.ArrayUnion([evento])})
     log.info("Pedido %s modificado por %s", numero, por)
     if notificar:
-        res = email_notif.enviar_cambio_estado(p, "modificado", por)
+        res = email_notif.enviar_modificacion(p, xlsx, p.get("xlsx_filename") or f"pedido_{numero}.xlsx", por)
         ref.update({"email_modificado": res})
         p["email_modificado"] = res
     return p
