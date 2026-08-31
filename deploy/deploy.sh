@@ -14,7 +14,7 @@ case "$ENV" in
     BUCKET_PEDIDOS=chimola-mayorista-pedidos-dev
     # DEV: todos los mails van a una casilla de prueba
     EMAIL_VARS="EMAIL_OVERRIDE_TO=${EMAIL_OVERRIDE_TO:-},PEDIDOS_EMAIL_TO=${PEDIDOS_EMAIL_TO:-fiskowitz@lautin.com.ar}"
-    MAX_INSTANCES=1   # >1 rompe descargas/subidas: la afinidad de sesión de Cloud Run es best-effort y Streamlit necesita que TODO llegue a la misma instancia ;;
+    MAX_INSTANCES=1 ;;   # >1 rompe descargas/subidas (afinidad best-effort; Streamlit necesita instancia única)
   prod)
     PROJECT=chimola-490015; SERVICE=mayorista-b2b; SA=sa-mayorista@chimola-490015.iam.gserviceaccount.com
     BUCKET_PEDIDOS=chimola-mayorista-pedidos
