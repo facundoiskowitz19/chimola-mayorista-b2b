@@ -277,6 +277,7 @@ DEFAULTS_CONFIG = {
     "banner_texto": "",
     "aplicar_descvta": False,
     "minimo_pedido_unidades": None,
+    "minimo_pedido_monto": None,       # $ mínimo sobre subtotal de lista (sin IVA ni desc)
     # Las listas mayoristas de Aleph son SIN IVA (el Woo muestra "+IVA" y la NP
     # suma 21%). Se muestra como línea informativa en carrito/Excel. 0 = ocultar.
     "iva_pct": 21.0,

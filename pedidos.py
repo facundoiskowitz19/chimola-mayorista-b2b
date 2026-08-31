@@ -218,6 +218,28 @@ class StockInsuficiente(Exception):
         self.problemas = problemas
 
 
+class MinimoMontoNoAlcanzado(Exception):
+    """El subtotal a precio de lista (sin IVA ni descuento) no llega al mínimo."""
+    def __init__(self, minimo: float, subtotal: float):
+        super().__init__(f"Mínimo de compra ${minimo:,.0f}; subtotal ${subtotal:,.0f}")
+        self.minimo, self.subtotal = minimo, subtotal
+
+
+def resumen_cambios(orig: list[dict], nuevos: list[dict]) -> str:
+    """PURA: texto con lo modificado y lo quitado entre dos versiones de items."""
+    de = {str(i["sku"]): i for i in nuevos}
+    lineas = []
+    for it in orig:
+        n = de.get(str(it["sku"]))
+        etiqueta = (f"{it['producto_cod']} {it.get('producto_nombre', '')} | "
+                    f"{it.get('color', '')} | T {it.get('talle', '')}")
+        if n is None:
+            lineas.append(f"  - QUITADO: {etiqueta} (eran {it['cantidad']} u)")
+        elif int(n["cantidad"]) != int(it["cantidad"]):
+            lineas.append(f"  - {etiqueta}: {it['cantidad']} u → {n['cantidad']} u")
+    return "\n".join(lineas)
+
+
 def confirmar_pedido(usuario: dict, cliente: dict, items: list[dict], observaciones: str = "") -> tuple[dict, bytes]:
     """Valida stock en vivo → numera → Excel → backup GCS → Firestore → email.
     Devuelve (pedido, xlsx_bytes). Levanta StockInsuficiente si no alcanza."""
@@ -229,6 +251,13 @@ def confirmar_pedido(usuario: dict, cliente: dict, items: list[dict], observacio
     unidades = sum(int(i["cantidad"]) for i in items)
     if minimo and unidades < int(minimo):
         raise MinimoNoAlcanzado(int(minimo), unidades)
+    # Mínimo en $: sobre el subtotal a PRECIO DE LISTA (sin IVA ni descuento
+    # cabecera) — con el descuento aplicado el total puede quedar menor.
+    minimo_m = overrides.get_config().get("minimo_pedido_monto")
+    if minimo_m:
+        sub_lista = round(sum(int(i["cantidad"]) * float(i["precio_unit"]) for i in items), 2)
+        if sub_lista < float(minimo_m):
+            raise MinimoMontoNoAlcanzado(float(minimo_m), sub_lista)
     problemas = stock_mod.validar_stock(items)
     if problemas:
         raise StockInsuficiente(problemas)
@@ -372,12 +401,14 @@ def modificar_pedido(numero: int, cantidades: dict[str, int], por: str,
     nuevos = items_modificados(p["items"], cantidades)
     if [(i["sku"], i["cantidad"]) for i in nuevos] == [(i["sku"], i["cantidad"]) for i in p["items"]]:
         raise ValueError("No hay cambios para guardar — las cantidades quedaron igual.")
+    p["cambios_texto"] = resumen_cambios(p["items"], nuevos)
     p["items"] = nuevos
     tot = calcular_totales(p["items"], float(p.get("descuento_pct") or 0),
                            float(p.get("iva_pct") or 0))
     p.update({k: tot[k] for k in ("unidades", "subtotal", "descuento_monto", "total",
                                   "iva_monto", "total_con_iva")})
-    evento = {"estado": "modificado", "por": por, "en": dt.datetime.now(dt.timezone.utc)}
+    evento = {"estado": "modificado", "por": por, "en": dt.datetime.now(dt.timezone.utc),
+              "detalle": p["cambios_texto"]}
     try:
         p["xlsx_gcs_path"] = subir_backup(gcs_path(p), generar_excel(p))
     except Exception as e:  # noqa: BLE001 — el Excel se puede regenerar on-demand

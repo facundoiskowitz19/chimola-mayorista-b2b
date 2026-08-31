@@ -54,7 +54,8 @@ DEFAULT_TEMPLATES = {
         "asunto": "[Mayorista Lautin] Tu pedido N° {numero} fue modificado",
         "cuerpo": ("Pedido N° {numero} — {cliente} (cliente {cliente_cod})\n"
                    "Fecha del pedido: {fecha}\n\n"
-                   "Lautin ajustó tu pedido. Este es el detalle VIGENTE:\n\n{detalle}\n\n"
+                   "Lautin ajustó tu pedido. Qué cambió:\n{cambios}\n\n"
+                   "Este es el detalle VIGENTE:\n\n{detalle}\n\n"
                    "Unidades: {unidades}\n"
                    "Subtotal (lista {lista_precios}, sin IVA): {subtotal}\n"
                    "Descuento cabecera {descuento_pct}%: -{descuento_monto}\n"
@@ -113,6 +114,7 @@ def variables_pedido(pedido: dict, por: str = "") -> dict:
         "iva_pct": f"{iva:g}", "iva_monto": _fmt(pedido.get("iva_monto", 0)),
         "total_con_iva": _fmt(pedido.get("total_con_iva", 0)), "lineas_iva": lineas_iva,
         "observaciones": pedido.get("observaciones") or "—", "detalle": detalle,
+        "cambios": pedido.get("cambios_texto") or "—",
         "estado": pedido.get("estado", ""), "quien": quien,
     }
 

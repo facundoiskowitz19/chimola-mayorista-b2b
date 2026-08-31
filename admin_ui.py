@@ -1162,6 +1162,9 @@ def _detalle_pedido(p: dict) -> None:
     for h in p.get("historial", []):
         st.markdown(f"<p class='muted'>{h['en'].astimezone(TZ):%d/%m %H:%M} — <b>{h['estado']}</b> "
                     f"por {h['por']}</p>", unsafe_allow_html=True)
+        if h.get("detalle"):
+            st.markdown(f"<p class='muted' style='margin:-.4rem 0 .4rem 1.2rem; "
+                        f"white-space:pre-line'>{h['detalle']}</p>", unsafe_allow_html=True)
 
     items = pd.DataFrame(p["items"])
     items["foto"] = items.apply(
@@ -1250,6 +1253,11 @@ def _sec_config() -> None:
                                  value=int(cfg.get("minimo_pedido_unidades") or 0))
         c1.markdown("<p class='muted' style='margin-top:-0.6rem'>0 = sin mínimo</p>",
                     unsafe_allow_html=True)
+        minimo_m = c1.number_input("Mínimo de compra en $", min_value=0, step=5000,
+                                   value=int(cfg.get("minimo_pedido_monto") or 0))
+        c1.markdown("<p class='muted' style='margin-top:-0.6rem'>Sobre el subtotal a PRECIO DE LISTA "
+                    "(sin IVA ni descuento cabecera) — con el descuento aplicado el total puede quedar "
+                    "menor. 0 = sin mínimo</p>", unsafe_allow_html=True)
         iva = c2.number_input("IVA % informativo", min_value=0.0, max_value=30.0, step=0.5,
                               value=float(cfg.get("iva_pct") or 0))
         c2.markdown("<p class='muted' style='margin-top:-0.6rem'>Las listas de Aleph son sin IVA; se "
@@ -1277,6 +1285,7 @@ def _sec_config() -> None:
                 "banner_texto": banner.strip(),
                 "aplicar_descvta": bool(descvta),
                 "minimo_pedido_unidades": int(minimo) or None,
+                "minimo_pedido_monto": float(minimo_m) or None,
                 "iva_pct": float(iva),
                 "notificar_estados": bool(notificar),
                 "repo_dias_objetivo": int(repo),

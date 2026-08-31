@@ -439,3 +439,18 @@ def test_template_modificado():
     import email_notif as en
     assert "modificado" in en.EVENTOS and "modificado" in en.DEFAULT_TEMPLATES
     assert "{detalle}" in en.DEFAULT_TEMPLATES["modificado"]["cuerpo"]
+
+
+def test_resumen_cambios():
+    import pedidos as pe
+    orig = [{"sku": "A", "producto_cod": "M1", "producto_nombre": "Moch", "color": "AQUA",
+             "talle": "U", "cantidad": 3},
+            {"sku": "B", "producto_cod": "T2", "producto_nombre": "Rem", "color": "PINK",
+             "talle": "4", "cantidad": 2}]
+    nuevos = [{"sku": "A", "cantidad": 1}]
+    txt = pe.resumen_cambios(orig, nuevos)
+    assert "M1 Moch | AQUA | T U: 3 u → 1 u" in txt
+    assert "QUITADO: T2 Rem | PINK | T 4 (eran 2 u)" in txt
+    assert pe.resumen_cambios(orig, orig) == ""
+    import email_notif as en
+    assert "{cambios}" in en.DEFAULT_TEMPLATES["modificado"]["cuerpo"]

@@ -911,6 +911,11 @@ def page_carrito() -> None:
           <div style='font-size:1.35rem;margin-top:.4rem'>TOTAL: <b>{fmt_money(tot['total'])}</b></div>
           {iva_html}
           </div>""", unsafe_allow_html=True)
+        minimo_m = float(overrides.get_config().get("minimo_pedido_monto") or 0)
+        if minimo_m and tot["subtotal"] < minimo_m:
+            st.markdown(f"<div class='nota-acento'>El mínimo de compra es {fmt_money(minimo_m)} a "
+                        f"precio de lista — te faltan {fmt_money(minimo_m - tot['subtotal'])} para "
+                        "poder confirmar.</div>", unsafe_allow_html=True)
         if not puede_pedir():
             st.warning("Tu usuario no tiene cliente asociado; no podés confirmar pedidos.")
         with st.form("confirmar_form", border=False):
@@ -981,6 +986,11 @@ def page_carrito() -> None:
                 st.session_state.confirmando = False
                 st.error(f"El pedido mínimo es de {e.minimo} unidades y tenés {e.unidades}. "
                          "Agregá más productos para confirmar.")
+            except pedidos.MinimoMontoNoAlcanzado as e:
+                st.session_state.confirmando = False
+                st.error(f"El mínimo de compra es {fmt_money(e.minimo)} a precio de lista (sin IVA "
+                         f"ni descuento) y tu subtotal es {fmt_money(e.subtotal)} — te faltan "
+                         f"{fmt_money(e.minimo - e.subtotal)}.")
             except Exception as e:  # noqa: BLE001
                 st.session_state.confirmando = False
                 log.exception("Error confirmando pedido")
