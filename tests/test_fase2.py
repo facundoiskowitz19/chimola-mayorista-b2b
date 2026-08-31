@@ -242,7 +242,7 @@ def test_excel_marca_variante_manual():
     p.update(pedidos.calcular_totales(items, 25))
     p["xlsx_filename"] = pedidos.nombre_archivo(p)
     ws = openpyxl.load_workbook(io.BytesIO(pedidos.generar_excel(p)))["Detalle"]
-    assert "VARIANTE MANUAL" in ws["B2"].value
+    assert "VARIANTE MANUAL" in ws["C2"].value
     import email_notif
     assert "[VARIANTE MANUAL" in email_notif.variables_pedido(p)["detalle"]
 

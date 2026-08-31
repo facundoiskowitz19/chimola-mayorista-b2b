@@ -1092,10 +1092,7 @@ def page_pedidos() -> None:
                 ir("carrito")
         else:
             st.error("Ninguna variante de ese pedido está disponible hoy.")
-    try:
-        data = pedidos.descargar_backup(p["xlsx_gcs_path"]) if p.get("xlsx_gcs_path") else pedidos.generar_excel(p)
-    except Exception:  # noqa: BLE001
-        data = pedidos.generar_excel(p)
+    data = pedidos.generar_excel(p)   # fresco: siempre con las fotos
     b2.download_button("Descargar Excel", data=data, file_name=p["xlsx_filename"], use_container_width=True,
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     boton_odoo(p, key=f"odoo_{p['numero']}", col=b4)
@@ -1201,7 +1198,8 @@ def page_reposicion() -> None:
     cants_r = {str(v["sku"]): int(e["cantidad"] or 0)
                for (_, v), (_, e) in zip(sug.iterrows(), edited.iterrows())}
     links_r = {str(r["sku"]): u for _, r in sug.iterrows()
-               if (u := fotos.url_variante_publica(r["producto_cod"], r["color"]))}
+               if (u := fotos.url_variante_publica(r["producto_cod"], r["color"],
+                                                   solo_color=True))}
     ba, bx = st.columns([1, 1])
     firma_r = (dias, fkey)
     if bx.button("Exportar Excel del filtro actual", key="rp_xlsx_btn", use_container_width=True,
@@ -1266,7 +1264,7 @@ def _miniaturas_excel(sub: pd.DataFrame) -> dict[str, bytes]:
     from concurrent.futures import ThreadPoolExecutor
 
     def una(r):
-        fn = (fotos.foto_variante_filename(r["producto_cod"], r["color"])
+        fn = (fotos.foto_variante_filename(r["producto_cod"], r["color"], solo_color=True)
               if fotos.tiene_fotos(r["producto_cod"]) else None)
         return str(r["sku"]), (fotos.miniatura_jpeg(r["producto_cod"], fn) if fn else None)
 
@@ -1409,7 +1407,9 @@ def page_compra_rapida() -> None:
         cli_x = cliente_efectivo()
         iva_x = float(overrides.get_config().get("iva_pct") or 0)
         cants_x = {str(v["sku"]): q for v, q in seleccion}
-        links_x = {str(r["sku"]): r["foto"] for _, r in sub.iterrows() if r["foto"]}
+        links_x = {str(r["sku"]): u for _, r in sub.iterrows()
+                   if (u := fotos.url_variante_publica(r["producto_cod"], r["color"],
+                                                       solo_color=True))}
         ba, bx = st.columns([1, 1])
         firma_f = (busq, tuple(marca), tuple(categoria), tuple(tipo), tuple(temporada))
         if bx.button("Exportar Excel del filtro actual", key="cr_xlsx_btn", use_container_width=True,

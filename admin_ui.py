@@ -1185,13 +1185,11 @@ def _detalle_pedido(p: dict) -> None:
             st.rerun()
     if cols[2].button("Reenviar email", key=f"mail_{p['numero']}", use_container_width=True):
         try:
-            data = pedidos.descargar_backup(p["xlsx_gcs_path"]) if p.get("xlsx_gcs_path") else pedidos.generar_excel(p)
-            res = email_notif.enviar_confirmacion(p, data, p["xlsx_filename"])
+            res = email_notif.enviar_confirmacion(p, pedidos.generar_excel(p), p["xlsx_filename"])
             st.success(f"Reenviado a {', '.join(res['destinatarios'])}") if res["enviado"] else st.error(res["error"])
         except Exception as e:  # noqa: BLE001
             st.error(str(e))
-    cols[3].download_button("Excel", data=(pedidos.descargar_backup(p["xlsx_gcs_path"])
-                                           if p.get("xlsx_gcs_path") else pedidos.generar_excel(p)),
+    cols[3].download_button("Excel", data=pedidos.generar_excel(p),   # fresco: con fotos
                             file_name=p["xlsx_filename"], key=f"dl_{p['numero']}", use_container_width=True)
 
     # --- Modificar pedido: SOLO en estado confirmado (antes de procesar) ---

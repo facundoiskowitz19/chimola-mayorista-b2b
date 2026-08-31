@@ -129,7 +129,7 @@ def test_excel_y_nombres():
     wb = openpyxl.load_workbook(io.BytesIO(data))
     assert wb.sheetnames == ["Resumen", "Detalle"]
     det = wb["Detalle"]
-    assert det["A2"].value == "M211" and det["H2"].value == 3 and det["I2"].value == 32900
+    assert det["B2"].value == "M211" and det["I2"].value == 3 and det["J2"].value == 32900
     res = wb["Resumen"]
     vals = {res.cell(r, 1).value: res.cell(r, 2).value for r in range(1, 25)}
     assert vals["TOTAL"] == p["total"] == round(4 * 32900 * 0.8, 2)

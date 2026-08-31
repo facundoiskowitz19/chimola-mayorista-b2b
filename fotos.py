@@ -158,8 +158,11 @@ def url_foto_publica(producto_cod: str, filename: str) -> str:
     return _public_url(f"{config.FOTOS_PREFIX.rstrip('/')}/{producto_cod.strip().upper()}/{filename}")
 
 
-def foto_variante_filename(producto_cod: str, color: str | None = None) -> str | None:
-    """Filename de la foto de la variante: la de SU color, o la portada."""
+def foto_variante_filename(producto_cod: str, color: str | None = None,
+                           solo_color: bool = False) -> str | None:
+    """Filename de la foto de la variante: la de SU color, o la portada.
+    `solo_color=True` (Excels): si el color no tiene foto propia → None,
+    nunca una foto de otro color ni la portada."""
     prod = producto_cod.strip().upper()
     files = indice_fotos().get(prod, [])
     if not files:
@@ -169,13 +172,17 @@ def foto_variante_filename(producto_cod: str, color: str | None = None) -> str |
         fn = mapa.get(norm(color))
         if fn:
             return fn
+    if solo_color:
+        return None
     return _portada_filename(prod, files)
 
 
 @lru_cache(maxsize=16384)
-def url_variante_publica(producto_cod: str, color: str | None = None) -> str:
-    """URL pública de la foto de la variante ('' si el producto no tiene fotos)."""
-    fn = foto_variante_filename(producto_cod, color)
+def url_variante_publica(producto_cod: str, color: str | None = None,
+                         solo_color: bool = False) -> str:
+    """URL pública de la foto de la variante ('' si no hay; con `solo_color`,
+    '' también cuando el color no tiene foto propia)."""
+    fn = foto_variante_filename(producto_cod, color, solo_color)
     return url_foto_publica(producto_cod, fn) if fn else ""
 
 

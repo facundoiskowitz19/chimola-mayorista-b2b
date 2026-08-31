@@ -146,59 +146,60 @@ def generar_excel(pedido: dict) -> bytes:
         ws.write(r, 0, f"IVA {iva:g}%", bold); ws.write(r, 1, pedido.get("iva_monto", 0), money); r += 1
         ws.write(r, 0, "TOTAL c/IVA", bold); ws.write(r, 1, pedido.get("total_con_iva", 0), money_b); r += 1
 
-    # --- Detalle ---
+    # --- Detalle --- (la miniatura va PRIMERA, pedido del equipo)
     wd = wb.add_worksheet("Detalle")
-    cols = [("Producto", 12), ("Descripción", 36), ("Color", 16), ("Cód. color", 10), ("Talle", 8),
-            ("SKU", 20), ("EAN", 16), ("Cantidad", 10), ("Precio unit. lista", 16), ("Subtotal", 16),
-            ("Foto", 10), ("Imagen", 9)]
+    cols = [("Imagen", 9), ("Producto", 12), ("Descripción", 36), ("Color", 16), ("Cód. color", 10),
+            ("Talle", 8), ("SKU", 20), ("EAN", 16), ("Cantidad", 10), ("Precio unit. lista", 16),
+            ("Subtotal", 16), ("Foto", 10)]
     for c, (name, w) in enumerate(cols):
         wd.set_column(c, c, w)
         wd.write(0, c, name, hdr)
     for i, it in enumerate(pedido["items"], start=1):
-        wd.write(i, 0, it["producto_cod"])
+        wd.write(i, 1, it["producto_cod"])
         # Las variantes manuales no existen en Aleph: marcarlas para que el
         # equipo no las busque en el ERP al cargar la NP (SPECS §3).
         nombre_linea = it["producto_nombre"] + (" (VARIANTE MANUAL — no existe en Aleph)"
                                                 if it.get("manual") else "")
-        wd.write(i, 1, nombre_linea)
-        wd.write(i, 2, it["color"])
-        wd.write(i, 3, str(it["color_cod"]))
-        wd.write(i, 4, it["talle"])
-        wd.write(i, 5, it["sku"])
-        wd.write(i, 6, it.get("ean") or "")
-        wd.write(i, 7, it["cantidad"], intf)
-        wd.write(i, 8, it["precio_unit"], money)
-        wd.write_formula(i, 9, f"=H{i + 1}*I{i + 1}", money, it["subtotal"])
-        # Foto de la variante: link público + miniatura embebida (best-effort:
+        wd.write(i, 2, nombre_linea)
+        wd.write(i, 3, it["color"])
+        wd.write(i, 4, str(it["color_cod"]))
+        wd.write(i, 5, it["talle"])
+        wd.write(i, 6, it["sku"])
+        wd.write(i, 7, it.get("ean") or "")
+        wd.write(i, 8, it["cantidad"], intf)
+        wd.write(i, 9, it["precio_unit"], money)
+        wd.write_formula(i, 10, f"=I{i + 1}*J{i + 1}", money, it["subtotal"])
+        # Foto de la variante: miniatura en A + link público (best-effort:
         # el Excel del pedido JAMÁS falla por una foto).
         try:
             import fotos as _fotos
-            fn = (_fotos.foto_variante_filename(it["producto_cod"], it.get("color"))
+            fn = (_fotos.foto_variante_filename(it["producto_cod"], it.get("color"),
+                                                solo_color=True)
                   if _fotos.tiene_fotos(it["producto_cod"]) else None)
             if fn:
-                wd.write_url(i, 10, _fotos.url_foto_publica(it["producto_cod"], fn),
+                wd.write_url(i, 11, _fotos.url_foto_publica(it["producto_cod"], fn),
                              string="ver foto")
                 mini = _fotos.miniatura_jpeg(it["producto_cod"], fn)
                 if mini:
                     wd.set_row(i, 34)
-                    wd.insert_image(i, 11, f"{it['sku']}.jpg",
+                    wd.insert_image(i, 0, f"{it['sku']}.jpg",
                                     {"image_data": io.BytesIO(mini), "x_offset": 3,
                                      "y_offset": 3, "object_position": 1})
         except Exception:  # noqa: BLE001
             pass
     n = len(pedido["items"])
-    wd.write(n + 2, 6, "Totales", bold)
-    wd.write_formula(n + 2, 7, f"=SUM(H2:H{n + 1})", intf, pedido["unidades"])
-    wd.write_formula(n + 2, 9, f"=SUM(J2:J{n + 1})", money_b, pedido["subtotal"])
-    wd.write(n + 3, 6, f"Desc. {pedido['descuento_pct']:g}%", bold)
-    wd.write(n + 3, 9, -pedido["descuento_monto"], money)
-    wd.write(n + 4, 6, "TOTAL", bold)
-    wd.write(n + 4, 9, pedido["total"], money_b)
+    wd.write(n + 2, 7, "Totales", bold)
+    wd.write_formula(n + 2, 8, f"=SUM(I2:I{n + 1})", intf, pedido["unidades"])
+    wd.write_formula(n + 2, 10, f"=SUM(K2:K{n + 1})", money_b, pedido["subtotal"])
+    wd.write(n + 3, 7, f"Desc. {pedido['descuento_pct']:g}%", bold)
+    wd.write(n + 3, 10, -pedido["descuento_monto"], money)
+    wd.write(n + 4, 7, "TOTAL", bold)
+    wd.write(n + 4, 10, pedido["total"], money_b)
     if float(pedido.get("iva_pct") or 0) > 0:
-        wd.write(n + 5, 6, f"IVA {pedido['iva_pct']:g}%", bold)
-        wd.write(n + 5, 9, pedido.get("iva_monto", 0), money)
-        wd.write(n + 6, 6, "TOTAL c/IVA", bold)
-        wd.write(n + 6, 9, pedido.get("total_con_iva", 0), money_b)
+        wd.write(n + 5, 7, f"IVA {pedido['iva_pct']:g}%", bold)
+        wd.write(n + 5, 10, pedido.get("iva_monto", 0), money)
+        wd.write(n + 6, 7, "TOTAL c/IVA", bold)
+        wd.write(n + 6, 10, pedido.get("total_con_iva", 0), money_b)
     wd.freeze_panes(1, 0)
     wd.autofilter(0, 0, max(n, 1), len(cols) - 1)
 
