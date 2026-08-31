@@ -1363,149 +1363,130 @@ def page_compra_rapida() -> None:
         return
     df = df_catalogo()
     df = df[df["precio"].notna()]
-    tab_tabla, tab_pegar = st.tabs(["Tabla con miniaturas", "Pegar códigos"])
 
-    with tab_tabla:
-        c1, c2, c3, c4, c5 = st.columns([1.5, 1, 1, 1.2, 1])
-        busq = c1.text_input("Buscar", key="cr_busq", placeholder="código, nombre, EAN, color")
-        # Facetado dependiente: cada filtro solo ofrece opciones con match en los otros.
-        sel_prev = {"marca": st.session_state.get("cr_marca", []),
-                    "categoria": st.session_state.get("cr_cat", []),
-                    "rubro": st.session_state.get("cr_rubro", []),
-                    "temporada": st.session_state.get("cr_temp", [])}
-        ops = catalog.opciones_filtros(df, sel_prev)
-        for k, campo in (("cr_marca", "marca"), ("cr_cat", "categoria"),
-                         ("cr_rubro", "rubro"), ("cr_temp", "temporada")):
-            st.session_state[k] = [v for v in st.session_state.get(k, []) if v in ops[campo]]
-        marca = c2.multiselect("Marca", ops["marca"], key="cr_marca", placeholder="Todas")
-        categoria = c3.multiselect("Categoría", ops["categoria"], key="cr_cat", placeholder="Todas")
-        tipo = c4.multiselect("Tipo de producto", ops["rubro"], key="cr_rubro", placeholder="Todos")
-        temporada = c5.multiselect("Temporada", ops["temporada"], key="cr_temp", placeholder="Todas")
-        sub = catalog.filtrar_variantes(df, {"marca": marca, "categoria": categoria, "rubro": tipo,
-                                             "temporada": temporada}, busq).copy()
-        st.markdown(f"<p class='muted'>{len(sub)} variantes con stock y precio · scrolleá la tabla, "
-                    "cargá cantidades y tocá Agregar</p>", unsafe_allow_html=True)
-        # Scroll infinito: una sola tabla con TODO el filtro (Streamlit la virtualiza).
-        # Fotos con URL pública del bucket: firmar miles de URLs sería una llamada por foto.
-        sub["foto"] = [fotos.url_variante_publica(pcod, c)
-                       for pcod, c in zip(sub["producto_cod"], sub["color"])]
-        # Las variantes CON miniatura primero (los códigos "A" sin foto iban
-        # arriba por orden alfabético y la tabla arrancaba pelada).
-        sub = sub.sort_values("foto", key=lambda c: c == "", kind="stable")
-        sub["cantidad"] = 0
-        ver = st.session_state.get("cr_ver", 0)
-        # Sin columna de stock: el cliente nunca ve cuánto queda.
-        edited = st.data_editor(
-            sub[["foto", "producto_cod", "producto_nombre", "color", "talle", "precio", "cantidad"]],
-            hide_index=True, use_container_width=True, height=620, key=f"cr_editor_{ver}",
-            disabled=["foto", "producto_cod", "producto_nombre", "color", "talle", "precio"],
-            column_config={
-                "foto": st.column_config.ImageColumn("", width="small"),
-                "producto_cod": "Código", "producto_nombre": "Producto", "color": "Color", "talle": "Talle",
-                "precio": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
-                "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1, format="%d"),
-            })
-        seleccion = [(v, int(q)) for (_, v), q in zip(sub.iterrows(), edited["cantidad"])
-                     if int(q or 0) > 0]
-        cli_x = cliente_efectivo()
-        iva_x = float(overrides.get_config().get("iva_pct") or 0)
-        cants_x = {str(v["sku"]): q for v, q in seleccion}
-        links_x = {str(r["sku"]): u for _, r in sub.iterrows()
-                   if (u := fotos.url_variante_publica(r["producto_cod"], r["color"],
-                                                       solo_color=True))}
-        ba, bx = st.columns([1, 1])
-        firma_f = (busq, tuple(marca), tuple(categoria), tuple(tipo), tuple(temporada))
-        if bx.button("Exportar Excel del filtro actual", key="cr_xlsx_btn", use_container_width=True,
-                     help="Con la miniatura de cada variante embebida (hasta 600 filas; con más, va "
-                          "sin fotos). Cantidad editable, totales con tu descuento, link a cada foto. "
-                          "Completalo offline y subilo de nuevo acá abajo."):
-            con_fotos = len(sub) <= 600
-            minis = None
-            if con_fotos:
-                with st.spinner(f"Armando el Excel con {len(sub)} miniaturas..."):
-                    minis = _miniaturas_excel(sub)
-            else:
-                st.warning(f"El filtro tiene {len(sub)} variantes y el máximo con fotos es 600 — "
-                           "te lo doy sin fotos (afiná los filtros si las querés).")
-            st.session_state.cr_xlsx = (firma_f, cr.excel_plantilla(
-                sub, cants_x, cliente=cli_x, iva_pct=iva_x, links_foto=links_x,
-                miniaturas=minis), con_fotos)
-        listo = st.session_state.get("cr_xlsx")
-        if listo and listo[0] == firma_f:
-            bx.download_button("Descargar Excel (con fotos)" if listo[2] else "Descargar Excel (sin fotos)",
-                               data=listo[1], key="cr_xlsx_dl", use_container_width=True,
-                               file_name="compra_rapida.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        if ba.button("Agregar al carrito", type="primary", disabled=not seleccion, key="cr_add",
-                     use_container_width=True):
-            items, ajustes = [], []
-            for v, q in seleccion:
-                pedido = int(q)
-                q = min(pedido, int(v["stock"]))
-                if q < pedido:   # sin revelar el stock — aviso efímero
-                    toast_pendiente(f"{v['sku']}: estás superando la cantidad disponible — "
-                                    f"se cargó {q} de {pedido}.")
-                ub = int(v["ub"]) if ("ub" in v and pd.notna(v["ub"]) and v["ub"]) else 0
-                if ub > 1 and q % ub:
-                    q = (q // ub) * ub
-                    ajustes.append(f"{v['sku']}: ajustado a múltiplo de {ub} → {q}")
-                if q > 0:
-                    items.append(cr.item_desde_variante(v, q))
-            for a in ajustes:
-                st.warning(a)
-            if not items:
-                st.warning("Las cantidades quedaron en 0 tras aplicar los múltiplos.")
-                st.stop()
-            total = _agregar_items(items)
-            st.session_state.cr_ver = ver + 1
-            toast_pendiente(f"Agregaste {total} unidades al carrito.")
+    c1, c2, c3, c4, c5 = st.columns([1.5, 1, 1, 1.2, 1])
+    busq = c1.text_input("Buscar", key="cr_busq", placeholder="código, nombre, EAN, color")
+    # Facetado dependiente: cada filtro solo ofrece opciones con match en los otros.
+    sel_prev = {"marca": st.session_state.get("cr_marca", []),
+                "categoria": st.session_state.get("cr_cat", []),
+                "rubro": st.session_state.get("cr_rubro", []),
+                "temporada": st.session_state.get("cr_temp", [])}
+    ops = catalog.opciones_filtros(df, sel_prev)
+    for k, campo in (("cr_marca", "marca"), ("cr_cat", "categoria"),
+                     ("cr_rubro", "rubro"), ("cr_temp", "temporada")):
+        st.session_state[k] = [v for v in st.session_state.get(k, []) if v in ops[campo]]
+    marca = c2.multiselect("Marca", ops["marca"], key="cr_marca", placeholder="Todas")
+    categoria = c3.multiselect("Categoría", ops["categoria"], key="cr_cat", placeholder="Todas")
+    tipo = c4.multiselect("Tipo de producto", ops["rubro"], key="cr_rubro", placeholder="Todos")
+    temporada = c5.multiselect("Temporada", ops["temporada"], key="cr_temp", placeholder="Todas")
+    sub = catalog.filtrar_variantes(df, {"marca": marca, "categoria": categoria, "rubro": tipo,
+                                         "temporada": temporada}, busq).copy()
+    st.markdown(f"<p class='muted'>{len(sub)} variantes con stock y precio · scrolleá la tabla, "
+                "cargá cantidades y tocá Agregar</p>", unsafe_allow_html=True)
+    # Scroll infinito: una sola tabla con TODO el filtro (Streamlit la virtualiza).
+    # Fotos con URL pública del bucket: firmar miles de URLs sería una llamada por foto.
+    sub["foto"] = [fotos.url_variante_publica(pcod, c)
+                   for pcod, c in zip(sub["producto_cod"], sub["color"])]
+    # Las variantes CON miniatura primero (los códigos "A" sin foto iban
+    # arriba por orden alfabético y la tabla arrancaba pelada).
+    sub = sub.sort_values("foto", key=lambda c: c == "", kind="stable")
+    sub["cantidad"] = 0
+    ver = st.session_state.get("cr_ver", 0)
+    # Sin columna de stock: el cliente nunca ve cuánto queda.
+    edited = st.data_editor(
+        sub[["foto", "producto_cod", "producto_nombre", "color", "talle", "precio", "cantidad"]],
+        hide_index=True, use_container_width=True, height=620, key=f"cr_editor_{ver}",
+        disabled=["foto", "producto_cod", "producto_nombre", "color", "talle", "precio"],
+        column_config={
+            "foto": st.column_config.ImageColumn("", width="small"),
+            "producto_cod": "Código", "producto_nombre": "Producto", "color": "Color", "talle": "Talle",
+            "precio": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
+            "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1, format="%d"),
+        })
+    seleccion = [(v, int(q)) for (_, v), q in zip(sub.iterrows(), edited["cantidad"])
+                 if int(q or 0) > 0]
+    cli_x = cliente_efectivo()
+    iva_x = float(overrides.get_config().get("iva_pct") or 0)
+    cants_x = {str(v["sku"]): q for v, q in seleccion}
+    links_x = {str(r["sku"]): u for _, r in sub.iterrows()
+               if (u := fotos.url_variante_publica(r["producto_cod"], r["color"],
+                                                   solo_color=True))}
+    ba, bx = st.columns([1, 1])
+    firma_f = (busq, tuple(marca), tuple(categoria), tuple(tipo), tuple(temporada))
+    if bx.button("Exportar Excel del filtro actual", key="cr_xlsx_btn", use_container_width=True,
+                 help="Con la miniatura de cada variante embebida (hasta 600 filas; con más, va "
+                      "sin fotos). Cantidad editable, totales con tu descuento, link a cada foto. "
+                      "Completalo offline y subilo de nuevo acá abajo."):
+        con_fotos = len(sub) <= 600
+        minis = None
+        if con_fotos:
+            with st.spinner(f"Armando el Excel con {len(sub)} miniaturas..."):
+                minis = _miniaturas_excel(sub)
+        else:
+            st.warning(f"El filtro tiene {len(sub)} variantes y el máximo con fotos es 600 — "
+                       "te lo doy sin fotos (afiná los filtros si las querés).")
+        st.session_state.cr_xlsx = (firma_f, cr.excel_plantilla(
+            sub, cants_x, cliente=cli_x, iva_pct=iva_x, links_foto=links_x,
+            miniaturas=minis), con_fotos)
+    listo = st.session_state.get("cr_xlsx")
+    if listo and listo[0] == firma_f:
+        bx.download_button("Descargar Excel (con fotos)" if listo[2] else "Descargar Excel (sin fotos)",
+                           data=listo[1], key="cr_xlsx_dl", use_container_width=True,
+                           file_name="compra_rapida.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    if ba.button("Agregar al carrito", type="primary", disabled=not seleccion, key="cr_add",
+                 use_container_width=True):
+        items, ajustes = [], []
+        for v, q in seleccion:
+            pedido = int(q)
+            q = min(pedido, int(v["stock"]))
+            if q < pedido:   # sin revelar el stock — aviso efímero
+                toast_pendiente(f"{v['sku']}: estás superando la cantidad disponible — "
+                                f"se cargó {q} de {pedido}.")
+            ub = int(v["ub"]) if ("ub" in v and pd.notna(v["ub"]) and v["ub"]) else 0
+            if ub > 1 and q % ub:
+                q = (q // ub) * ub
+                ajustes.append(f"{v['sku']}: ajustado a múltiplo de {ub} → {q}")
+            if q > 0:
+                items.append(cr.item_desde_variante(v, q))
+        for a in ajustes:
+            st.warning(a)
+        if not items:
+            st.warning("Las cantidades quedaron en 0 tras aplicar los múltiplos.")
+            st.stop()
+        total = _agregar_items(items)
+        st.session_state.cr_ver = ver + 1
+        toast_pendiente(f"Agregaste {total} unidades al carrito.")
+        st.rerun()
+
+    st.markdown("<div class='kicker' style='margin-top:.6rem'>Cargar el Excel que exportaste</div>",
+                unsafe_allow_html=True)
+    up = st.file_uploader("Subí el archivo con la columna Cantidad completa", type=["xlsx"],
+                          key="cr_tabla_file", label_visibility="collapsed")
+    if up is not None:
+        data_up = up.getvalue()
+        hash_up = hashlib.md5(data_up).hexdigest()
+        ya_cargado = st.session_state.get("cr_tabla_file_hash") == hash_up
+        texto_up, err = cr.texto_desde_excel(data_up)
+        if err:
+            st.error(err)
+        elif not texto_up:
+            st.warning("El archivo no tiene ninguna fila con Cantidad mayor a 0.")
+        elif ya_cargado:
+            st.markdown("<p class='muted'>Ese archivo ya se cargó al carrito — modificalo o subí "
+                        "otro.</p>", unsafe_allow_html=True)
+            procesar = st.button("Cargarlo al carrito de nuevo", key="cr_tabla_up_otra_vez")
+        else:
+            procesar = st.button(f"Cargar al carrito las {len(texto_up.splitlines())} líneas con cantidad",
+                                 type="primary", key="cr_tabla_up_add")
+        if up is not None and not err and texto_up and procesar:
+            items_up, incidencias = cr.resolver_pegado(texto_up, df)
+            total = _agregar_items(items_up) if items_up else 0
+            toast_pendiente(f"Agregaste {total} unidades al carrito desde el archivo." if total
+                            else "No se agregó nada — revisá el detalle de las líneas.")
+            st.session_state.cr_resultado_tabla = (cr.resumen_incidencias(incidencias), incidencias, total)
+            st.session_state.cr_tabla_file_hash = hash_up
             st.rerun()
-
-    with tab_tabla:
-        st.markdown("<div class='kicker' style='margin-top:.6rem'>Cargar el Excel que exportaste</div>",
-                    unsafe_allow_html=True)
-        up = st.file_uploader("Subí el archivo con la columna Cantidad completa", type=["xlsx"],
-                              key="cr_tabla_file", label_visibility="collapsed")
-        if up is not None:
-            data_up = up.getvalue()
-            hash_up = hashlib.md5(data_up).hexdigest()
-            ya_cargado = st.session_state.get("cr_tabla_file_hash") == hash_up
-            texto_up, err = cr.texto_desde_excel(data_up)
-            if err:
-                st.error(err)
-            elif not texto_up:
-                st.warning("El archivo no tiene ninguna fila con Cantidad mayor a 0.")
-            elif ya_cargado:
-                st.markdown("<p class='muted'>Ese archivo ya se cargó al carrito — modificalo o subí "
-                            "otro.</p>", unsafe_allow_html=True)
-                procesar = st.button("Cargarlo al carrito de nuevo", key="cr_tabla_up_otra_vez")
-            else:
-                procesar = st.button(f"Cargar al carrito las {len(texto_up.splitlines())} líneas con cantidad",
-                                     type="primary", key="cr_tabla_up_add")
-            if up is not None and not err and texto_up and procesar:
-                items_up, incidencias = cr.resolver_pegado(texto_up, df)
-                total = _agregar_items(items_up) if items_up else 0
-                toast_pendiente(f"Agregaste {total} unidades al carrito desde el archivo." if total
-                                else "No se agregó nada — revisá el detalle de las líneas.")
-                st.session_state.cr_resultado_tabla = (cr.resumen_incidencias(incidencias), incidencias, total)
-                st.session_state.cr_tabla_file_hash = hash_up
-                st.rerun()
-        _mostrar_resultado_cr("cr_resultado_tabla")
-
-    with tab_pegar:
-        st.markdown("<p class='muted'>Una línea por variante: <code>SKU,cantidad</code> o "
-                    "<code>EAN,cantidad</code> (coma, punto y coma, tab o espacio). "
-                    "Podés pegar directo desde Excel.</p>", unsafe_allow_html=True)
-        _mostrar_resultado_cr("cr_resultado")
-        with st.form("cr_pegar", border=False):
-            texto = st.text_area("Códigos", height=170, placeholder="M211_U_2059,3\n7798218194446,2")
-            ok = st.form_submit_button("Procesar y agregar", type="primary")
-        if ok and texto.strip():
-            items, incidencias = cr.resolver_pegado(texto, df)
-            total = _agregar_items(items) if items else 0
-            toast_pendiente(f"Agregaste {total} unidades al carrito." if total
-                            else "No se agregó nada al carrito — revisá el detalle de las líneas.")
-            st.session_state.cr_resultado = (cr.resumen_incidencias(incidencias), incidencias, total)
-            st.rerun()
+    _mostrar_resultado_cr("cr_resultado_tabla")
 
 
 def page_admin() -> None:
