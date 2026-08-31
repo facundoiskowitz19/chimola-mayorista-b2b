@@ -17,13 +17,11 @@
     font-family: "Source Serif 4", Georgia, "Times New Roman", serif; }
   .deck { position: relative; width: 100%; height: 100%; }
 
-  /* ---------- slides ---------- */
   .slide { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     padding: 4.5vh 5vw; opacity: 0; pointer-events: none; transform: translateY(18px);
     transition: opacity .55s ease, transform .55s ease; }
   .slide.active { opacity: 1; pointer-events: auto; transform: none; }
 
-  /* revelado escalonado del contenido del slide activo */
   .reveal { opacity: 0; transform: translateY(16px); transition: opacity .6s ease, transform .6s ease; }
   .active .reveal { opacity: 1; transform: none; }
   .active .reveal:nth-child(1) { transition-delay: .10s; }
@@ -39,7 +37,6 @@
   h2 { font-size: clamp(28px, 3.3vw, 46px); line-height: 1.08; font-weight: 700; margin-bottom: 18px; }
   .sub { font-size: clamp(16px, 1.5vw, 21px); color: var(--muted); margin-top: 18px; max-width: 34ch; }
 
-  /* layout funcionalidad: texto izquierda, captura derecha */
   .split { display: grid; grid-template-columns: minmax(320px, 30fr) 46fr; gap: 4.5vw;
     align-items: center; width: 100%; max-width: 1750px; }
   ul.puntos { list-style: none; margin-top: 6px; }
@@ -54,7 +51,6 @@
     font-weight: 700; color: #fff; background: var(--tinta); padding: 4px 10px; border-radius: 2px;
     margin-left: 10px; vertical-align: middle; }
 
-  /* marco tipo navegador para las capturas */
   .browser { background: #fff; border: 1px solid var(--borde); border-radius: 4px; overflow: hidden;
     box-shadow: 0 22px 60px rgba(32, 30, 29, .16); }
   .active .browser { animation: asoma .8s ease .15s both; }
@@ -67,7 +63,6 @@
     font-family: ui-monospace, Menlo, monospace; letter-spacing: .02em; }
   .browser img { display: block; width: 100%; height: auto; }
 
-  /* crossfade apagado/encendido en el slide de catálogo */
   .xfade { position: relative; }
   .xfade img + img { position: absolute; inset: 0; opacity: 0; animation: prende 7s ease-in-out infinite; }
   @keyframes prende { 0%, 45% { opacity: 0; } 50%, 95% { opacity: 1; } 100% { opacity: 0; } }
@@ -75,7 +70,6 @@
     text-transform: uppercase; font-weight: 700; background: var(--cian); color: #fff;
     padding: 5px 11px; border-radius: 2px; opacity: 0; animation: prende 7s ease-in-out infinite; }
 
-  /* portada y cierre */
   .centro { text-align: center; flex-direction: column; }
   .logo { height: 58px; margin-bottom: 34px; }
   .active .logo { animation: logoIn 1s ease both; }
@@ -88,7 +82,6 @@
     color: var(--cian-oscuro); background: var(--cian-tinte); padding: 8px 16px; border-radius: 2px;
     display: inline-block; margin-top: 10px; }
 
-  /* cromo del deck */
   .progreso { position: fixed; top: 0; left: 0; height: 3px; background: var(--cian); width: 0;
     transition: width .45s ease; z-index: 10; }
   .contador { position: fixed; right: 22px; bottom: 16px; font-size: 13px; color: var(--muted);
@@ -115,21 +108,21 @@
     <div class="kicker reveal">Chimola · Lima — venta exclusiva mayorista</div>
     <h1 class="reveal">Sitio Mayorista B2B</h1>
     <div class="linea reveal"></div>
-    <p class="sub reveal" style="max-width:46ch; margin:0 auto">Catálogo con fotos y stock real, pedidos
-      en tres clicks y administración completa — hecho a medida sobre los datos de Aleph.</p>
+    <p class="sub reveal" style="max-width:46ch; margin:0 auto">Cuatro formas de comprar, un admin que
+      edita todo, y comunicaciones que siempre llegan con el Excel listo.</p>
     <div class="hint">→ o click para avanzar &nbsp;·&nbsp; F pantalla completa</div>
   </section>
 
-  <!-- 2 · Catálogo -->
+  <!-- 2 · Forma 1: catálogo -->
   <section class="slide"><div class="split">
     <div>
-      <div class="kicker reveal">Para clientes y franquicias</div>
-      <h2 class="reveal">Catálogo con fotos y stock real</h2>
+      <div class="kicker reveal">Cómo se compra · 1 de 4</div>
+      <h2 class="reveal">Mirando el catálogo</h2>
       <ul class="puntos">
-        <li class="reveal">Solo variantes <b>con stock físico en Ezeiza</b> — lo que se ve, se puede pedir.</li>
-        <li class="reveal">Filtros por <b>categoría, tipo, marca, temporada, color y talle</b> + búsqueda por código, nombre o EAN.</li>
-        <li class="reveal">Destacados primero y scroll continuo, sin páginas.</li>
-        <li class="reveal">Switch <b>“Encender el sitio”</b>: cada producto muestra la foto de su color más claro.</li>
+        <li class="reveal">Fotos y <b>stock real de Ezeiza</b>: lo que se ve, se puede pedir.</li>
+        <li class="reveal">Filtros que acompañan el scroll, búsqueda y <b>scroll infinito</b>.</li>
+        <li class="reveal"><b>«Cargar cantidades»</b> abre la compra ahí mismo, sin salir de la vista.</li>
+        <li class="reveal">Y el switch <b>“Encender el sitio”</b>: todo el catálogo en colores claros.</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Catálogo</span></div>
@@ -141,29 +134,13 @@
     </div>
   </div></section>
 
-  <!-- 3 · Compra rápida desde el catálogo -->
+  <!-- 3 · La grilla -->
   <section class="slide"><div class="split">
     <div>
-      <div class="kicker reveal">Para clientes y franquicias</div>
-      <h2 class="reveal">Comprá sin salir del catálogo</h2>
-      <ul class="puntos">
-        <li class="reveal"><b>“Cargar cantidades”</b> abre el panel de compra ahí mismo, en la vista de la categoría.</li>
-        <li class="reveal">Cantidades por variante <b>sin perder los filtros ni el scroll</b>.</li>
-        <li class="reveal">Total en vivo y directo al carrito.</li>
-        <li class="reveal">Ideal para recorrer una categoría entera cargando a medida que mirás.</li>
-      </ul>
-    </div>
-    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Catálogo</span></div>
-      <img src="img/02b_panel_inline.png" alt="Panel de compra en el catálogo"></div>
-  </div></section>
-
-  <!-- 4 · Matriz color × talle -->
-  <section class="slide"><div class="split">
-    <div>
-      <div class="kicker reveal">Para clientes y franquicias</div>
+      <div class="kicker reveal">Cómo se compra · 1 de 4</div>
       <h2 class="reveal">Talles y colores: la grilla</h2>
       <ul class="puntos">
-        <li class="reveal">Cuando el producto tiene <b>talle y color</b>, la carga es una <b>matriz</b>: una fila por color, una columna por talle.</li>
+        <li class="reveal">Con <b>talle y color</b>, la carga es una <b>matriz</b>: una fila por color, una columna por talle.</li>
         <li class="reveal">Todas las variantes del producto <b>de una sola vez</b>.</li>
         <li class="reveal">Respeta la <b>unidad de bulto</b> y avisa si se pide de más — sin revelar el stock.</li>
         <li class="reveal">Arriba, la galería: las miniaturas cambian el visor por color.</li>
@@ -173,103 +150,151 @@
       <img src="img/02_matriz.png" alt="Matriz color por talle"></div>
   </div></section>
 
-  <!-- 5 · Carrito: precios del cliente + confirmación -->
+  <!-- 4 · Forma 2: compra rápida -->
   <section class="slide"><div class="split">
     <div>
-      <div class="kicker reveal">Para clientes y franquicias</div>
-      <h2 class="reveal">Cada cliente ve sus precios</h2>
-      <ul class="puntos">
-        <li class="reveal">Cada cuenta está atada a un cliente de Aleph: <b>su lista de precios</b> y su <b>descuento de cabecera</b>, como en la NP.</li>
-        <li class="reveal">IVA informativo — las listas mayoristas son sin IVA.</li>
-        <li class="reveal">El stock <b>nunca se muestra</b>; el sitio valida contra BigQuery al confirmar (nada de sobreventa).</li>
-        <li class="reveal">Confirmar genera el <b>Excel numerado</b> del pedido y avisa a Lautin.</li>
-      </ul>
-    </div>
-    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Carrito</span></div>
-      <img src="img/03_carrito.png" alt="Carrito con totales"></div>
-  </div></section>
-
-  <!-- 6 · Compra rápida -->
-  <section class="slide"><div class="split">
-    <div>
-      <div class="kicker reveal">Para clientes y franquicias</div>
+      <div class="kicker reveal">Cómo se compra · 2 de 4</div>
       <h2 class="reveal">Compra rápida</h2>
       <ul class="puntos">
-        <li class="reveal">Tabla con miniaturas y filtros: <b>cantidades directo sobre la lista</b>.</li>
-        <li class="reveal"><b>Pegar códigos</b> desde Excel (SKU o EAN + cantidad) y listo.</li>
-        <li class="reveal"><b>Exportar Excel del filtro actual</b>, completarlo offline y volver a subirlo.</li>
-        <li class="reveal">Reconciliación línea por línea: agregadas, ajustadas, sin reconocer.</li>
+        <li class="reveal">Una sola vista: <b>todo el catálogo en una tabla</b> con miniaturas.</li>
+        <li class="reveal">Cinco filtros que se cruzan solos (marca, categoría, tipo, temporada + búsqueda).</li>
+        <li class="reveal"><b>Cantidades directo sobre la lista</b> y un click al carrito.</li>
+        <li class="reveal">Las variantes con foto van primero.</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Compra rápida</span></div>
       <img src="img/05_compra_rapida.png" alt="Compra rápida"></div>
   </div></section>
 
-  <!-- 7 · Reposición -->
+  <!-- 5 · Forma 3: el circuito Excel -->
   <section class="slide"><div class="split">
     <div>
-      <div class="kicker reveal">Solo franquicias</div>
+      <div class="kicker reveal">Cómo se compra · 3 de 4</div>
+      <h2 class="reveal">El circuito Excel</h2>
+      <ul class="puntos">
+        <li class="reveal"><b>Exportás el filtro</b>: miniaturas, link a cada foto, precios de TU lista y totales con tu descuento.</li>
+        <li class="reveal">Todo bloqueado salvo <b>Cantidad</b> (resaltada): imposible romperlo.</li>
+        <li class="reveal">Lo completás offline, con quien quieras, y <b>lo subís tal cual</b>.</li>
+        <li class="reveal">El sitio reconcilia línea por línea: agregadas, ajustadas, sin reconocer.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>compra_rapida.xlsx — Excel</span></div>
+      <img src="img/04_excel.png" alt="Excel exportado con miniaturas"></div>
+  </div></section>
+
+  <!-- 6 · Forma 4: reposición (franquicias) -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Cómo se compra · 4 de 4 — franquicias</div>
       <h2 class="reveal">Reposición sugerida</h2>
       <ul class="puntos">
-        <li class="reveal">Cruza <b>lo que vendió el punto de venta</b> (últimos 30 días) con lo disponible en Ezeiza.</li>
-        <li class="reveal">Selector de <b>días a cubrir: 7 / 14 / 21 / 30</b> — recalcula al instante.</li>
-        <li class="reveal">Filtros por categoría y temporada; lo más urgente primero.</li>
-        <li class="reveal">Cantidades sugeridas editables y <b>un click al carrito</b>.</li>
+        <li class="reveal">Cruza <b>lo que vendió tu punto de venta</b> con lo disponible en Ezeiza.</li>
+        <li class="reveal">Días a cubrir (7/14/21/30), filtros y <b>cantidades sugeridas editables</b>.</li>
+        <li class="reveal">Un click al carrito — o el mismo circuito Excel, ya precargado.</li>
+        <li class="reveal">Y el pedido sale en <b>formato Odoo</b>, listo para importar en tu sistema.</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Reposición</span></div>
       <img src="img/06_reposicion.png" alt="Reposición sugerida"></div>
   </div></section>
 
-  <!-- 8 · El cliente ve todo lo que pidió -->
+  <!-- 7 · Autogestión -->
   <section class="slide"><div class="split">
     <div>
-      <div class="kicker reveal">Para clientes y franquicias</div>
-      <h2 class="reveal">El cliente ve todo lo que pidió</h2>
+      <div class="kicker reveal">Cómo se compra · el día después</div>
+      <h2 class="reveal">El cliente se maneja solo</h2>
       <ul class="puntos">
-        <li class="reveal">En su portal: <b>historial completo</b> con estado de cada pedido (confirmado / procesado / cancelado).</li>
-        <li class="reveal">Detalle línea por línea: <b>productos, cantidades, precios y totales</b>.</li>
-        <li class="reveal"><b>Repetir pedido</b>, re-descargar el Excel, cancelar mientras Lautin no lo procesó.</li>
-        <li class="reveal">Franquicias: <b>export formato Odoo</b> (dos hojas listas para la importación masiva).</li>
+        <li class="reveal"><b>Mis pedidos</b>: historial con estados, detalle completo, repetir, re-descargar el Excel.</li>
+        <li class="reveal">Puede <b>cancelar</b> mientras Lautin no lo procesó — con aviso automático.</li>
+        <li class="reveal"><b>Mis datos</b>: contacto, teléfono y cambio de password, sin llamar a nadie.</li>
+        <li class="reveal">Avisos honestos: cuánto falta para el mínimo, qué se ajustó y por qué.</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Mis pedidos</span></div>
       <img src="img/07_pedidos.png" alt="Mis pedidos"></div>
   </div></section>
 
-  <!-- 9 · Admin: así se edita un producto -->
+  <!-- 8 · Admin: producto -->
   <section class="slide"><div class="split">
     <div>
-      <div class="kicker reveal">Para el equipo<span class="badge">Admin</span></div>
-      <h2 class="reveal">Así se edita un producto</h2>
+      <div class="kicker reveal">Qué maneja el equipo<span class="badge">Admin</span></div>
+      <h2 class="reveal">Todo editable: el producto</h2>
       <ul class="puntos">
-        <li class="reveal">Todo lo de Aleph se puede <b>pisar cuando haga falta</b>: nombre, descripción, precios por lista, U.B.</li>
-        <li class="reveal"><b>Variantes en tabla editable</b>: stock manual, ocultar u ajustar precio por variante.</li>
-        <li class="reveal"><b>Fotos por color</b>: asignación automática + corrección manual.</li>
-        <li class="reveal">Publicar / ocultar / destacar — solo o <b>en lote</b> por tipo, temporada o categoría.</li>
+        <li class="reveal"><b>Pisar lo de Aleph</b> cuando haga falta: nombre, descripción, precios por lista, U.B.</li>
+        <li class="reveal">Variantes una por una: <b>stock manual, ocultar, precio</b>.</li>
+        <li class="reveal"><b>Fotos por color</b> + elegir la <b>portada</b> del catálogo.</li>
+        <li class="reveal">Publicar / ocultar / destacar — solo o en lote por tipo, temporada o categoría.</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Administración</span></div>
-      <img src="img/08_admin_editor.png" alt="Editor de producto del admin"></div>
+      <img src="img/08_admin_editor.png" alt="Editor de producto"></div>
   </div></section>
 
-  <!-- 10 · Admin: toda la info del cliente -->
+  <!-- 9 · Admin: cliente -->
   <section class="slide"><div class="split">
     <div>
-      <div class="kicker reveal">Para el equipo<span class="badge">Admin</span></div>
-      <h2 class="reveal">Todo el cliente, en una ficha</h2>
+      <div class="kicker reveal">Qué maneja el equipo<span class="badge">Admin</span></div>
+      <h2 class="reveal">Todo editable: el cliente</h2>
       <ul class="puntos">
-        <li class="reveal">Datos de Aleph + ajustes del sitio: <b>descuento, lista de precios, contacto, CUIT, nombre en Odoo</b>.</li>
-        <li class="reveal"><b>Sus pedidos y estados</b>, con el detalle de cada uno.</li>
-        <li class="reveal">Usuarios de acceso: alta, <b>reset de password</b>, activar/desactivar.</li>
-        <li class="reveal"><b>Import del historial de Aleph</b> (sin duplicar) y reposición sugerida de su punto de venta.</li>
+        <li class="reveal"><b>Rol y cliente de Aleph</b> de cada usuario de acceso.</li>
+        <li class="reveal">Overrides de <b>descuento y lista de precios</b> — sin tocar el ERP.</li>
+        <li class="reveal">Contacto, CUIT y <b>nombre en Odoo</b> para el export de franquicias.</li>
+        <li class="reveal">Alta de usuarios, <b>reset de password</b>, activar/desactivar.</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Administración</span></div>
-      <img src="img/10_admin_cliente.png" alt="Ficha de cliente del admin"></div>
+      <img src="img/09_cliente_edit.png" alt="Edición de cliente"></div>
   </div></section>
 
-  <!-- 11 · Cierre -->
+  <!-- 10 · Admin: pedidos modificables -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Qué maneja el equipo<span class="badge">Admin</span></div>
+      <h2 class="reveal">Los pedidos también se tocan</h2>
+      <ul class="puntos">
+        <li class="reveal"><b>Modificar un pedido confirmado</b>: cambiar cantidades o quitar líneas.</li>
+        <li class="reveal">Recalcula totales, <b>regenera el Excel</b> y le avisa al cliente qué cambió.</li>
+        <li class="reveal">Estados con un click (procesado / cancelado) — y una vez procesado, <b>inmutable</b>.</li>
+        <li class="reveal">Cada cambio queda en el historial del pedido, con quién y cuándo.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Administración</span></div>
+      <img src="img/10b_modificar.png" alt="Modificar pedido"></div>
+  </div></section>
+
+  <!-- 11 · Admin: historia del cliente -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Qué maneja el equipo<span class="badge">Admin</span></div>
+      <h2 class="reveal">La historia de cada cliente</h2>
+      <ul class="puntos">
+        <li class="reveal">Métricas al toque: <b>total histórico, ticket promedio, último pedido</b>.</li>
+        <li class="reveal">Todos sus pedidos con estados, y el <b>top de productos</b> que compra.</li>
+        <li class="reveal"><b>Import del historial de Aleph</b>: los pedidos previos al sitio, sin duplicar.</li>
+        <li class="reveal">Y su reposición sugerida, para llegar a la llamada con la propuesta armada.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Administración</span></div>
+      <img src="img/10_admin_cliente.png" alt="Ficha del cliente"></div>
+  </div></section>
+
+  <!-- 12 · Comunicaciones -->
+  <section class="slide"><div class="split">
+    <div>
+      <div class="kicker reveal">Comunicaciones</div>
+      <h2 class="reveal">Siempre con el Excel adjunto</h2>
+      <ul class="puntos">
+        <li class="reveal">Cada evento avisa solo: <b>confirmación, modificación, procesado, cancelación</b>.</li>
+        <li class="reveal">El Excel va SIEMPRE adjunto — <b>con miniaturas y link a las fotos</b> de cada línea.</li>
+        <li class="reveal">Si Lautin modifica, el mail dice <b>exactamente qué cambió y qué se quitó</b>.</li>
+        <li class="reveal">Los textos se editan desde Config, con vista previa y envío de prueba.</li>
+      </ul>
+    </div>
+    <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>Email — pedido modificado</span></div>
+      <img src="img/11_email_mod.png" alt="Email de modificación"></div>
+  </div></section>
+
+  <!-- 13 · Cierre -->
   <section class="slide centro">
     <img class="logo" src="img/logo_lautin.png" alt="Lautin">
     <div class="kicker reveal">Probalo hoy</div>
