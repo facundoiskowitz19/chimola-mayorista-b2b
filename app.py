@@ -1389,6 +1389,9 @@ def page_compra_rapida() -> None:
         # Fotos con URL pública del bucket: firmar miles de URLs sería una llamada por foto.
         sub["foto"] = [fotos.url_variante_publica(pcod, c)
                        for pcod, c in zip(sub["producto_cod"], sub["color"])]
+        # Las variantes CON miniatura primero (los códigos "A" sin foto iban
+        # arriba por orden alfabético y la tabla arrancaba pelada).
+        sub = sub.sort_values("foto", key=lambda c: c == "", kind="stable")
         sub["cantidad"] = 0
         ver = st.session_state.get("cr_ver", 0)
         # Sin columna de stock: el cliente nunca ve cuánto queda.
