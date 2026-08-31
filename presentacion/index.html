@@ -69,6 +69,8 @@
   .xfade .tag { position: absolute; right: 14px; top: 14px; font-size: 11px; letter-spacing: .13em;
     text-transform: uppercase; font-weight: 700; background: var(--cian); color: #fff;
     padding: 5px 11px; border-radius: 2px; opacity: 0; animation: prende 7s ease-in-out infinite; }
+  @keyframes apaga { 0%, 45% { opacity: 1; } 50%, 95% { opacity: 0; } 100% { opacity: 1; } }
+  .xfade .tag1 { animation: apaga 7s ease-in-out infinite; background: var(--tinta); }
 
   .centro { text-align: center; flex-direction: column; }
   .logo { height: 58px; margin-bottom: 34px; }
@@ -134,26 +136,32 @@
     </div>
   </div></section>
 
-  <!-- 3 · La grilla -->
+  <!-- 3 · Cargar cantidades: solo color vs talle × color -->
   <section class="slide"><div class="split">
     <div>
-      <div class="kicker reveal">Cómo se compra · 1 de 4</div>
-      <h2 class="reveal">Talles y colores: la grilla</h2>
+      <div class="kicker reveal">Cómo se compra · 2 de 4</div>
+      <h2 class="reveal">Tocá «Cargar cantidades»</h2>
       <ul class="puntos">
-        <li class="reveal">Con <b>talle y color</b>, la carga es una <b>matriz</b>: una fila por color, una columna por talle.</li>
-        <li class="reveal">Todas las variantes del producto <b>de una sola vez</b>.</li>
-        <li class="reveal">Respeta la <b>unidad de bulto</b> y avisa si se pide de más — sin revelar el stock.</li>
+        <li class="reveal">Producto con <b>colores</b>: una fila por color, y listo.</li>
+        <li class="reveal">Con <b>talle y color</b>: la matriz completa — <b>todas las variantes de una sola vez</b>.</li>
+        <li class="reveal">Total en vivo, aviso si pedís de más (sin revelar el stock) y al carrito.</li>
         <li class="reveal">Arriba, la galería: las miniaturas cambian el visor por color.</li>
       </ul>
     </div>
     <div class="browser reveal"><div class="bar"><i></i><i></i><i></i><span>mayorista.lautin — Producto</span></div>
-      <img src="img/02_matriz.png" alt="Matriz color por talle"></div>
+      <div class="xfade">
+        <img src="img/02a_color.png" alt="Variantes solo por color">
+        <img src="img/02b_talle_color.png" alt="Matriz talle por color">
+        <div class="tag tag1">Solo color</div>
+        <div class="tag">Talle × color</div>
+      </div>
+    </div>
   </div></section>
 
   <!-- 4 · Forma 2: compra rápida -->
   <section class="slide"><div class="split">
     <div>
-      <div class="kicker reveal">Cómo se compra · 2 de 4</div>
+      <div class="kicker reveal">Cómo se compra · 3 de 4</div>
       <h2 class="reveal">Compra rápida</h2>
       <ul class="puntos">
         <li class="reveal">Una sola vista: <b>todo el catálogo en una tabla</b> con miniaturas.</li>
@@ -169,7 +177,7 @@
   <!-- 5 · Forma 3: el circuito Excel -->
   <section class="slide"><div class="split">
     <div>
-      <div class="kicker reveal">Cómo se compra · 3 de 4</div>
+      <div class="kicker reveal">Cómo se compra · 4 de 4</div>
       <h2 class="reveal">El circuito Excel</h2>
       <ul class="puntos">
         <li class="reveal"><b>Exportás el filtro</b>: miniaturas, link a cada foto, precios de TU lista y totales con tu descuento.</li>
@@ -185,7 +193,7 @@
   <!-- 6 · Forma 4: reposición (franquicias) -->
   <section class="slide"><div class="split">
     <div>
-      <div class="kicker reveal">Cómo se compra · 4 de 4 — franquicias</div>
+      <div class="kicker reveal">Cómo se compra · solo franquicias</div>
       <h2 class="reveal">Reposición sugerida</h2>
       <ul class="puntos">
         <li class="reveal">Cruza <b>lo que vendió tu punto de venta</b> con lo disponible en Ezeiza.</li>
