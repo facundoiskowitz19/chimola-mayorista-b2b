@@ -169,8 +169,7 @@ def foto_variante_filename(producto_cod: str, color: str | None = None) -> str |
         fn = mapa.get(norm(color))
         if fn:
             return fn
-    pf = parsear_fotos(prod, files)
-    return pf[0]["filename"] if pf else None
+    return _portada_filename(prod, files)
 
 
 @lru_cache(maxsize=16384)
@@ -245,20 +244,42 @@ def parsear_fotos(producto_cod: str, filenames: list[str], colores_catalogo: lis
     return [principal] + resto
 
 
+def _override_portada(producto_cod: str) -> str | None:
+    """Portada elegida por el admin (catalogo_overrides.portada), si hay."""
+    try:
+        import overrides as _ov
+        o = _ov.get_catalogo_overrides().get(producto_cod.strip().upper(), {})
+        return o.get("portada") or None
+    except Exception:  # noqa: BLE001 — tests / local sin Firestore
+        return None
+
+
+def _portada_filename(producto_cod: str, files: list[str]) -> str | None:
+    """Filename de la portada: el override del admin si existe, si no la automática."""
+    ov = _override_portada(producto_cod)
+    if ov and ov in files:
+        return ov
+    pf = parsear_fotos(producto_cod, files)
+    return pf[0]["filename"] if pf else None
+
+
 def fotos_producto(producto_cod: str, colores_catalogo: list[str] | None = None) -> list[dict]:
     """Fotos del producto con URL firmada. [] si no tiene."""
     files = indice_fotos().get(producto_cod.strip().upper(), [])
     fotos = parsear_fotos(producto_cod, files, colores_catalogo)
+    ov = _override_portada(producto_cod)
+    if ov and any(f["filename"] == ov for f in fotos):
+        fotos.sort(key=lambda f: f["filename"] != ov)   # la elegida, primera
     for f in fotos:
         f["url"] = url_foto(producto_cod, f["filename"])
     return fotos
 
 
 def foto_principal(producto_cod: str) -> str:
-    """URL de la foto de portada (o placeholder)."""
+    """URL de la foto de portada (elegida por el admin, o automática)."""
     files = indice_fotos().get(producto_cod.strip().upper(), [])
-    fotos = parsear_fotos(producto_cod, files)
-    return url_foto(producto_cod, fotos[0]["filename"]) if fotos else PLACEHOLDER
+    fn = _portada_filename(producto_cod, files)
+    return url_foto(producto_cod, fn) if fn else PLACEHOLDER
 
 
 def fotos_por_color(fotos: list[dict], color: str) -> list[dict]:
@@ -364,8 +385,7 @@ def foto_card_filename(producto_cod: str, colores: list[str], modo: str,
             fn = mapa.get(norm(c))
             if fn:
                 return fn, True
-    pf = parsear_fotos(prod, files)
-    return (pf[0]["filename"] if pf else None), False
+    return _portada_filename(prod, files), False
 
 
 def foto_card(producto_cod: str, colores: list[str], modo: str) -> str:

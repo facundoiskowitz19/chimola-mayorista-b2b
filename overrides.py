@@ -65,7 +65,7 @@ def set_catalogo_override(producto_cod: str, campos: dict, por: str) -> None:
     precios, ub} y de variante `variantes: {sku: {stock, oculta, precios}}`.
     ub = múltiplo/mínimo de compra (unidad de bulto). Ver SPECS §3."""
     permitidos = {"publicado", "destacado", "nombre", "descripcion", "precios", "ub", "variantes",
-                  "variantes_extra", "fotos_color"}
+                  "variantes_extra", "fotos_color", "portada"}
     campos = {k: v for k, v in campos.items() if k in permitidos}
     if "variantes_extra" in campos:
         limpio = {}

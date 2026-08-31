@@ -384,7 +384,7 @@ def _limpiar_edicion_producto(cod: str) -> None:
     """Borra el estado de los widgets de edición para que siempre arranquen
     desde lo GUARDADO (fase 6.1: editar sin guardar no deja rastro)."""
     for k in [f"pe_{cod}_{n}" for n in (1, 2, 3, 4)] + [f"adm_var_{cod}", f"adm_extra_{cod}",
-                                                        f"adm_fc_{cod}"]:
+                                                        f"adm_fc_{cod}", f"adm_port_{cod}"]:
         st.session_state.pop(k, None)
 
 
@@ -665,6 +665,21 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
                                      "Asignación manual", options=["(automática)"] + sorted(files_prod)),
                              })
 
+    # --- Foto de portada elegible (pisa la automática) ---
+    portada_sel = None
+    if files_prod:
+        st.markdown("<div class='kicker' style='margin:.8rem 0 0'>Foto de portada</div>"
+                    "<p class='muted' style='margin:0 0 .4rem'>Con la que el producto aparece en el "
+                    "catálogo. «Automática» = la detectada por nombre. Va con Guardar.</p>",
+                    unsafe_allow_html=True)
+        pc1, pc2 = st.columns([2.2, 1])
+        op_port = ["Automática"] + sorted(files_prod)
+        actual_p = o.get("portada") if o.get("portada") in files_prod else "Automática"
+        portada_sel = pc1.selectbox("Foto de portada", op_port, index=op_port.index(actual_p),
+                                    key=f"adm_port_{cod}", label_visibility="collapsed")
+        if portada_sel != "Automática":
+            pc2.image(fotos.url_foto(cod.upper(), portada_sel), width=110)
+
     st.markdown("<div style='border-top:1px solid rgba(32,30,29,.16); margin:1rem 0 .6rem'></div>",
                 unsafe_allow_html=True)
     g1, g2, g3, _ = st.columns([1, 1, 1.3, 2])
@@ -686,6 +701,8 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
             "publicado": PUB_VALOR[pub], "destacado": bool(dest),
             "ub": int(ub) or None, "variantes": variantes,
         }
+        if portada_sel is not None:
+            campos["portada"] = portada_sel if portada_sel != "Automática" else ""
         if fed is not None:   # asignación manual foto↔color (reemplazo completo)
             campos["fotos_color"] = {fotos.norm(r["color"]): r["manual"] for _, r in fed.iterrows()
                                      if r["manual"] and r["manual"] != "(automática)"}
