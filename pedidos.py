@@ -68,6 +68,10 @@ def agregar_al_carrito(items: list[dict], nuevo: dict) -> list[dict]:
             if it.get("stock"):
                 it["cantidad"] = min(it["cantidad"], int(it["stock"]))
             it["precio_unit"] = nuevo["precio_unit"]
+            if "precio_lista" in nuevo:
+                it["precio_lista"] = nuevo["precio_lista"]
+            if "pct_desc" in nuevo:
+                it["pct_desc"] = nuevo["pct_desc"]
             return out
     out.append(dict(nuevo))
     return out
@@ -87,11 +91,16 @@ def calcular_totales(items: list[dict], descuento_pct: float, iva_pct: float = 0
     subtotal = round(sum(i["subtotal"] for i in items), 2)
     total = aplicar_descuento(subtotal, descuento_pct)
     iva_pct = float(iva_pct or 0)
+    # Ahorro por ofertas (descvta): diferencia entre precio de lista y precio
+    # final por unidad. Solo el descuento por producto, no el cabecera.
+    ahorro = round(sum((float(i.get("precio_lista") or i["precio_unit"]) - i["precio_unit"])
+                       * i["cantidad"] for i in items), 2)
     return {
         "unidades": sum(i["cantidad"] for i in items),
         "subtotal": subtotal,
         "descuento_pct": float(descuento_pct or 0),
         "descuento_monto": round(subtotal - total, 2),
+        "ahorro_descvta": max(ahorro, 0.0),
         "total": total,
         "iva_pct": iva_pct,
         "iva_monto": round(total * iva_pct / 100, 2),
@@ -137,7 +146,9 @@ def generar_excel(pedido: dict) -> bytes:
         r += 1
     r += 1
     ws.write(r, 0, "Unidades", bold); ws.write(r, 1, pedido["unidades"], intf); r += 1
-    ws.write(r, 0, "Subtotal (precio de lista)", bold); ws.write(r, 1, pedido["subtotal"], money); r += 1
+    if float(pedido.get("ahorro_descvta") or 0) > 0:
+        ws.write(r, 0, "Ahorro por ofertas", bold); ws.write(r, 1, pedido["ahorro_descvta"], money); r += 1
+    ws.write(r, 0, "Subtotal", bold); ws.write(r, 1, pedido["subtotal"], money); r += 1
     ws.write(r, 0, "Descuento cabecera %", bold); ws.write(r, 1, pedido["descuento_pct"], pct); r += 1
     ws.write(r, 0, "Descuento $", bold); ws.write(r, 1, pedido["descuento_monto"], money); r += 1
     ws.write(r, 0, "TOTAL", bold); ws.write(r, 1, pedido["total"], money_b); r += 1
@@ -149,7 +160,7 @@ def generar_excel(pedido: dict) -> bytes:
     # --- Detalle --- (la miniatura va PRIMERA, pedido del equipo)
     wd = wb.add_worksheet("Detalle")
     cols = [("Imagen", 9), ("Producto", 12), ("Descripción", 36), ("Color", 16), ("Cód. color", 10),
-            ("Talle", 8), ("SKU", 20), ("EAN", 16), ("Cantidad", 10), ("Precio unit. lista", 16),
+            ("Talle", 8), ("SKU", 20), ("EAN", 16), ("Cantidad", 10), ("Precio unit.", 16),
             ("Subtotal", 16), ("Foto", 10)]
     for c, (name, w) in enumerate(cols):
         wd.set_column(c, c, w)
@@ -274,7 +285,8 @@ def confirmar_pedido(usuario: dict, cliente: dict, items: list[dict], observacio
     # cabecera) — con el descuento aplicado el total puede quedar menor.
     minimo_m = overrides.get_config().get("minimo_pedido_monto")
     if minimo_m:
-        sub_lista = round(sum(int(i["cantidad"]) * float(i["precio_unit"]) for i in items), 2)
+        sub_lista = round(sum(int(i["cantidad"]) * float(i.get("precio_lista") or i["precio_unit"])
+                              for i in items), 2)
         if sub_lista < float(minimo_m):
             raise MinimoMontoNoAlcanzado(float(minimo_m), sub_lista)
     problemas = stock_mod.validar_stock(items)
@@ -295,7 +307,8 @@ def confirmar_pedido(usuario: dict, cliente: dict, items: list[dict], observacio
         "usuario_email": usuario["email"],
         "lista_precios": int(cliente.get("lista_precios") or 1),
         "items": [{k: it.get(k) for k in ("sku", "ean", "producto_cod", "producto_nombre", "color_cod",
-                                          "color", "talle", "cantidad", "precio_unit", "subtotal", "manual")}
+                                          "color", "talle", "cantidad", "precio_unit", "precio_lista",
+                                          "pct_desc", "subtotal", "manual")}
                   for it in items],
         **tot,
         "estado": "confirmado",

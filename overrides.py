@@ -275,7 +275,7 @@ def aplicar_override_cliente(cliente: dict) -> dict:
 DEFAULTS_CONFIG = {
     "pedidos_email_to": None,          # None → env config.PEDIDOS_EMAIL_TO
     "banner_texto": "",
-    "aplicar_descvta": False,
+    "aplicar_descvta": True,   # descuento por artículo de Aleph (descvta). Master kill-switch.
     "minimo_pedido_unidades": None,
     "minimo_pedido_monto": None,       # $ mínimo sobre subtotal de lista (sin IVA ni desc)
     # Las listas mayoristas de Aleph son SIN IVA (el Woo muestra "+IVA" y la NP

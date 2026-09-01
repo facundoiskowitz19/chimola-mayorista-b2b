@@ -111,9 +111,15 @@ Navegador ──cookie JWT (24h)──▶ Streamlit (Cloud Run, --session-affini
   Mendoza 30%, Santa Fe 20%, Corrientes 20%, Nine 20%, Villa María 28%.
 - **`dim_cliente.activo` es FALSE para las franquicias** (tienen
   `baja='1900-01-01'`, artefacto de Aleph). No filtrar por `activo`.
-- **`articulosol.descvta`** (desc. por artículo, ej. 10% en M211) NO se
-  aplica en el sitio — pendiente de definir con Chimola (el Woo lo usa como
-  `sale_price`).
+- **`articulosol.descvta`** (desc. por artículo de Aleph, 10/15/20/25%) SÍ se
+  aplica en el sitio (2026-09-01): `con_precio` genera `precio_lista` (sin oferta)
+  y `precio` (final = lista × (1−descvta/100)) + `pct_desc`. Se ve como precio
+  tachado + final magenta + badge «−N%» en catálogo/ficha/panel; el carrito lleva
+  `precio_lista`/`pct_desc` en cada item; el pedido guarda `ahorro_descvta`; el
+  Excel muestra 1 columna de precio final; el email suma «Ahorro por ofertas».
+  Master kill-switch: `config/global.aplicar_descvta` (default **True**), toggle en
+  Admin → Config. Filtro «Solo con descuento» en catálogo/compra rápida/reposición
+  (`descvta > 0`). El descuento cabecera del cliente sigue aplicándose sobre el total.
 - **Stock neto**: 1.572 productos con `stock_ezeiza>0` → 1.285 con stock
   neto tras restar OC (`raw.stock` deposito=1, anclado a `fecha_snapshot`
   de `v_stock_central_actual`). `v_stock_central_actual` NO tiene columna

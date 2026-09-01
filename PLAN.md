@@ -181,8 +181,9 @@ Todo reproducible con `./deploy/setup_infra.sh dev`.
 
 - [ ] Email destino de pedidos (`pedidos@lautin.com.ar`?). Hoy DEV → fiskowitz.
 - [ ] Formato exacto del Excel (hoy: Resumen + Detalle con SKU/EAN/cantidad/precio lista/subtotal).
-- [ ] ¿Aplicar `articulosol.descvta` (desc. por artículo, ej. 10% M211) además
-      del descuento cabecera? Hoy NO se aplica (el Woo sí lo usa como sale_price).
+- [x] Aplicar `articulosol.descvta` (desc. por artículo) además del descuento
+      cabecera (2026-09-01): precio tachado + final magenta + badge, ahorro en
+      Excel/email, filtro «Solo con descuento». Kill-switch `aplicar_descvta` (default on).
 - [ ] Confirmar listas/descuentos por cliente en `dim_cliente` (franquicias =
       lista 1; Jujuy 20%, Mendoza 30%, Villa María 28%, resto 20%).
 - [ ] ¿Mínimo de compra / múltiplos por bulto (`articulosol.bulto`)?

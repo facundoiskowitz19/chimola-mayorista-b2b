@@ -8,7 +8,8 @@ Fase 6 (E3): los textos salen de TEMPLATES editables desde el admin
 y cuerpo con variables `{numero} {cliente} {cliente_cod} {usuario} {fecha}
 {unidades} {subtotal} {descuento_pct} {descuento_monto} {total} {iva_pct}
 {iva_monto} {total_con_iva} {lista_precios} {observaciones} {detalle} {quien}
-{estado}`. Una variable desconocida queda literal (no rompe el envío).
+{estado} {ahorro_descvta} {linea_ahorro}`. Una variable desconocida queda
+literal (no rompe el envío).
 """
 from __future__ import annotations
 
@@ -35,6 +36,7 @@ DEFAULT_TEMPLATES = {
                    "Fecha: {fecha}\nUsuario: {usuario}\n\n"
                    "Unidades: {unidades}\n"
                    "Subtotal (lista {lista_precios}, sin IVA): {subtotal}\n"
+                   "{linea_ahorro}"
                    "Descuento cabecera {descuento_pct}%: -{descuento_monto}\n"
                    "TOTAL: {total}\n{lineas_iva}"
                    "Observaciones: {observaciones}\n\n"
@@ -58,6 +60,7 @@ DEFAULT_TEMPLATES = {
                    "Este es el detalle VIGENTE:\n\n{detalle}\n\n"
                    "Unidades: {unidades}\n"
                    "Subtotal (lista {lista_precios}, sin IVA): {subtotal}\n"
+                   "{linea_ahorro}"
                    "Descuento cabecera {descuento_pct}%: -{descuento_monto}\n"
                    "TOTAL: {total}\n{lineas_iva}"
                    "\nEl Excel actualizado del pedido va adjunto.\n"
@@ -90,6 +93,8 @@ def variables_pedido(pedido: dict, por: str = "") -> dict:
     if iva > 0:
         lineas_iva = (f"IVA {iva:g}%: {_fmt(pedido.get('iva_monto', 0))}\n"
                       f"TOTAL c/IVA: {_fmt(pedido.get('total_con_iva', 0))}\n")
+    ahorro = float(pedido.get("ahorro_descvta") or 0)
+    linea_ahorro = f"Ahorro por ofertas: {_fmt(ahorro)}\n" if ahorro > 0 else ""
     detalle = "\n".join(
         f"  - {it['producto_cod']} {it['producto_nombre']} | {it['color']} | T {it['talle']} "
         f"| {it['cantidad']} u × {_fmt(it['precio_unit'])} = {_fmt(it.get('subtotal', 0))}"
@@ -114,6 +119,7 @@ def variables_pedido(pedido: dict, por: str = "") -> dict:
         "descuento_monto": _fmt(pedido.get("descuento_monto", 0)), "total": _fmt(pedido.get("total", 0)),
         "iva_pct": f"{iva:g}", "iva_monto": _fmt(pedido.get("iva_monto", 0)),
         "total_con_iva": _fmt(pedido.get("total_con_iva", 0)), "lineas_iva": lineas_iva,
+        "ahorro_descvta": _fmt(ahorro), "linea_ahorro": linea_ahorro,
         "observaciones": pedido.get("observaciones") or "—", "detalle": detalle,
         "cambios": pedido.get("cambios_texto") or "—",
         "estado": pedido.get("estado", ""), "quien": quien,

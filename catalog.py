@@ -200,21 +200,28 @@ def columna_precio(lista_precios: int) -> str:
 
 
 def con_precio(df: pd.DataFrame, lista_precios: int, aplicar_descvta: bool | None = None) -> pd.DataFrame:
-    """Agrega columna `precio` (precio de lista del cliente, sin descuento
-    cabecera). Si la lista no tiene precio cargado (0) queda NaN → no se vende.
-    Si config/global.aplicar_descvta está activo, aplica además el descuento
-    por artículo de Aleph (descvta), como hace el pipeline Woo."""
+    """Agrega DOS columnas de precio del cliente (sin descuento cabecera):
+    `precio_lista` (el de la lista, sin oferta) y `precio` (final, con el
+    descuento por artículo de Aleph `descvta` aplicado cuando descvta>0 y el
+    master toggle config/global.aplicar_descvta está activo — default True).
+    `pct_desc` expone el % de descuento por producto. Si la lista no tiene
+    precio cargado (0) ambas quedan NaN → no se vende."""
     col = columna_precio(lista_precios)
     out = df.copy()
-    precio = out[col].where(out[col] > 0)
+    precio_lista = out[col].where(out[col] > 0)
+    pct = out["descvta"].clip(lower=0, upper=90) if "descvta" in out.columns else pd.Series(0.0, index=out.index)
     if aplicar_descvta is None:
         try:
             aplicar_descvta = bool(overrides.get_config().get("aplicar_descvta"))
         except Exception:  # noqa: BLE001 — sin Firestore (tests/local aislado)
-            aplicar_descvta = False
-    if aplicar_descvta and "descvta" in out.columns:
-        precio = (precio * (1 - out["descvta"].clip(lower=0, upper=90) / 100)).round(2)
-    out["precio"] = precio
+            aplicar_descvta = True
+    out["precio_lista"] = precio_lista
+    if aplicar_descvta:
+        out["pct_desc"] = pct
+        out["precio"] = (precio_lista * (1 - pct / 100)).round(2)
+    else:
+        out["pct_desc"] = 0.0
+        out["precio"] = precio_lista
     return out
 
 
@@ -272,12 +279,13 @@ def productos(df_variantes: pd.DataFrame) -> pd.DataFrame:
     """1 fila por producto: nombre, atributos, precio (min), stock total, colores."""
     if df_variantes.empty:
         return pd.DataFrame(columns=["producto_cod", "producto_nombre", "marca", "temporada", "rubro",
-                                     "categoria", "precio", "stock", "n_variantes", "colores"])
+                                     "categoria", "precio", "precio_lista", "pct_desc", "stock",
+                                     "n_variantes", "colores"])
     g = df_variantes.groupby("producto_cod", sort=True)
     if "categoria" not in df_variantes.columns:
         df_variantes = df_variantes.assign(categoria="Otros")
         g = df_variantes.groupby("producto_cod", sort=True)
-    out = g.agg(
+    aggs = dict(
         producto_nombre=("producto_nombre", "first"),
         marca=("marca", "first"),
         temporada=("temporada", "first"),
@@ -287,8 +295,14 @@ def productos(df_variantes: pd.DataFrame) -> pd.DataFrame:
         stock=("stock", "sum"),
         n_variantes=("sku", "count"),
         colores=("color", lambda s: sorted(set(s))),
-    ).reset_index()
-    return out
+    )
+    # precio_lista atado a la variante más barata (misma que define `precio`);
+    # pct_desc = descuento máximo del producto (para el badge).
+    if "precio_lista" in df_variantes.columns:
+        aggs["precio_lista"] = ("precio_lista", "min")
+    if "pct_desc" in df_variantes.columns:
+        aggs["pct_desc"] = ("pct_desc", "max")
+    return g.agg(**aggs).reset_index()
 
 
 _ORDEN_TALLES = {t: i for i, t in enumerate(["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL", "U"])}
@@ -319,9 +333,11 @@ def get_producto(df: pd.DataFrame, producto_cod: str) -> dict | None:
         "descripcion": first.get("descripcion", ""),
         "ub": int(ub) if pd.notna(ub) and ub else None,
         "precio": float(first["precio"]) if pd.notna(first["precio"]) else None,
+        "precio_lista": float(first["precio_lista"]) if "precio_lista" in sub.columns and pd.notna(first["precio_lista"]) else None,
+        "pct_desc": float(first["pct_desc"]) if "pct_desc" in sub.columns and pd.notna(first["pct_desc"]) else 0.0,
         # producto_cod/nombre/es_manual viajan en cada variante: item_desde_variante los necesita
         "variantes": sub[[c for c in ["sku", "ean", "producto_cod", "producto_nombre", "color_cod",
-                                      "color", "talle", "stock", "precio", "es_manual"]
+                                      "color", "talle", "stock", "precio", "precio_lista", "pct_desc", "es_manual"]
                           if c in sub.columns]].to_dict("records"),
         "colores": sorted(sub["color"].unique()),
         "talles": list(dict.fromkeys(sub["talle"])),

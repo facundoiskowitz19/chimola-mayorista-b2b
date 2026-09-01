@@ -119,6 +119,12 @@ st.markdown("""
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .card-sub { color:var(--faint); font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; margin-top:.1rem; }
   .card-price { font-weight:600; font-size:1.15rem; margin-top:.2rem; }
+  .card-price-old { color:var(--faint); text-decoration:line-through; font-weight:400;
+    font-size:.92rem; margin-right:.4rem; }
+  .card-price-off { color:#d6006c; }
+  .badge-desc { display:inline-block; background:#d6006c; color:#fff; font-weight:700;
+    font-size:.7rem; letter-spacing:.04em; padding:.08rem .4rem; border-radius:2px;
+    margin-left:.4rem; vertical-align:.08rem; }
   .tag { display:inline-block; padding:.12rem .55rem; border-radius:2px; font-size:.72rem; font-weight:600;
     letter-spacing:.08em; text-transform:uppercase; }
   .tag-conf { background:var(--accent-tint); color:var(--accent-press); }
@@ -155,6 +161,22 @@ def fmt_money(n) -> str:
     if n is None or (isinstance(n, float) and math.isnan(n)):
         return "—"
     return f"$ {float(n):,.0f}".replace(",", ".")
+
+
+def precio_html(precio, precio_lista=None, pct_desc=0, *, clase_final="card-price", inline=False) -> str:
+    """HTML del precio. Si pct_desc>0: precio de lista tachado + precio final en
+    magenta + badge «−N%». Si no, solo el precio. `inline` usa <span> (para la ficha)."""
+    pct = float(pct_desc or 0)
+    final = fmt_money(precio)
+    if pct <= 0 or precio_lista in (None, "") or (isinstance(precio_lista, float) and math.isnan(precio_lista)):
+        if inline:
+            return final
+        return f"<div class='{clase_final}'>{final}</div>"
+    lista = fmt_money(precio_lista)
+    badge = f"<span class='badge-desc'>−{pct:g}%</span>"
+    cuerpo = (f"<span class='card-price-old'>{lista}</span>"
+              f"<span class='card-price-off'>{final}</span>{badge}")
+    return cuerpo if inline else f"<div class='{clase_final}'>{cuerpo}</div>"
 
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -432,12 +454,15 @@ def _quitar_filtro(campo, valor=None) -> None:
         st.session_state.f_fotos = False
     elif campo == "claros":
         st.session_state.f_claros = False
+    elif campo == "desc":
+        st.session_state.f_desc = False
     elif campo == "todos":
         for f in catalog.FILTROS:
             st.session_state[f"f_{f}"] = []
         st.session_state.f_busqueda = ""
         st.session_state.f_fotos = False
         st.session_state.f_claros = False
+        st.session_state.f_desc = False
     else:
         st.session_state[f"f_{campo}"] = [v for v in st.session_state.get(f"f_{campo}", []) if v != valor]
 
@@ -521,12 +546,16 @@ def _totales_seleccion(items: list) -> None:
     cli = cliente_efectivo()
     unidades = sum(i["cantidad"] for i in items)
     monto = sum(i["cantidad"] * i["precio_unit"] for i in items)
+    ahorro = sum(i["cantidad"] * (float(i.get("precio_lista") or i["precio_unit"]) - i["precio_unit"])
+                 for i in items)
     if unidades:
         # OJO: envuelto en <div> — con DOS "$" en markdown plano, Streamlit
         # los interpreta como fórmula matemática (LaTeX) y rompe el HTML.
-        st.markdown(f"<div>Seleccionadas <b>{unidades} u.</b> · {fmt_money(monto)} precio lista · "
+        ahorro_html = (f" · <span style='color:#d6006c'>ahorrás {fmt_money(ahorro)} por ofertas</span>"
+                       if ahorro > 0 else "")
+        st.markdown(f"<div>Seleccionadas <b>{unidades} u.</b> · {fmt_money(monto)} subtotal · "
                     f"<span style='color:#006786'>{fmt_money(catalog.aplicar_descuento(monto, cli.get('descuento', 0)))} "
-                    f"con tu {cli.get('descuento', 0):g}%</span></div>", unsafe_allow_html=True)
+                    f"con tu {cli.get('descuento', 0):g}%</span>{ahorro_html}</div>", unsafe_allow_html=True)
 
 
 def page_catalogo() -> None:
@@ -562,13 +591,18 @@ def page_catalogo() -> None:
                                     label_visibility="collapsed")
         st.markdown("")
         st.checkbox("Solo con foto", value=True, key="f_fotos")
+        st.checkbox("Solo con descuento", value=False, key="f_desc",
+                    help="Muestra solo los productos con oferta (descuento por artículo).")
         st.toggle("Encender el sitio", key="f_claros",
                   help="Muestra cada producto con la foto de su color más claro "
                        "(blanco, beige, nude, rosa, celeste...). Apagado: foto principal.")
     solo_fotos = st.session_state.get("f_fotos", True)
+    solo_desc = bool(st.session_state.get("f_desc", False))
     claros = bool(st.session_state.get("f_claros", False))
 
     variantes = catalog.filtrar_variantes(df, sel, busqueda)
+    if solo_desc and "descvta" in variantes.columns:
+        variantes = variantes[variantes["descvta"] > 0]
     prods = catalog.productos(variantes)
     if solo_fotos and not prods.empty:
         prods = prods[prods["producto_cod"].map(fotos.tiene_fotos)]
@@ -589,11 +623,11 @@ def page_catalogo() -> None:
                                   ascending=[False, False, True]).drop(columns=["_d", "_m"])
 
     with main:
-        _grid_catalogo(df, prods, variantes, busqueda, sel, solo_fotos, claros)
+        _grid_catalogo(df, prods, variantes, busqueda, sel, solo_fotos, claros, solo_desc)
 
 
 def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: bool,
-                   claros: bool = False) -> None:
+                   claros: bool = False, solo_desc: bool = False) -> None:
     # Chips de filtros activos (handoff cambio 2)
     chips = []
     if busqueda:
@@ -603,6 +637,8 @@ def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: b
             chips.append((f, v, str(v)))
     if solo_fotos:
         chips.append(("fotos", None, "Solo con foto"))
+    if solo_desc:
+        chips.append(("desc", None, "Solo con descuento"))
     if claros:
         chips.append(("claros", None, "Sitio encendido"))
     anchos = [max(len(c[2]) * 0.058 + 0.3, 0.6) for c in chips] + ([0.62] if chips else []) + [2.2]
@@ -615,7 +651,7 @@ def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: b
                        f"{len(variantes)} variantes con stock</div>", unsafe_allow_html=True)
 
     # Fase 8: sin paginado — el grid acumula de a tandas («Mostrar más»)
-    firma = (busqueda, tuple(tuple(v) for v in sel.values()), solo_fotos)
+    firma = (busqueda, tuple(tuple(v) for v in sel.values()), solo_fotos, solo_desc)
     if st.session_state.get("cat_firma") != firma:
         st.session_state.cat_firma = firma
         st.session_state.cat_n = config.ITEMS_POR_PAGINA
@@ -642,7 +678,7 @@ def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: b
                     st.markdown(
                         f"<div class='card-title' title='{p['producto_nombre']}'>{p['producto_nombre']}</div>"
                         f"<div class='card-sub'>{p['producto_cod']} · {p['marca'] or ''} · {p['rubro'] or ''}</div>"
-                        f"<div class='card-price'>{fmt_money(p['precio'])}</div>"
+                        f"{precio_html(p['precio'], p.get('precio_lista'), p.get('pct_desc', 0))}"
                         f"<div class='muted'>{(str(int(p['stock'])) + ' u. · ') if es_admin() else ''}"
                         f"{len(p['colores'])} color(es)</div>",
                         unsafe_allow_html=True)
@@ -667,6 +703,9 @@ def _grid_catalogo(df, prods, variantes, busqueda: str, sel: dict, solo_fotos: b
                         st.markdown(f"<div class='card-sub'>{abierta} · {prod['marca'] or ''} · "
                                     f"{prod['temporada'] or ''} · {prod['rubro'] or ''}</div>",
                                     unsafe_allow_html=True)
+                        if float(prod.get("pct_desc") or 0) > 0:
+                            st.markdown(precio_html(prod["precio"], prod.get("precio_lista"),
+                                                    prod["pct_desc"]), unsafe_allow_html=True)
                         ver = st.session_state.get("mx_ver", 0)
                         items = matriz_variantes(prod, key=f"mx_{abierta}_{ver}")
                         _totales_seleccion(items)
@@ -769,7 +808,10 @@ def page_producto() -> None:
             st.error(f"Este producto no tiene precio cargado en la lista {cli['lista_precios']}. "
                      "No se puede pedir — consultá a Lautin.")
         else:
-            st.markdown(f"### {fmt_money(prod['precio'])} <span class='muted'>precio lista "
+            pdesc = float(prod.get("pct_desc") or 0)
+            precio_ficha = precio_html(prod["precio"], prod.get("precio_lista"), pdesc, inline=True)
+            etiqueta = "precio con oferta" if pdesc > 0 else "precio lista"
+            st.markdown(f"### {precio_ficha} <span class='muted'>{etiqueta} "
                         f"{cli['lista_precios']}{iva_tag}</span>", unsafe_allow_html=True)
             if cli.get("descuento"):
                 st.markdown(f"<p class='muted'>Con tu descuento cabecera ({cli['descuento']:g}%): "
@@ -1155,12 +1197,16 @@ def page_reposicion() -> None:
     cat_r = c3.multiselect("Categoría", ops["categoria"], key="rp_cat", placeholder="Todas")
     tipo_r = c4.multiselect("Tipo de producto", ops["rubro"], key="rp_rubro", placeholder="Todos")
     temp_r = c5.multiselect("Temporada", ops["temporada"], key="rp_temp", placeholder="Todas")
+    solo_desc_r = st.checkbox("Solo con descuento", value=False, key="rp_desc",
+                              help="Solo variantes con oferta (descuento por artículo).")
     sug = catalog.filtrar_variantes(sug, {"marca": marca_r, "categoria": cat_r,
                                           "rubro": tipo_r, "temporada": temp_r}, busq_r)
+    if solo_desc_r and "descvta" in sug.columns:
+        sug = sug[sug["descvta"] > 0]
     if sug.empty:
         st.markdown("<p class='muted'>Nada sugerido con esos filtros.</p>", unsafe_allow_html=True)
         return
-    fkey = "".join(ch for ch in "-".join([busq_r] + sorted(marca_r + cat_r + tipo_r + temp_r))
+    fkey = "".join(ch for ch in "-".join([busq_r, str(solo_desc_r)] + sorted(marca_r + cat_r + tipo_r + temp_r))
                    if ch.isalnum())[:48]
     ver = st.session_state.get("repo_ver", 0)
     tabla = sug[["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
@@ -1177,7 +1223,7 @@ def page_reposicion() -> None:
             "talle": "Talle",
             "vendidas_30d": st.column_config.NumberColumn("Vendiste 30d", format="%d"),
             "stock_pv": st.column_config.NumberColumn("Tenés", format="%d"),
-            "precio": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
+            "precio": st.column_config.NumberColumn("Precio", format="$ %.0f"),
             "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1),
         })
     seleccion = []
@@ -1379,8 +1425,12 @@ def page_compra_rapida() -> None:
     categoria = c3.multiselect("Categoría", ops["categoria"], key="cr_cat", placeholder="Todas")
     tipo = c4.multiselect("Tipo de producto", ops["rubro"], key="cr_rubro", placeholder="Todos")
     temporada = c5.multiselect("Temporada", ops["temporada"], key="cr_temp", placeholder="Todas")
+    solo_desc = st.checkbox("Solo con descuento", value=False, key="cr_desc",
+                            help="Solo variantes con oferta (descuento por artículo).")
     sub = catalog.filtrar_variantes(df, {"marca": marca, "categoria": categoria, "rubro": tipo,
                                          "temporada": temporada}, busq).copy()
+    if solo_desc and "descvta" in sub.columns:
+        sub = sub[sub["descvta"] > 0]
     st.markdown(f"<p class='muted'>{len(sub)} variantes con stock y precio · scrolleá la tabla, "
                 "cargá cantidades y tocá Agregar</p>", unsafe_allow_html=True)
     # Scroll infinito: una sola tabla con TODO el filtro (Streamlit la virtualiza).
@@ -1400,7 +1450,7 @@ def page_compra_rapida() -> None:
         column_config={
             "foto": st.column_config.ImageColumn("", width="small"),
             "producto_cod": "Código", "producto_nombre": "Producto", "color": "Color", "talle": "Talle",
-            "precio": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
+            "precio": st.column_config.NumberColumn("Precio", format="$ %.0f"),
             "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1, format="%d"),
         })
     seleccion = [(v, int(q)) for (_, v), q in zip(sub.iterrows(), edited["cantidad"])
@@ -1412,7 +1462,7 @@ def page_compra_rapida() -> None:
                if (u := fotos.url_variante_publica(r["producto_cod"], r["color"],
                                                    solo_color=True))}
     ba, bx = st.columns([1, 1])
-    firma_f = (busq, tuple(marca), tuple(categoria), tuple(tipo), tuple(temporada))
+    firma_f = (busq, tuple(marca), tuple(categoria), tuple(tipo), tuple(temporada), solo_desc)
     if bx.button("Exportar Excel del filtro actual", key="cr_xlsx_btn", use_container_width=True,
                  help="Con la miniatura de cada variante embebida (hasta 600 filas; con más, va "
                       "sin fotos). Cantidad editable, totales con tu descuento, link a cada foto. "

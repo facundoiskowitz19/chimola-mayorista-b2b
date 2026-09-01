@@ -11,11 +11,16 @@ SEPARADORES = re.compile(r"[,;\t]+|\s{2,}")
 
 
 def item_desde_variante(v, cantidad: int) -> dict:
-    """Row del catálogo (con columna `precio`) → item de carrito."""
+    """Row del catálogo (con columnas `precio` final y `precio_lista`) → item de
+    carrito. `precio_unit` es el precio final (con descvta si aplica); `precio_lista`
+    y `pct_desc` viajan para poder tachar el precio y sumar el ahorro por ofertas."""
+    precio_final = float(v["precio"])
+    precio_lista = float(v["precio_lista"]) if v.get("precio_lista") is not None and not pd.isna(v.get("precio_lista")) else precio_final
     return {"sku": v["sku"], "ean": v["ean"], "producto_cod": v["producto_cod"],
             "producto_nombre": v["producto_nombre"], "color_cod": str(v["color_cod"]),
             "color": v["color"], "talle": v["talle"], "cantidad": int(cantidad),
-            "precio_unit": float(v["precio"]), "stock": int(v["stock"]),
+            "precio_unit": precio_final, "precio_lista": precio_lista,
+            "pct_desc": float(v.get("pct_desc") or 0), "stock": int(v["stock"]),
             "manual": bool(v.get("es_manual", False))}
 
 
@@ -114,7 +119,7 @@ def resumen_incidencias(incidencias: list[dict]) -> dict[str, int]:
 # Excel de la compra rápida: exportar el filtro actual y re-importarlo editado
 # ---------------------------------------------------------------------------
 COLS_PLANTILLA = ["SKU", "EAN", "Código", "Producto", "Color", "Talle",
-                  "Precio lista", "Cantidad", "Subtotal", "Foto"]
+                  "Precio", "Cantidad", "Subtotal", "Foto"]
 
 
 def _letra(idx: int) -> str:
@@ -168,7 +173,7 @@ def excel_plantilla(df_variantes: pd.DataFrame, cantidades: dict[str, int] | Non
                              str(v.get("talle") or "")])
         ws.write_number(r, off + 6, precio, plata)
         ws.write_number(r, off + 7, q, editable)
-        ws.write_formula(r, off + 8, f"={C['Precio lista']}{r+1}*{C['Cantidad']}{r+1}",
+        ws.write_formula(r, off + 8, f"={C['Precio']}{r+1}*{C['Cantidad']}{r+1}",
                          plata, precio * q)
         url = links.get(sku)
         if url:
