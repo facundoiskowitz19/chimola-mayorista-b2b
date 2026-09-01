@@ -65,8 +65,12 @@ def set_catalogo_override(producto_cod: str, campos: dict, por: str) -> None:
     precios, ub} y de variante `variantes: {sku: {stock, oculta, precios}}`.
     ub = múltiplo/mínimo de compra (unidad de bulto). Ver SPECS §3."""
     permitidos = {"publicado", "destacado", "nombre", "descripcion", "precios", "ub", "variantes",
-                  "variantes_extra", "fotos_color", "portada"}
+                  "variantes_extra", "fotos_color", "portada", "descuento_pct"}
     campos = {k: v for k, v in campos.items() if k in permitidos}
+    if "descuento_pct" in campos:
+        # % de descuento por producto (pisa articulosol.descvta). None/0 = sin override.
+        d = campos["descuento_pct"]
+        campos["descuento_pct"] = min(max(float(d), 0.0), 90.0) if d not in (None, "") else None
     if "variantes_extra" in campos:
         limpio = {}
         for sku, vo in (campos["variantes_extra"] or {}).items():
@@ -155,6 +159,9 @@ def aplicar_overrides(df: pd.DataFrame, incluir_ocultos: bool = False) -> pd.Dat
                 col = f"precio{int(lista)}"
                 if col in out.columns:
                     out.loc[out["producto_cod"] == p, col] = float(precio)
+            # Descuento por producto del admin: pisa articulosol.descvta.
+            if o.get("descuento_pct") is not None and "descvta" in out.columns:
+                out.loc[out["producto_cod"] == p, "descvta"] = float(o["descuento_pct"])
         # Overrides por VARIANTE (SPECS §3): stock manual reemplaza, oculta excluye,
         # precio por variante pisa al del producto.
         stock_map, ocultas, var_precios = variantes_overrides()

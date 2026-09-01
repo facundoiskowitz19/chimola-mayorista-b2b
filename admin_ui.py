@@ -538,6 +538,13 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
         dest = st.checkbox("Destacado (primero en el catálogo)", value=bool(o.get("destacado")))
         ub = st.number_input("Múltiplo de compra (U.B.)", min_value=0, step=1, value=int(o.get("ub") or 0),
                              help="Cantidad mínima y múltiplo por variante, como el u.b del Woo. 0 = libre")
+        aleph_desc = float(raw_p.iloc[0].get("descvta") or 0) if not raw_p.empty else 0
+        desc_prod = st.number_input(
+            "Descuento del producto (%)", min_value=0.0, max_value=90.0, step=5.0,
+            value=float(o["descuento_pct"]) if o.get("descuento_pct") is not None else None,
+            placeholder=(f"Aleph: {aleph_desc:g}%" if aleph_desc > 0 else "sin descuento"),
+            help="Oferta del producto: precio tachado + badge en el sitio. Vacío = usa el "
+                 "descuento de Aleph (descvta). Poné 0 para forzar SIN descuento.")
     with cd:
         nombre = st.text_input("Nombre", value=o.get("nombre") or "", placeholder=str(f0["producto_nombre"]))
         st.markdown(f"<p class='muted' style='margin-top:-0.6rem'>Aleph: {raw_p.iloc[0]['producto_nombre']}"
@@ -700,6 +707,7 @@ def _producto_edicion(cod, f0, filas, o, raw_p, stock_bq) -> None:
             "precios": {k: float(v) for k, v in precios.items() if v and v > 0},
             "publicado": PUB_VALOR[pub], "destacado": bool(dest),
             "ub": int(ub) or None, "variantes": variantes,
+            "descuento_pct": desc_prod if desc_prod is not None else None,
         }
         if portada_sel is not None:
             campos["portada"] = portada_sel if portada_sel != "Automática" else ""

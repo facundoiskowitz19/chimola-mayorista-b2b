@@ -125,6 +125,10 @@ st.markdown("""
   .badge-desc { display:inline-block; background:#d6006c; color:#fff; font-weight:700;
     font-size:.7rem; letter-spacing:.04em; padding:.08rem .4rem; border-radius:2px;
     margin-left:.4rem; vertical-align:.08rem; }
+  .ficha-precio { font-size:1.5rem; font-weight:700; margin:.2rem 0 .3rem; }
+  .ficha-precio .card-price-old { font-size:1.15rem; }
+  .cart-price-old { color:var(--faint); text-decoration:line-through; font-size:.8rem; display:block; }
+  .cart-price-off { color:#d6006c; font-weight:600; }
   .tag { display:inline-block; padding:.12rem .55rem; border-radius:2px; font-size:.72rem; font-weight:600;
     letter-spacing:.08em; text-transform:uppercase; }
   .tag-conf { background:var(--accent-tint); color:var(--accent-press); }
@@ -811,8 +815,11 @@ def page_producto() -> None:
             pdesc = float(prod.get("pct_desc") or 0)
             precio_ficha = precio_html(prod["precio"], prod.get("precio_lista"), pdesc, inline=True)
             etiqueta = "precio con oferta" if pdesc > 0 else "precio lista"
-            st.markdown(f"### {precio_ficha} <span class='muted'>{etiqueta} "
-                        f"{cli['lista_precios']}{iva_tag}</span>", unsafe_allow_html=True)
+            # Bloque <div> (NO markdown `###`): con dos "$" el markdown los toma
+            # como fórmula LaTeX y rompe el HTML de los <span> (gotcha del proyecto).
+            st.markdown(f"<div class='ficha-precio'>{precio_ficha} "
+                        f"<span class='muted' style='font-size:1rem;font-weight:400'>{etiqueta} "
+                        f"{cli['lista_precios']}{iva_tag}</span></div>", unsafe_allow_html=True)
             if cli.get("descuento"):
                 st.markdown(f"<p class='muted'>Con tu descuento cabecera ({cli['descuento']:g}%): "
                             f"<b style='color:#006786'>{fmt_money(catalog.aplicar_descuento(prod['precio'], cli['descuento']))}</b> "
@@ -890,7 +897,7 @@ def page_carrito() -> None:
     left, right = st.columns([2.55, 1.25], gap="large")
     with left:
         h = st.columns([0.5, 2.3, 0.95, 0.85, 0.85, 0.3])
-        for col, txt in zip(h, ["", "Producto", "Cantidad", "Precio lista", "Subtotal", ""]):
+        for col, txt in zip(h, ["", "Producto", "Cantidad", "Precio", "Subtotal", ""]):
             col.markdown(f"<div class='kicker'>{txt}</div>", unsafe_allow_html=True)
         nuevos, cambio, recortes = [], False, {}
         for it in items:
@@ -916,7 +923,14 @@ def page_carrito() -> None:
                 recortes[it["sku"]] = (f"{it['producto_nombre']} ({it['color']}): estás superando la "
                                        "cantidad disponible — lo ajustamos al máximo posible.")
                 q = tope
-            c[3].markdown(fmt_money(it["precio_unit"]))
+            pd_it = float(it.get("pct_desc") or 0)
+            lista_it = float(it.get("precio_lista") or it["precio_unit"])
+            if pd_it > 0 and lista_it > it["precio_unit"]:
+                c[3].markdown(f"<div><span class='cart-price-old'>{fmt_money(lista_it)}</span>"
+                              f"<span class='cart-price-off'>{fmt_money(it['precio_unit'])}</span> "
+                              f"<span class='badge-desc'>−{pd_it:g}%</span></div>", unsafe_allow_html=True)
+            else:
+                c[3].markdown(fmt_money(it["precio_unit"]))
             c[4].markdown(f"<b>{fmt_money(int(q) * it['precio_unit'])}</b>", unsafe_allow_html=True)
             c[5].button("×", key=f"del_{it['sku']}", on_click=_quitar_item,
                         args=(it["sku"], f"{it['producto_nombre']} ({it['color']})"))
@@ -945,18 +959,24 @@ def page_carrito() -> None:
         if iva_pct > 0:
             iva_html = (f"<div class='muted'>IVA {tot['iva_pct']:g}%: {fmt_money(tot['iva_monto'])}</div>"
                         f"<div class='muted'>Total c/IVA: <b>{fmt_money(tot['total_con_iva'])}</b></div>")
+        ahorro_html = ""
+        if float(tot.get("ahorro_descvta") or 0) > 0:
+            ahorro_html = (f"<div style='color:#d6006c'>Ahorro por ofertas: "
+                           f"<b>-{fmt_money(tot['ahorro_descvta'])}</b></div>")
         st.markdown(f"""<div class='total-box'>
           <div class='kicker'>Resumen</div>
           <div>Unidades: <b>{tot['unidades']}</b></div>
-          <div>Subtotal (lista {cli['lista_precios']}{', sin IVA' if iva_pct > 0 else ''}): <b>{fmt_money(tot['subtotal'])}</b></div>
+          {ahorro_html}
+          <div>Subtotal{', sin IVA' if iva_pct > 0 else ''}: <b>{fmt_money(tot['subtotal'])}</b></div>
           <div>Descuento cabecera {tot['descuento_pct']:g}%: <b>-{fmt_money(tot['descuento_monto'])}</b></div>
           <div style='font-size:1.35rem;margin-top:.4rem'>TOTAL: <b>{fmt_money(tot['total'])}</b></div>
           {iva_html}
           </div>""", unsafe_allow_html=True)
         minimo_m = float(overrides.get_config().get("minimo_pedido_monto") or 0)
-        if minimo_m and tot["subtotal"] < minimo_m:
+        sub_lista = sum(int(i["cantidad"]) * float(i.get("precio_lista") or i["precio_unit"]) for i in items)
+        if minimo_m and sub_lista < minimo_m:
             st.markdown(f"<div class='nota-acento'>El mínimo de compra es {fmt_money(minimo_m)} a "
-                        f"precio de lista — te faltan {fmt_money(minimo_m - tot['subtotal'])} para "
+                        f"precio de lista — te faltan {fmt_money(minimo_m - sub_lista)} para "
                         "poder confirmar.</div>", unsafe_allow_html=True)
         if not puede_pedir():
             st.warning("Tu usuario no tiene cliente asociado; no podés confirmar pedidos.")
