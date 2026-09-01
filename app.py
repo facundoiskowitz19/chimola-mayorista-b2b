@@ -1232,7 +1232,7 @@ def page_reposicion() -> None:
     tabla = sug[["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
                  "stock_pv", "precio_lista", "pct_desc", "precio", "sugerido"]].copy()
     tabla["stock_pv"] = tabla["stock_pv"].clip(lower=0)
-    tabla["precio_lista_disp"] = [fmt_money(pl) if pd_ > 0 else "" for pl, pd_ in zip(tabla["precio_lista"], tabla["pct_desc"])]
+    tabla["precio_lista_disp"] = [fmt_money(pl) for pl in tabla["precio_lista"]]
     tabla["desc_disp"] = [f"−{p:g}%" if p > 0 else "" for p in tabla["pct_desc"]]
     tabla = tabla.drop(columns=["precio_lista", "pct_desc"]).rename(columns={"sugerido": "cantidad"})
     edited = st.data_editor(
@@ -1469,8 +1469,9 @@ def page_compra_rapida() -> None:
     sub["cantidad"] = 0
     # Detalle de oferta: precio de lista y % SOLO en las filas con descuento
     # (vacío en el resto → no ensucia). "precio" es el final que se paga.
-    # Texto preformateado ("" = celda vacía; NumberColumn con NaN muestra "None" en Streamlit 1.41).
-    sub["precio_lista_disp"] = [fmt_money(pl) if pd_ > 0 else "" for pl, pd_ in zip(sub["precio_lista"], sub["pct_desc"])]
+    # Texto preformateado (NumberColumn con NaN muestra "None" en Streamlit 1.41).
+    # Precio lista SIEMPRE (sin oferta = igual al precio); Desc. solo si hay descuento.
+    sub["precio_lista_disp"] = [fmt_money(pl) for pl in sub["precio_lista"]]
     sub["desc_disp"] = [f"−{p:g}%" if p > 0 else "" for p in sub["pct_desc"]]
     ver = st.session_state.get("cr_ver", 0)
     # Sin columna de stock: el cliente nunca ve cuánto queda.
