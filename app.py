@@ -1230,19 +1230,26 @@ def page_reposicion() -> None:
                    if ch.isalnum())[:48]
     ver = st.session_state.get("repo_ver", 0)
     tabla = sug[["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
-                 "stock_pv", "precio", "sugerido"]].copy()
+                 "stock_pv", "precio_lista", "pct_desc", "precio", "sugerido"]].copy()
     tabla["stock_pv"] = tabla["stock_pv"].clip(lower=0)
-    tabla = tabla.rename(columns={"sugerido": "cantidad"})
+    tabla["precio_lista_disp"] = [pl if pd_ > 0 else None
+                                  for pl, pd_ in zip(tabla["precio_lista"], tabla["pct_desc"])]
+    tabla["desc_disp"] = [f"−{p:g}%" if p > 0 else "" for p in tabla["pct_desc"]]
+    tabla = tabla.drop(columns=["precio_lista", "pct_desc"]).rename(columns={"sugerido": "cantidad"})
     edited = st.data_editor(
-        tabla, hide_index=True, use_container_width=True, key=f"repo_editor_{ver}_{dias}_{fkey}",
+        tabla[["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
+               "stock_pv", "precio_lista_disp", "desc_disp", "precio", "cantidad"]],
+        hide_index=True, use_container_width=True, key=f"repo_editor_{ver}_{dias}_{fkey}",
         disabled=["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
-                  "stock_pv", "precio"],
+                  "stock_pv", "precio_lista_disp", "desc_disp", "precio"],
         column_config={
             "foto": st.column_config.ImageColumn("", width="small"),
             "producto_cod": "Código", "producto_nombre": "Producto", "color": "Color",
             "talle": "Talle",
             "vendidas_30d": st.column_config.NumberColumn("Vendiste 30d", format="%d"),
             "stock_pv": st.column_config.NumberColumn("Tenés", format="%d"),
+            "precio_lista_disp": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
+            "desc_disp": st.column_config.TextColumn("Desc."),
             "precio": st.column_config.NumberColumn("Precio", format="$ %.0f"),
             "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1),
         })
@@ -1461,15 +1468,24 @@ def page_compra_rapida() -> None:
     # arriba por orden alfabético y la tabla arrancaba pelada).
     sub = sub.sort_values("foto", key=lambda c: c == "", kind="stable")
     sub["cantidad"] = 0
+    # Detalle de oferta: precio de lista y % SOLO en las filas con descuento
+    # (vacío en el resto → no ensucia). "precio" es el final que se paga.
+    sub["precio_lista_disp"] = [pl if pd_ > 0 else None
+                                for pl, pd_ in zip(sub["precio_lista"], sub["pct_desc"])]
+    sub["desc_disp"] = [f"−{p:g}%" if p > 0 else "" for p in sub["pct_desc"]]
     ver = st.session_state.get("cr_ver", 0)
     # Sin columna de stock: el cliente nunca ve cuánto queda.
     edited = st.data_editor(
-        sub[["foto", "producto_cod", "producto_nombre", "color", "talle", "precio", "cantidad"]],
+        sub[["foto", "producto_cod", "producto_nombre", "color", "talle",
+             "precio_lista_disp", "desc_disp", "precio", "cantidad"]],
         hide_index=True, use_container_width=True, height=620, key=f"cr_editor_{ver}",
-        disabled=["foto", "producto_cod", "producto_nombre", "color", "talle", "precio"],
+        disabled=["foto", "producto_cod", "producto_nombre", "color", "talle",
+                  "precio_lista_disp", "desc_disp", "precio"],
         column_config={
             "foto": st.column_config.ImageColumn("", width="small"),
             "producto_cod": "Código", "producto_nombre": "Producto", "color": "Color", "talle": "Talle",
+            "precio_lista_disp": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
+            "desc_disp": st.column_config.TextColumn("Desc."),
             "precio": st.column_config.NumberColumn("Precio", format="$ %.0f"),
             "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1, format="%d"),
         })
