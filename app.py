@@ -1232,8 +1232,7 @@ def page_reposicion() -> None:
     tabla = sug[["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
                  "stock_pv", "precio_lista", "pct_desc", "precio", "sugerido"]].copy()
     tabla["stock_pv"] = tabla["stock_pv"].clip(lower=0)
-    tabla["precio_lista_disp"] = [float(pl) if pd_ > 0 else float("nan")
-                                  for pl, pd_ in zip(tabla["precio_lista"], tabla["pct_desc"])]
+    tabla["precio_lista_disp"] = [fmt_money(pl) if pd_ > 0 else "" for pl, pd_ in zip(tabla["precio_lista"], tabla["pct_desc"])]
     tabla["desc_disp"] = [f"−{p:g}%" if p > 0 else "" for p in tabla["pct_desc"]]
     tabla = tabla.drop(columns=["precio_lista", "pct_desc"]).rename(columns={"sugerido": "cantidad"})
     edited = st.data_editor(
@@ -1248,7 +1247,7 @@ def page_reposicion() -> None:
             "talle": "Talle",
             "vendidas_30d": st.column_config.NumberColumn("Vendiste 30d", format="%d"),
             "stock_pv": st.column_config.NumberColumn("Tenés", format="%d"),
-            "precio_lista_disp": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
+            "precio_lista_disp": st.column_config.TextColumn("Precio lista"),
             "desc_disp": st.column_config.TextColumn("Desc."),
             "precio": st.column_config.NumberColumn("Precio", format="$ %.0f"),
             "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1),
@@ -1470,8 +1469,8 @@ def page_compra_rapida() -> None:
     sub["cantidad"] = 0
     # Detalle de oferta: precio de lista y % SOLO en las filas con descuento
     # (vacío en el resto → no ensucia). "precio" es el final que se paga.
-    sub["precio_lista_disp"] = [float(pl) if pd_ > 0 else float("nan")
-                                for pl, pd_ in zip(sub["precio_lista"], sub["pct_desc"])]
+    # Texto preformateado ("" = celda vacía; NumberColumn con NaN muestra "None" en Streamlit 1.41).
+    sub["precio_lista_disp"] = [fmt_money(pl) if pd_ > 0 else "" for pl, pd_ in zip(sub["precio_lista"], sub["pct_desc"])]
     sub["desc_disp"] = [f"−{p:g}%" if p > 0 else "" for p in sub["pct_desc"]]
     ver = st.session_state.get("cr_ver", 0)
     # Sin columna de stock: el cliente nunca ve cuánto queda.
@@ -1484,7 +1483,7 @@ def page_compra_rapida() -> None:
         column_config={
             "foto": st.column_config.ImageColumn("", width="small"),
             "producto_cod": "Código", "producto_nombre": "Producto", "color": "Color", "talle": "Talle",
-            "precio_lista_disp": st.column_config.NumberColumn("Precio lista", format="$ %.0f"),
+            "precio_lista_disp": st.column_config.TextColumn("Precio lista"),
             "desc_disp": st.column_config.TextColumn("Desc."),
             "precio": st.column_config.NumberColumn("Precio", format="$ %.0f"),
             "cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, step=1, format="%d"),
