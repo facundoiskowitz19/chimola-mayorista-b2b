@@ -1232,7 +1232,7 @@ def page_reposicion() -> None:
     tabla = sug[["foto", "producto_cod", "producto_nombre", "color", "talle", "vendidas_30d",
                  "stock_pv", "precio_lista", "pct_desc", "precio", "sugerido"]].copy()
     tabla["stock_pv"] = tabla["stock_pv"].clip(lower=0)
-    tabla["precio_lista_disp"] = [pl if pd_ > 0 else None
+    tabla["precio_lista_disp"] = [float(pl) if pd_ > 0 else float("nan")
                                   for pl, pd_ in zip(tabla["precio_lista"], tabla["pct_desc"])]
     tabla["desc_disp"] = [f"−{p:g}%" if p > 0 else "" for p in tabla["pct_desc"]]
     tabla = tabla.drop(columns=["precio_lista", "pct_desc"]).rename(columns={"sugerido": "cantidad"})
@@ -1470,7 +1470,7 @@ def page_compra_rapida() -> None:
     sub["cantidad"] = 0
     # Detalle de oferta: precio de lista y % SOLO en las filas con descuento
     # (vacío en el resto → no ensucia). "precio" es el final que se paga.
-    sub["precio_lista_disp"] = [pl if pd_ > 0 else None
+    sub["precio_lista_disp"] = [float(pl) if pd_ > 0 else float("nan")
                                 for pl, pd_ in zip(sub["precio_lista"], sub["pct_desc"])]
     sub["desc_disp"] = [f"−{p:g}%" if p > 0 else "" for p in sub["pct_desc"]]
     ver = st.session_state.get("cr_ver", 0)
