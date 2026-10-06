@@ -5,6 +5,7 @@ import { SECCIONES } from "@/lib/format";
 import FilterRail from "@/components/FilterRail";
 import CatalogGrid from "@/components/CatalogGrid";
 import SortSelect from "@/components/SortSelect";
+import CatalogoBanner from "@/components/CatalogoBanner";
 
 const FILTROS = ["categoria", "rubro", "marca", "temporada", "color", "talle"] as const;
 export type Sel = Record<(typeof FILTROS)[number], string[]> & {
@@ -39,11 +40,21 @@ type SP = Record<string, string | string[] | undefined>;
 export default async function CatalogoPage({ params, searchParams }: { params: Promise<{ seccion: string }>; searchParams: Promise<SP> }) {
   const { seccion } = await params;
   if (seccion !== "todo" && !SECCIONES[seccion]) notFound();
-  const sel = parse(await searchParams);
-  const [cat, me, ban] = await Promise.all([
+  let sel = parse(await searchParams);
+  const [cat0, me, ban] = await Promise.all([
     apiServer<Catalogo>(`/catalogo?${queryDe(sel, seccion)}`), apiServer<Me>("/auth/me"),
-    seccion === "todo" ? Promise.resolve(null) : apiServer<{ banner_grilla: HomeBloque | null }>(`/home/${seccion}/banner`).catch(() => null),
+    seccion === "todo" ? Promise.resolve(null) : apiServer<{ banner_grilla: HomeBloque | null; banner_top: HomeBloque | null }>(
+      `/home/${seccion}/banner?${new URLSearchParams([...sel.temporada.map((v) => ["temporada", v]), ...sel.rubro.map((v) => ["rubro", v]), ...sel.categoria.map((v) => ["categoria", v])])}`).catch(() => null),
   ]);
+
+  // Colecciones nuevas sin fotos cargadas: si «solo con foto» deja la grilla vacía, mostrar igual.
+  let cat = cat0;
+  let sinFotoForzado = false;
+  if (cat.total === 0 && sel.solo_foto) {
+    const sel2 = { ...sel, solo_foto: false };
+    const cat2 = await apiServer<Catalogo>(`/catalogo?${queryDe(sel2, seccion)}`);
+    if (cat2.total > 0) { cat = cat2; sel = sel2; sinFotoForzado = true; }
+  }
 
   let titulo = seccion === "todo" ? "Todo el catálogo" : SECCIONES[seccion].nombre;
   if (sel.q) titulo = `Resultados para “${sel.q}”`;
@@ -54,11 +65,12 @@ export default async function CatalogoPage({ params, searchParams }: { params: P
 
   return (
     <div className="container-lt pb-10 pt-8">
+      {ban?.banner_top && <CatalogoBanner b={ban.banner_top} seccion={seccion} />}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-baseline gap-4">
           <h1 className="font-brand text-[28px] font-extrabold">{titulo}</h1>
           <span className="hidden h-6 w-px bg-line-2 sm:block" />
-          <span className="font-sans text-[13px]">{cat.total} producto{cat.total === 1 ? "" : "s"} encontrado{cat.total === 1 ? "" : "s"}</span>
+          <span className="font-sans text-[13px]">{cat.total} producto{cat.total === 1 ? "" : "s"} encontrado{cat.total === 1 ? "" : "s"}{sinFotoForzado && <span className="text-muted"> · todavía sin fotos</span>}</span>
         </div>
         <SortSelect orden={sel.orden} />
       </div>

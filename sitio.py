@@ -51,6 +51,10 @@ DEFAULTS: dict[str, dict] = {
         ],
         "banner_grilla": {"img": "/banners/banner_pets.jpg", "titulo": "PETS", "subtitulo": "chimola® nuevo lanzamiento",
                           "cta": "Ver productos", "link": "/c/marro?rubro=Pets"},
+        "banners_catalogo": [
+            {"temporada": "Summer 2027", "img": "/banners/hero_marro.jpg", "kicker": "Grupo_ Denim Indigo",
+             "titulo": "summer\n_stories", "cta": "Ver productos", "link": "/c/marro?temporada=Summer 2027"},
+        ],
     },
     "indu": {
         "hero": [{"img": "/banners/hero_indu.jpg", "titulo": "summer\n_stories", "tag": "SS_2027",
@@ -68,6 +72,10 @@ DEFAULTS: dict[str, dict] = {
             {"titulo": "Oportunidades", "tipo": "ofertas", "link": "/c/indu?solo_desc=1"},
         ],
         "banner_grilla": None,
+        "banners_catalogo": [
+            {"temporada": "SS27 Indumentaria", "img": "/banners/hero_indu.jpg", "kicker": "Colección",
+             "titulo": "summer\n_stories", "cta": "Ver productos", "link": "/c/indu?temporada=SS27 Indumentaria"},
+        ],
     },
     "lima": {
         "hero": [{"img": "/banners/hero_lima.jpg", "titulo": "LIMA", "tag": "AW26",
@@ -85,6 +93,7 @@ DEFAULTS: dict[str, dict] = {
             {"titulo": "Oportunidades", "tipo": "ofertas", "link": "/c/lima?solo_desc=1"},
         ],
         "banner_grilla": None,
+        "banners_catalogo": [],
     },
 }
 
@@ -134,6 +143,7 @@ def set_home(seccion: str, data: dict, por: str) -> None:
         "bloques": [_limpiar_bloque(b) for b in (data.get("bloques") or []) if (b.get("img") or b.get("titulo"))],
         "secciones": [_limpiar_seccion(s) for s in (data.get("secciones") or []) if s.get("titulo")],
         "banner_grilla": _limpiar_bloque(data["banner_grilla"]) if data.get("banner_grilla") else None,
+        "banners_catalogo": [b for b in (_limpiar_banner_cat(x) for x in (data.get("banners_catalogo") or [])) if b],
     }
     _ref().set({seccion: limpio, "updated_at": dt.datetime.now(dt.timezone.utc), "updated_by": por}, merge=True)
     invalidar()
@@ -147,9 +157,40 @@ def reset_home(seccion: str, por: str) -> None:
 
 
 def _limpiar_bloque(b: dict) -> dict:
-    out = {k: (str(b.get(k) or "").strip()) for k in ("img", "titulo", "subtitulo", "tag", "cta", "link")}
+    out = {k: (str(b.get(k) or "").strip()) for k in ("img", "titulo", "subtitulo", "tag", "cta", "link", "kicker")}
     out["ancho"] = "doble" if str(b.get("ancho") or "").lower().startswith("d") else "simple"
     return {k: v for k, v in out.items() if v != "" or k in ("img", "titulo")}
+
+
+FILTROS_BANNER = ("temporada", "rubro", "categoria")
+
+
+def _limpiar_banner_cat(b: dict) -> dict | None:
+    """Banner de arriba del catálogo, atado a UN filtro (temporada / tipo de producto / categoría)."""
+    out = _limpiar_bloque(b)
+    out["kicker"] = str(b.get("kicker") or "").strip()
+    filtros = {k: str(b.get(k) or "").strip() for k in FILTROS_BANNER if str(b.get(k) or "").strip()}
+    if not filtros or not (out.get("img") or out.get("titulo")):
+        return None
+    out.update(filtros)
+    return out
+
+
+def banner_catalogo(seccion: str, seleccion: dict) -> dict | None:
+    """El banner cuya condición matchea la selección actual del catálogo (listas de valores
+    por filtro). Primera regla que matchea, todas sus condiciones incluidas en la selección."""
+    for b in sitio_get_home_safe(seccion).get("banners_catalogo") or []:
+        cond = {k: b[k] for k in FILTROS_BANNER if b.get(k)}
+        if cond and all(b[k] in (seleccion.get(k) or []) for k in cond):
+            return b
+    return None
+
+
+def sitio_get_home_safe(seccion: str) -> dict:
+    try:
+        return get_home(seccion)
+    except KeyError:
+        return {}
 
 
 def _limpiar_seccion(s: dict) -> dict:

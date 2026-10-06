@@ -6,7 +6,7 @@ La config vive en `sitio.py` (compartido con el admin Streamlit): doc Firestore
 from __future__ import annotations
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 import catalog
 import fotos
@@ -59,10 +59,14 @@ def home(seccion: str, c: deps.Ctx = Depends(deps.ctx_requerido)):
 
 
 @router.get("/home/{seccion}/banner")
-def banner_grilla(seccion: str, c: deps.Ctx = Depends(deps.ctx_requerido)):
+def banner_grilla(seccion: str, temporada: list[str] | None = Query(None), rubro: list[str] | None = Query(None),
+                  categoria: list[str] | None = Query(None), c: deps.Ctx = Depends(deps.ctx_requerido)):
+    """Banner intercalado en la grilla + banner de arriba del catálogo si algún filtro activo tiene uno."""
     if seccion not in SECCIONES:
         raise HTTPException(404, "Sección desconocida")
-    return {"banner_grilla": sitio.get_home(seccion).get("banner_grilla")}
+    cfg = sitio.get_home(seccion)
+    sel = {"temporada": temporada or [], "rubro": rubro or [], "categoria": categoria or []}
+    return {"banner_grilla": cfg.get("banner_grilla"), "banner_top": sitio.banner_catalogo(seccion, sel)}
 
 
 @router.get("/media/{path:path}")

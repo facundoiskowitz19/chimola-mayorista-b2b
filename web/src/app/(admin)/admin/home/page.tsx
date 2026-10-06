@@ -8,7 +8,8 @@ import { Confirm, Field, H1, Kicker, Muted, Panel, Pills, Spinner } from "@/comp
 type Sec = "marro" | "indu" | "lima";
 const SECS: { value: Sec; label: string }[] = [{ value: "marro", label: "Marroquinería (Chimola)" }, { value: "indu", label: "Indumentaria (Chimola)" }, { value: "lima", label: "LIMA" }];
 interface Fila { titulo: string; tipo: string; productos: string; rubro: string; temporada: string; link: string }
-interface Cfg { hero: HomeBloque[]; bloques: HomeBloque[]; secciones: { titulo: string; tipo: string; productos?: string[]; filtro?: { rubro?: string[]; temporada?: string[] }; link?: string | null }[]; banner_grilla: HomeBloque | null }
+interface Cfg { hero: HomeBloque[]; bloques: HomeBloque[]; secciones: { titulo: string; tipo: string; productos?: string[]; filtro?: { rubro?: string[]; temporada?: string[] }; link?: string | null }[]; banner_grilla: HomeBloque | null; banners_catalogo?: HomeBloque[] }
+interface Opciones { temporadas: { valor: string }[]; tipos: { valor: string }[]; tendencias: { valor: string }[] }
 interface Res { seccion: Sec; config: Cfg; personalizada: boolean; tipos_seccion: Record<string, string> }
 
 const vacio = (): HomeBloque => ({ img: "", titulo: "", subtitulo: "", cta: "", link: "", tag: "", ancho: "simple" });
@@ -20,6 +21,8 @@ export default function HomeAdmin() {
   const [bloques, setBloques] = useState<HomeBloque[]>([]);
   const [filas, setFilas] = useState<Fila[]>([]);
   const [banner, setBanner] = useState<HomeBloque | null>(null);
+  const [cats, setCats] = useState<HomeBloque[]>([]);
+  const [ops, setOps] = useState<Opciones | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const { notify } = useToast();
@@ -30,6 +33,8 @@ export default function HomeAdmin() {
     setBloques(d.config.bloques.map((b) => ({ ...vacio(), ...b })));
     setFilas(d.config.secciones.map((s) => ({ titulo: s.titulo, tipo: s.tipo, productos: (s.productos || []).join(", "), rubro: (s.filtro?.rubro || []).join(", "), temporada: (s.filtro?.temporada || []).join(", "), link: s.link || "" })));
     setBanner(d.config.banner_grilla ? { ...vacio(), ...d.config.banner_grilla } : null);
+    setCats((d.config.banners_catalogo || []).map((b) => ({ ...vacio(), ...b })));
+    api<{ auto: Opciones }>(`/admin/menu/${sec}`).then((m) => setOps(m.auto)).catch(() => setOps(null));
   }, [sec]);
   useEffect(() => { setR(null); cargar(); }, [cargar]);
 
@@ -47,6 +52,7 @@ export default function HomeAdmin() {
         hero, bloques,
         secciones: filas.filter((f) => f.titulo.trim()).map((f) => ({ titulo: f.titulo, tipo: f.tipo, productos: f.productos, filtro: { rubro: f.rubro, temporada: f.temporada }, link: f.link })),
         banner_grilla: banner && (banner.img || banner.titulo) ? banner : null,
+        banners_catalogo: cats,
       } });
       notify("Home guardada — el sitio la toma en menos de un minuto"); await cargar();
     } catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); }
@@ -101,6 +107,28 @@ export default function HomeAdmin() {
         <Kicker>Banner dentro de la grilla del catálogo</Kicker><Muted className="mt-1">Franja angosta después de la segunda fila de productos del catálogo de esta sección. Vacío = no se muestra.</Muted>
         <div className="mt-3">{banner ? <BloqueForm b={banner} onChange={setBanner} onQuitar={() => setBanner(null)} subir={subir} conSubtitulo /> : <button onClick={() => setBanner(vacio())} className="btn btn-light btn-sm">+ Agregar banner</button>}</div>
       </Panel>
+      <Panel className="mt-5">
+        <Kicker>Banners por colección o categoría (arriba del catálogo)</Kicker>
+        <Muted className="mt-1">Cuando el cliente entra a una temporada, tipo de producto o categoría que tenga banner, lo ve arriba de la grilla (como «Verano 2027» en el diseño). Imagen ideal 1600×420. El título admite | para cortar en dos líneas.</Muted>
+        <div className="mt-3 space-y-3">
+          {cats.map((b, i) => {
+            const tipo: "temporada" | "rubro" | "categoria" = b.temporada ? "temporada" : b.rubro ? "rubro" : "categoria";
+            const valores = tipo === "temporada" ? ops?.temporadas : tipo === "rubro" ? ops?.tipos : ops?.tendencias;
+            const set = (nb: HomeBloque) => setCats(cats.map((x, k) => k === i ? nb : x));
+            return (
+              <div key={i} className="rounded border border-line p-3">
+                <div className="mb-3 grid gap-3 sm:grid-cols-3">
+                  <Field label="Se muestra cuando el filtro es"><select className="input" value={tipo} onChange={(e) => set({ ...b, temporada: "", rubro: "", categoria: "", [e.target.value]: valores?.[0]?.valor || "" })}><option value="temporada">Temporada</option><option value="rubro">Tipo de producto</option><option value="categoria">Categoría</option></select></Field>
+                  <Field label="Valor"><select className="input" value={b[tipo] || ""} onChange={(e) => set({ ...b, [tipo]: e.target.value })}><option value="">—</option>{(valores || []).map((v) => <option key={v.valor} value={v.valor}>{v.valor}</option>)}</select></Field>
+                  <Field label="Texto chico arriba del título (kicker)"><input className="input" value={b.kicker || ""} onChange={(e) => set({ ...b, kicker: e.target.value })} placeholder="Grupo_ Denim Indigo" /></Field>
+                </div>
+                <BloqueForm b={b} onChange={set} onQuitar={() => setCats(cats.filter((_, k) => k !== i))} subir={subir} />
+              </div>
+            );
+          })}
+          <button onClick={() => setCats([...cats, { ...vacio(), temporada: ops?.temporadas?.[0]?.valor || "", cta: "Ver productos" }])} className="btn btn-light btn-sm">+ Agregar banner de colección</button>
+        </div>
+      </Panel>
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button onClick={guardar} disabled={busy} className="btn btn-primary">{busy ? "Guardando…" : "Guardar home"}</button>
         {r.personalizada && (!confirmReset ? <button onClick={() => setConfirmReset(true)} className="btn btn-ghost">Volver a los valores por defecto</button> : <Confirm busy={busy} texto="Se descarta lo personalizado de esta sección y vuelve la home por defecto." onYes={async () => { setBusy(true); await api(`/admin/home/${sec}`, { method: "DELETE" }); setConfirmReset(false); setBusy(false); notify("Home restaurada"); cargar(); }} onNo={() => setConfirmReset(false)} />)}
@@ -118,6 +146,7 @@ function BloqueForm({ b, onChange, onQuitar, subir, conSubtitulo, conTag, conAnc
         <div className="aspect-[16/9] w-full overflow-hidden bg-[#eee]">{b.img && /* eslint-disable-next-line @next/next/no-img-element */ <img src={b.img} alt="" className="h-full w-full object-cover" />}</div>
         <Muted className="mt-1 truncate">{b.img ? (b.img.startsWith("/banners/") ? "Imagen por defecto" : "Imagen subida") : "Sin imagen"}</Muted>
         <label className={`btn btn-light btn-sm mt-2 cursor-pointer ${up ? "opacity-50" : ""}`}>{up ? "Subiendo…" : "Subir imagen"}<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; setUp(true); try { onChange({ ...b, img: await subir(f) }); } catch (er) { notify(er instanceof ClientError ? er.message : "Error al subir", "error"); } finally { setUp(false); } }} /></label>
+        <input className="input mt-2 !py-1 !text-[11px]" placeholder="…o pegá la URL de una imagen (https://…)" value={b.img && b.img.startsWith("http") ? b.img : ""} onChange={(e) => onChange({ ...b, img: e.target.value.trim() })} />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Título"><input className="input" value={(b.titulo || "").replace(/\n/g, "|")} onChange={(e) => onChange({ ...b, titulo: e.target.value.replace(/\|/g, "\n") })} /></Field>
