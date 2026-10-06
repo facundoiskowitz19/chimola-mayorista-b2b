@@ -14,7 +14,7 @@ const TABS: { key: Seccion; label: React.ReactNode }[] = [
   { key: "lima", label: <Lima className="text-[19px]" /> },
 ];
 
-export default function Header({ me, menu }: { me: Me; menu: Menu }) {
+export default function Header({ me, menu, topbar }: { me: Me; menu: Menu; topbar: string }) {
   const path = usePathname();
   const router = useRouter();
   const { unidades } = useCart();
@@ -36,9 +36,11 @@ export default function Header({ me, menu }: { me: Me; menu: Menu }) {
 
   return (
     <header className="relative z-40 bg-bg">
-      <div className="bg-black py-[7px] text-center font-sans text-[11.5px] text-white">
-        <span className="mx-2">★</span>Comprá online y obtené un 10% en tu próxima compra<span className="mx-2">★</span>
-      </div>
+      {topbar && (
+        <div className="bg-black py-[7px] text-center font-sans text-[11.5px] text-white">
+          <span className="mx-2">★</span>{topbar}<span className="mx-2">★</span>
+        </div>
+      )}
       <div className="container-lt">
         <div className="flex h-[66px] items-center justify-between gap-4">
           <div className="flex items-center gap-4">

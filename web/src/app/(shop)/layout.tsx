@@ -9,15 +9,16 @@ import { ToastProvider } from "@/components/Toast";
 export default async function ShopLayout({ children }: LayoutProps<"/">) {
   const me = await apiServerOpcional<Me>("/auth/me");
   if (!me) redirect("/login");
-  const [menu, carrito] = await Promise.all([
+  const [menu, carrito, sitio] = await Promise.all([
     apiServer<Menu>("/catalogo/menu"),
     me.puede_pedir ? apiServerOpcional<Carrito>("/carrito") : Promise.resolve(null),
+    apiServerOpcional<{ topbar: string }>("/config/sitio"),
   ]);
   return (
     <ToastProvider>
       <CartProvider unidadesIniciales={carrito?.totales.unidades ?? 0}>
         <div className="flex min-h-screen flex-col">
-          <Header me={me} menu={menu} />
+          <Header me={me} menu={menu} topbar={sitio?.topbar || ""} />
           <main className="flex-1">{children}</main>
           <Footer />
         </div>

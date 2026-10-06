@@ -73,3 +73,20 @@ def media(path: str):
         raise HTTPException(404, "No existe")
     data, ct = r
     return Response(data, media_type=ct, headers={"Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/config/sitio")
+def config_sitio(c: deps.Ctx = Depends(deps.ctx_requerido)):
+    """Textos globales del sitio para el front: barra negra superior y mínimos de compra.
+    La barra muestra `banner_texto` (Admin → Config); vacío → la compra mínima configurada."""
+    import overrides
+    cfg = overrides.get_config()
+    minimo_m = cfg.get("minimo_pedido_monto")
+    minimo_u = cfg.get("minimo_pedido_unidades")
+    texto = (cfg.get("banner_texto") or "").strip()
+    if not texto:
+        if minimo_m:
+            texto = f"Compra mínima: ${int(float(minimo_m)):,} + IVA".replace(",", ".")
+        elif minimo_u:
+            texto = f"Compra mínima: {int(minimo_u)} unidades"
+    return {"topbar": texto, "minimo_monto": minimo_m, "minimo_unidades": minimo_u}
