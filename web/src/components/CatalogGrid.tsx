@@ -1,11 +1,11 @@
 "use client";
 /* Grilla del catálogo con scroll infinito (carga la página siguiente al acercarse al final). */
 import { useEffect, useRef, useState } from "react";
-import type { Catalogo, Card } from "@/lib/types";
+import type { Catalogo, Card, HomeBloque } from "@/lib/types";
 import { api } from "@/lib/client";
 import CardsWithPanel from "./CardsWithPanel";
 
-export default function CatalogGrid({ inicial, query, puedePedir }: { inicial: Catalogo; query: string; puedePedir: boolean }) {
+export default function CatalogGrid({ inicial, query, puedePedir, banner = null }: { inicial: Catalogo; query: string; puedePedir: boolean; banner?: HomeBloque | null }) {
   const [items, setItems] = useState<Card[]>(inicial.items);
   const [page, setPage] = useState(inicial.page);
   const [busy, setBusy] = useState(false);
@@ -37,7 +37,7 @@ export default function CatalogGrid({ inicial, query, puedePedir }: { inicial: C
   }
   return (
     <div>
-      <CardsWithPanel items={items} cols={3} puedePedir={puedePedir} />
+      <CardsWithPanel items={items} cols={3} puedePedir={puedePedir} banner={banner} />
       <div ref={sentinel} className="h-px" />
       <div className="mt-8 flex flex-col items-center gap-2">
         <span className="font-sans text-[12px] text-muted">Viste {items.length} de {inicial.total}</span>

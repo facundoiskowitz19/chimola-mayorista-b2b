@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { apiServer } from "@/lib/api";
-import type { Catalogo, Me } from "@/lib/types";
+import type { Catalogo, HomeBloque, Me } from "@/lib/types";
 import { SECCIONES } from "@/lib/format";
 import FilterRail from "@/components/FilterRail";
 import CatalogGrid from "@/components/CatalogGrid";
@@ -40,7 +40,10 @@ export default async function CatalogoPage({ params, searchParams }: { params: P
   const { seccion } = await params;
   if (seccion !== "todo" && !SECCIONES[seccion]) notFound();
   const sel = parse(await searchParams);
-  const [cat, me] = await Promise.all([apiServer<Catalogo>(`/catalogo?${queryDe(sel, seccion)}`), apiServer<Me>("/auth/me")]);
+  const [cat, me, ban] = await Promise.all([
+    apiServer<Catalogo>(`/catalogo?${queryDe(sel, seccion)}`), apiServer<Me>("/auth/me"),
+    seccion === "todo" ? Promise.resolve(null) : apiServer<{ banner_grilla: HomeBloque | null }>(`/home/${seccion}/banner`).catch(() => null),
+  ]);
 
   let titulo = seccion === "todo" ? "Todo el catálogo" : SECCIONES[seccion].nombre;
   if (sel.q) titulo = `Resultados para “${sel.q}”`;
@@ -61,7 +64,7 @@ export default async function CatalogoPage({ params, searchParams }: { params: P
       </div>
       <div className="mt-6 grid gap-6 lg:grid-cols-[200px_1fr]">
         <FilterRail seccion={seccion} sel={sel} facetas={cat.facetas} rango={cat.precio_rango} />
-        <CatalogGrid key={queryDe(sel, seccion)} inicial={cat} query={queryDe(sel, seccion)} puedePedir={me.puede_pedir} />
+        <CatalogGrid key={queryDe(sel, seccion)} inicial={cat} query={queryDe(sel, seccion)} puedePedir={me.puede_pedir} banner={ban?.banner_grilla ?? null} />
       </div>
     </div>
   );

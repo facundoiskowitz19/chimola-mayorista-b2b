@@ -49,7 +49,8 @@ DEFAULTS: dict[str, dict] = {
             {"titulo": "Lo mejor de la temporada", "tipo": "destacados", "link": "/c/marro"},
             {"titulo": "Oportunidades", "tipo": "ofertas", "link": "/c/marro?solo_desc=1"},
         ],
-        "banner_grilla": None,
+        "banner_grilla": {"img": "/banners/banner_pets.jpg", "titulo": "PETS", "subtitulo": "chimola® nuevo lanzamiento",
+                          "cta": "Ver productos", "link": "/c/marro?rubro=Pets"},
     },
     "indu": {
         "hero": [{"img": "/banners/hero_indu.jpg", "titulo": "summer\n_stories", "tag": "SS_2027",

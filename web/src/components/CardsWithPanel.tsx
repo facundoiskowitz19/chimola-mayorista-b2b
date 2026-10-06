@@ -10,15 +10,18 @@ import Link from "next/link";
 
 export function BannerGrilla({ b }: { b: HomeBloque }) {
   return (
-    <div className="relative col-span-full h-[82px] overflow-hidden bg-[#7f8fb1]">
+    <div className="relative col-span-full h-[86px] overflow-hidden bg-[#8d97b4]">
       {b.img && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={b.img} alt="" className="absolute inset-0 h-full w-full object-cover" />
       )}
-      <div className="absolute inset-0 flex items-center justify-between px-6">
-        <span className="rounded-full bg-white px-2 py-[2px] font-brand text-[8px] font-bold uppercase">New!</span>
-        <div className="text-center font-brand font-bold text-white drop-shadow"><span className="text-[11px]">{b.subtitulo}</span><br /><span className="text-[22px] uppercase leading-none">{b.titulo}</span></div>
-        {b.link && <Link href={b.link} className="btn btn-light btn-sm">{b.cta || "Ver productos"} <Chevron size={14} /></Link>}
+      <div className="absolute inset-0 flex items-center justify-between px-5">
+        <span className="rounded-full bg-white px-2 py-[3px] font-brand text-[8px] font-bold uppercase shadow">New!</span>
+        <div className="flex items-center gap-4 text-white drop-shadow-[0_1px_4px_rgba(0,0,0,.45)]">
+          <span className="font-condensed text-[34px] uppercase leading-none">{b.titulo}</span>
+          {b.subtitulo && <span className="max-w-[160px] font-brand text-[11px] font-bold uppercase leading-tight">{b.subtitulo}</span>}
+        </div>
+        {b.link ? <Link href={b.link} className="btn btn-light btn-sm !bg-white">{b.cta || "Ver productos"} <Chevron size={14} /></Link> : <span />}
       </div>
     </div>
   );
