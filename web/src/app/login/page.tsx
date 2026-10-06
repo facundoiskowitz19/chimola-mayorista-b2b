@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Footer from "@/components/Footer";
 import LoginForm from "./LoginForm";
 import { Wordmark } from "@/components/Brand";
@@ -34,7 +35,7 @@ export default function LoginPage() {
             <div className="mt-6 w-full rounded-2xl bg-white p-8 shadow-sm lg:absolute lg:right-0 lg:top-[-50px] lg:mt-0 lg:w-[370px]">
               <h2 className="font-brand text-[26px] font-bold leading-tight">Ingresá a tu cuenta</h2>
               <p className="mt-1 font-sans text-[14px] leading-snug text-ink-2">Completá tus datos e ingresá<br />a nuestro catálogo mayorista</p>
-              <LoginForm />
+              <Suspense fallback={null}><LoginForm /></Suspense>
             </div>
           </div>
         </div>
