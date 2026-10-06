@@ -33,3 +33,6 @@ crash.log
 # Handoffs de diseño (referencia local, no versionar)
 design_handoff_admin_v2/
 /*.zip
+
+# Vistas de diseño (PDFs pesados de Vale, referencia local)
+vistas_vale/
