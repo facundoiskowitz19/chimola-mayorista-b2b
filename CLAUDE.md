@@ -200,6 +200,61 @@ Navegador ──cookie JWT (24h)──▶ Streamlit (Cloud Run, --session-affini
 
 ---
 
+## Rediseño Lautin — API + Next.js (rama `rediseno-lautin`, desde 2026-10-06)
+
+Rediseño completo del lado cliente a partir de las 18 vistas de Vale
+(`vistas_vale/*.pdf`, no versionadas: identidad Lautin negro/blanco, Montserrat +
+Roboto, mega-menú, home por sección, cards con swatches, panel inline, curva
+sugerida). Decisión: **Streamlit no alcanza para esa UI** → el cliente pasa a
+Next.js y la lógica Python se expone como API. **El admin sigue en Streamlit**
+(`admin_ui.py`) sin cambios: lee/escribe el mismo Firestore.
+
+```
+web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  ──▶ catalog.py, pedidos.py, stock.py,
+   cookie JWT `mayorista_session`                     sin lógica propia      fotos.py, overrides.py, auth.py…
+```
+
+- **`api/`**: `main.py` (app + warmup), `deps.py` (Ctx desde el JWT, cache de
+  `dim_cliente` 10 min, `df_cliente()` = publicadas + `con_precio`, `jsonable()`),
+  `colores.py` (nombre de color → hex para swatches), `routers/`: `auth`,
+  `catalogo` (grilla con facetas, `/catalogo/menu`, `/productos/{cod}` con
+  relacionados por "familia" = última palabra del nombre, `/productos/{cod}/curva`,
+  `/buscar`), `carrito`, `pedidos`, `cuenta`, `home`. Corre con el root del repo en
+  `sys.path`. Local: `./venv/bin/uvicorn api.main:app --port 8000`. Docker:
+  `docker build -f api/Dockerfile .` (contexto = root).
+- **Secciones del header** (los 3 "homes"): `marro` = Chimola sin
+  Indumentaria/Pijamas · `indu` = Chimola Indumentaria + Pijamas · `lima` = Lima.
+  Definidas en `api/routers/catalogo.py::SECCIONES`.
+- **Curva sugerida** (indumentaria): `repartir_proporcional()` reparte el total
+  proporcional al stock por SKU (mayor resto), nunca más que el stock, y marca
+  `recortado` si no alcanza, sin revelar números (SPECS §12 sigue valiendo).
+- **Home administrable**: doc Firestore `config/home` con una clave por sección
+  (`hero[]`, `bloques[]`, `secciones[]` de tipo destacados/ofertas/manual/filtro,
+  `banner_grilla`); `api/routers/home.py::DEFAULTS` si falta. Pendiente: pantalla
+  en el admin Streamlit para editarlo y subir imágenes.
+- **`web/`**: `src/app/(shop)/…` páginas (`/h/[seccion]` home, `/c/[seccion]`
+  catálogo —`todo` = sin sección—, `/p/[cod]` ficha, `/carrito`, `/pedidos`,
+  `/mis-datos`, `/reposicion` placeholder), `src/app/api/[...path]/route.ts` proxy
+  same-origin a `API_URL`, `src/proxy.ts` guard de cookie (Next 16 renombró
+  middleware → proxy), `src/lib/api.ts` (server, reenvía cookie) y
+  `src/lib/client.ts` (browser, vía `/api`). Componentes clave: `Header`
+  (mega-menú hover), `SearchBox`, `ProductCard`, `CardsWithPanel` / `ProductRow`
+  (panel inline debajo de la fila), `InlinePanel` + `VariantPicker` (lista por
+  color si 1 talle; matriz color×talle con curva si varios), `GalleryModal`,
+  `FilterRail`, `CatalogGrid` (scroll infinito), `Ficha`, `CarritoClient`,
+  `PedidosClient`. Tokens en `globals.css`. Local: `npm run dev` con
+  `.env.local` (`API_URL=http://localhost:8000`).
+- **Next 16**: leer `web/node_modules/next/dist/docs/` antes de tocar
+  convenciones (params/searchParams/cookies son async; `proxy.ts`; Turbopack).
+  Lint de React 19 prohíbe `setState` directo dentro de `useEffect`: resetear
+  estado con `key=` en el padre.
+- **Stock nunca sale al cliente**: la API devuelve `disponible` y acota al
+  agregar al carrito con avisos; `stock` solo si `es_admin`.
+- Deploy pendiente: servicios Cloud Run `mayorista-api-dev` + `mayorista-web-dev`
+  (DEV primero). El Streamlit `mayorista-b2b-dev` sigue vivo hasta el corte.
+
+---
+
 ## Reglas de negocio críticas
 
 Las mismas del ecosistema — copiadas de `sql-to-bq-franquicias/CLAUDE.md`:

@@ -73,7 +73,7 @@ export default function Header({ me, menu }: { me: Me; menu: Menu }) {
                 ))}
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3" onMouseEnter={() => { if (closeT.current) clearTimeout(closeT.current); setOpen(null); }}>
               <SearchBox />
               <Link href="/carrito" className="btn btn-primary !py-[10px] !pl-5 !pr-3" aria-label="Carrito">
                 <span className="font-brand text-[14px] font-semibold">{unidades}</span>
