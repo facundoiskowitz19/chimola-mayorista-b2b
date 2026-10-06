@@ -6,6 +6,7 @@ import { api } from "@/lib/client";
 import type { Card } from "@/lib/types";
 import { money } from "@/lib/format";
 import { Chimola, Lima, SearchIcon, XIcon } from "./Brand";
+import Thumb from "./Thumb";
 
 interface Res { nombres: string[]; productos: Card[]; total?: number }
 
@@ -52,8 +53,7 @@ export default function SearchBox() {
           {res.productos.map((p) => (
             <Link key={p.producto_cod} href={`/p/${p.producto_cod}`} onClick={() => setOpen(false)}
               className="flex items-center gap-4 border-t border-line px-6 py-3 hover:bg-[#f5f5f5]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.foto || ""} alt="" className="h-[64px] w-[64px] rounded-sm bg-white object-contain" />
+              <Thumb src={p.foto} className="h-[64px] w-[64px] rounded-sm bg-white object-contain" />
               <div className="min-w-0">
                 {p.marca === "Lima" ? <Lima className="text-[12px]" /> : <Chimola className="text-[12px]" />}
                 <div className="truncate font-sans text-[13px]">{p.nombre}</div>

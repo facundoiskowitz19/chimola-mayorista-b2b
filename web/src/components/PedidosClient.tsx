@@ -6,6 +6,7 @@ import type { Me, Pedido, PedidoResumen } from "@/lib/types";
 import { api, ClientError } from "@/lib/client";
 import { money } from "@/lib/format";
 import { Chevron } from "./Brand";
+import Thumb from "./Thumb";
 import { useCart } from "./CartContext";
 import { useToast } from "./Toast";
 import { Resumen } from "./CarritoClient";
@@ -76,8 +77,7 @@ export default function PedidosClient({ me, lista }: { me: Me; lista: PedidoResu
                           <tbody>
                             {d.items.map((it) => (
                               <tr key={it.sku} className="border-b border-line">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <td className="w-[52px] py-2"><img src={it.foto || ""} alt="" className="h-[44px] w-[44px] object-contain" /></td>
+                                <td className="w-[52px] py-2"><Thumb src={it.foto} className="h-[44px] w-[44px] object-contain" /></td>
                                 <td className="py-2"><Link href={`/p/${it.producto_cod}`} className="font-bold hover:underline">{it.producto_nombre}</Link><div className="card-meta"><b>{it.producto_cod}</b></div></td>
                                 <td className="py-2">{capital(it.color)}{it.talle !== "U" && ` · Talle ${it.talle}`}</td>
                                 <td className="py-2 text-right">{it.cantidad}</td>

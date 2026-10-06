@@ -5,6 +5,7 @@ import type { Carrito, Me, Pedido } from "@/lib/types";
 import { api, ClientError } from "@/lib/client";
 import { money } from "@/lib/format";
 import { Chevron, XIcon } from "./Brand";
+import Thumb from "./Thumb";
 import { useCart } from "./CartContext";
 import { useToast } from "./Toast";
 import QtyInput from "./QtyInput";
@@ -101,8 +102,7 @@ export default function CarritoClient({ me }: { me: Me }) {
                 {c.items.map((it) => (
                   <tr key={it.sku} className="border-b border-line font-sans text-[13px]">
                     <td className="w-[72px] py-3 pl-4">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={it.foto || ""} alt="" className="h-[60px] w-[60px] bg-white object-contain" />
+                      <Thumb src={it.foto} className="h-[60px] w-[60px] bg-white object-contain" />
                     </td>
                     <td className="py-3 pr-2"><Link href={`/p/${it.producto_cod}`} className="font-brand text-[13px] font-bold hover:underline">{it.producto_nombre}</Link>
                       <div className="card-meta"><b>{it.producto_cod}</b>{it.manual && <span className="ml-2 text-[#aa0b56]">variante manual</span>}</div></td>

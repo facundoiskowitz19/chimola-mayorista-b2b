@@ -25,6 +25,7 @@ import db
 import email_notif
 import fotos
 import overrides
+import sitio
 import pedidos
 
 log = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ PUB_CAPTIONS = ["Visible si tiene stock (lo decide Aleph)",
                 "Nunca visible para clientes"]
 PUB_VALOR = {"Automático": None, "Publicado": True, "Oculto": False}
 TAG_CLS = {"confirmado": "tag-conf", "procesado": "tag-proc", "cancelado": "tag-canc"}
-SECCIONES = ["inicio", "catalogo", "clientes", "pedidos", "config"]
+SECCIONES = ["inicio", "catalogo", "clientes", "pedidos", "home", "config"]
 
 
 def _admin_email() -> str:
@@ -97,7 +98,7 @@ def page_admin() -> None:
     sin_procesar = conteo.get("confirmado", 0)
     labels = {"inicio": "Inicio", "catalogo": "Catálogo", "clientes": "Clientes",
               "pedidos": "Pedidos" + (f" · {sin_procesar} sin procesar" if sin_procesar else ""),
-              "config": "Config"}
+              "home": "Home del sitio", "config": "Config"}
     sec = st.segmented_control("Sección", SECCIONES, format_func=lambda s: labels[s],
                                key="adm_nav", label_visibility="collapsed",
                                on_change=_adm_nav_click)
@@ -110,7 +111,7 @@ def page_admin() -> None:
         _ficha_cliente(cli)
         return
     {"inicio": _sec_inicio, "catalogo": _sec_catalogo, "clientes": _sec_clientes,
-     "pedidos": _sec_pedidos, "config": _sec_config}.get(sec or "inicio", _sec_inicio)()
+     "pedidos": _sec_pedidos, "home": _sec_home, "config": _sec_config}.get(sec or "inicio", _sec_inicio)()
 
 
 # ---------------------------------------------------------------------------
@@ -1420,3 +1421,150 @@ def _config_emails() -> None:
         st.rerun()
     st.markdown(f"<p class='muted'>«Enviarme una prueba» también guarda la plantilla. La prueba va a "
                 f"{_admin_email()}, nunca al cliente.</p>", unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
+# Home del sitio nuevo (Next.js): hero, bloques, filas de productos, banner
+# ---------------------------------------------------------------------------
+def _home_preview(url: str | None, ancho: int = 300) -> None:
+    if not url:
+        st.markdown("<p class='muted'>Sin imagen</p>", unsafe_allow_html=True)
+        return
+    if sitio.es_media(url):
+        try:
+            r = sitio.leer_media_url(url)
+            if r:
+                st.image(r[0], width=ancho)
+                return
+        except Exception:  # noqa: BLE001
+            pass
+        st.markdown(f"<p class='muted'>Imagen subida: {url}</p>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<p class='muted'>Imagen por defecto del sitio ({url})</p>", unsafe_allow_html=True)
+
+
+def _home_bloque_form(key: str, b: dict, con_subtitulo: bool, con_tag: bool, con_ancho: bool) -> dict:
+    """Campos de un hero / bloque / banner dentro del form. Devuelve lo tipeado (sin la imagen nueva)."""
+    c1, c2 = st.columns([1, 1.6])
+    with c1:
+        _home_preview(b.get("img"))
+        up = st.file_uploader("Nueva imagen (JPG/PNG, máx. 10 MB)", type=["jpg", "jpeg", "png", "webp"],
+                              key=f"{key}_up")
+    with c2:
+        titulo = st.text_input("Título", value=(b.get("titulo") or "").replace("\n", "|"), key=f"{key}_t",
+                               help="En el hero podés usar | para cortar en dos líneas (ej: summer|_stories)")
+        sub = st.text_input("Subtítulo", value=b.get("subtitulo", ""), key=f"{key}_s") if con_subtitulo else ""
+        tag = st.text_input("Etiqueta (ej: SS_2027)", value=b.get("tag", ""), key=f"{key}_g") if con_tag else ""
+        cc1, cc2 = st.columns(2)
+        cta = cc1.text_input("Texto del botón", value=b.get("cta", ""), key=f"{key}_c")
+        link = cc2.text_input("Link", value=b.get("link", ""), key=f"{key}_l",
+                              help="Ej: /c/marro?rubro=Mochilas · /c/indu?temporada=SS27 Indumentaria · /c/lima?solo_desc=1 · /p/M211")
+        ancho = cc1.selectbox("Tamaño", ["doble", "simple"], index=0 if b.get("ancho", "simple") == "doble" else 1,
+                              key=f"{key}_a") if con_ancho else None
+        quitar = st.checkbox("Quitar este elemento", key=f"{key}_q") if (b.get("img") or b.get("titulo")) else False
+    out = {"img": b.get("img", ""), "titulo": titulo.replace("|", "\n"), "subtitulo": sub, "tag": tag,
+           "cta": cta, "link": link, "ancho": ancho, "_up": up, "_quitar": quitar}
+    return out
+
+
+def _home_resolver_img(d: dict) -> dict | None:
+    """Sube la imagen nueva si la hay; None si el admin pidió quitarlo o está vacío."""
+    if d.get("_quitar"):
+        return None
+    up = d.pop("_up", None)
+    d.pop("_quitar", None)
+    if up is not None:
+        d["img"] = sitio.subir_imagen(up.getvalue(), up.name, up.type)
+    if not d.get("img") and not d.get("titulo"):
+        return None
+    return d
+
+
+def _sec_home() -> None:
+    st.markdown("<p class='muted'>Lo que ve el cliente al entrar al sitio nuevo, por sección del header. "
+                "Nada se aplica hasta tocar «Guardar home». Las imágenes grandes (hero) rinden mejor en "
+                "1600×480; los bloques en 800×600.</p>", unsafe_allow_html=True)
+    sec = st.segmented_control("Sección", list(sitio.SECCIONES_HOME), format_func=lambda s: sitio.SECCIONES_HOME[s],
+                               key="adm_home_sec", label_visibility="collapsed") or "marro"
+    cfg = sitio.get_home(sec)
+    if sitio.es_personalizada(sec):
+        st.markdown("<p class='muted'>Esta sección tiene una home personalizada guardada.</p>", unsafe_allow_html=True)
+    else:
+        st.markdown("<p class='muted'>Esta sección usa los valores por defecto del sitio. Al guardar quedan "
+                    "pisados.</p>", unsafe_allow_html=True)
+
+    with st.form(f"home_form_{sec}"):
+        st.markdown("### Carrusel principal")
+        st.markdown("<p class='muted'>Hasta 3 imágenes. Si hay una sola, no rota.</p>", unsafe_allow_html=True)
+        heros = list(cfg.get("hero") or [])[:3]
+        hero_out = []
+        for i in range(3):
+            b = heros[i] if i < len(heros) else {}
+            with st.expander(f"Imagen {i + 1}" + (f" — {b.get('titulo', '').splitlines()[0]}" if b.get("titulo") else ""),
+                             expanded=bool(b)):
+                hero_out.append(_home_bloque_form(f"hm_{sec}_h{i}", b, con_subtitulo=False, con_tag=True, con_ancho=False))
+
+        st.markdown("### Bloques destacados")
+        st.markdown("<p class='muted'>Hasta 3: uno «doble» (grande, a la izquierda) y dos «simples» apilados a la "
+                    "derecha. Con dos bloques se muestran lado a lado.</p>", unsafe_allow_html=True)
+        bloques = list(cfg.get("bloques") or [])[:3]
+        bloq_out = []
+        for i in range(3):
+            b = bloques[i] if i < len(bloques) else {}
+            with st.expander(f"Bloque {i + 1}" + (f" — {b.get('titulo')}" if b.get("titulo") else ""), expanded=bool(b)):
+                bloq_out.append(_home_bloque_form(f"hm_{sec}_b{i}", b, con_subtitulo=True, con_tag=False, con_ancho=True))
+
+        st.markdown("### Filas de productos")
+        st.markdown("<p class='muted'>Cada fila muestra hasta 8 productos con flechas. Tipos: <b>destacados</b> = los "
+                    "marcados en Catálogo (completa con lo más nuevo), <b>ofertas</b> = con descuento, "
+                    "<b>manual</b> = los códigos que pongas, <b>filtro</b> = por tipo de producto / temporada.</p>",
+                    unsafe_allow_html=True)
+        filas = pd.DataFrame([{
+            "titulo": s.get("titulo", ""), "tipo": s.get("tipo", "destacados"),
+            "productos": ", ".join(s.get("productos") or []),
+            "rubro": ", ".join((s.get("filtro") or {}).get("rubro") or []),
+            "temporada": ", ".join((s.get("filtro") or {}).get("temporada") or []),
+            "link": s.get("link") or "",
+        } for s in (cfg.get("secciones") or [])], columns=["titulo", "tipo", "productos", "rubro", "temporada", "link"])
+        filas_ed = st.data_editor(
+            filas, num_rows="dynamic", use_container_width=True, hide_index=True, key=f"hm_{sec}_filas",
+            column_config={
+                "titulo": st.column_config.TextColumn("Título", required=True),
+                "tipo": st.column_config.SelectboxColumn("Tipo", options=list(sitio.TIPOS_SECCION), required=True),
+                "productos": st.column_config.TextColumn("Códigos (manual)", help="Separados por coma, ej: M211, BP171"),
+                "rubro": st.column_config.TextColumn("Tipo de producto (filtro)", help="Ej: Mochilas, Bolsos y totes"),
+                "temporada": st.column_config.TextColumn("Temporada (filtro)", help="Ej: Summer 2027"),
+                "link": st.column_config.TextColumn("Link «Ver todo»", help="Ej: /c/marro?rubro=Mochilas"),
+            })
+
+        st.markdown("### Banner dentro de la grilla del catálogo")
+        st.markdown("<p class='muted'>Franja angosta que aparece después de la segunda fila de productos en el "
+                    "catálogo de esta sección (ej: lanzamiento). Vacío = no se muestra.</p>", unsafe_allow_html=True)
+        bg_out = _home_bloque_form(f"hm_{sec}_bg", cfg.get("banner_grilla") or {}, con_subtitulo=True, con_tag=False,
+                                   con_ancho=False)
+
+        if st.form_submit_button("Guardar home", type="primary"):
+            with st.spinner("Guardando (y subiendo imágenes nuevas)..."):
+                data = {
+                    "hero": [x for x in (_home_resolver_img(d) for d in hero_out) if x],
+                    "bloques": [x for x in (_home_resolver_img(d) for d in bloq_out) if x],
+                    "secciones": [
+                        {"titulo": r["titulo"], "tipo": r["tipo"], "productos": r.get("productos") or "",
+                         "filtro": {"rubro": r.get("rubro") or "", "temporada": r.get("temporada") or ""},
+                         "link": r.get("link") or ""}
+                        for r in filas_ed.fillna("").to_dict("records") if str(r.get("titulo") or "").strip()],
+                    "banner_grilla": _home_resolver_img(bg_out),
+                }
+                sitio.set_home(sec, data, _admin_email())
+            for k in [k for k in st.session_state if k.startswith(f"hm_{sec}_")]:
+                st.session_state.pop(k, None)
+            st.toast("Home guardada — el sitio la toma en menos de un minuto")
+            st.rerun()
+
+    if sitio.es_personalizada(sec):
+        if st.button("Volver a los valores por defecto de esta sección"):
+            sitio.reset_home(sec, _admin_email())
+            for k in [k for k in st.session_state if k.startswith(f"hm_{sec}_")]:
+                st.session_state.pop(k, None)
+            st.toast("Home restaurada a los valores por defecto")
+            st.rerun()

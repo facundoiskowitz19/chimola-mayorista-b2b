@@ -14,3 +14,11 @@ tests/
 .DS_Store
 .streamlit/secrets.toml
 prompt_nuevo_agente.txt
+web/
+vistas_vale/
+design_handoff_admin_v2/
+design_handoff_mayorista_ux/
+presentacion_mayorista/
+docs/
+*.png
+*.zip

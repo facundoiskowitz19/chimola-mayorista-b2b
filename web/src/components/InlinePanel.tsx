@@ -6,6 +6,7 @@ import type { Producto } from "@/lib/types";
 import { api, ClientError } from "@/lib/client";
 import { money } from "@/lib/format";
 import { CameraIcon, Chevron, XIcon } from "./Brand";
+import Thumb from "./Thumb";
 import { useCart } from "./CartContext";
 import { useToast } from "./Toast";
 import VariantPicker, { esMatriz, type Cants } from "./VariantPicker";
@@ -95,8 +96,7 @@ export default function InlinePanel({ cod, onClose, onGaleria }: { cod: string; 
               <div className="mt-5 flex flex-wrap justify-center gap-6">
                 {p.relacionados.slice(0, 4).map((r) => (
                   <Link key={r.producto_cod} href={`/p/${r.producto_cod}`} className="w-[150px] text-center">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={r.foto || ""} alt={r.nombre} className="mx-auto h-[120px] w-[120px] object-contain" />
+                    <Thumb src={r.foto} alt={r.nombre} className="mx-auto h-[120px] w-[120px] object-contain" />
                     <div className="mt-2 font-brand text-[12px] font-bold leading-tight">{r.nombre}</div>
                     <div className="font-sans text-[12px]">{money(r.precio)}</div>
                   </Link>
