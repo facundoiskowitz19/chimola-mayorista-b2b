@@ -40,7 +40,7 @@ export default function PedidoAdmin({ numero, onChange }: { numero: number; onCh
       {p.observaciones && <Muted>Obs: {p.observaciones}</Muted>}
       {p.historial?.map((h, i) => <Muted key={i}>{new Date(h.en).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} — <b className="text-ink">{h.estado}</b> por {h.por}{h.detalle && <span className="block whitespace-pre-line pl-4">{h.detalle}</span>}</Muted>)}
 
-      <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_280px]">
+      <div className="mt-4 grid items-start gap-6 lg:grid-cols-[1fr_280px]">
         <table className="w-full font-sans text-[13px]">
           <thead><tr className="border-b border-ink text-left text-[11px] uppercase text-ink-2"><th className="py-2" colSpan={2}>Producto</th><th className="py-2">Variante</th><th className="py-2 text-right">Cant.</th><th className="py-2 text-right">Precio</th><th className="py-2 text-right">Subtotal</th>{mod && <th className="py-2 text-center">Nueva cant.</th>}</tr></thead>
           <tbody>{p.items.map((it) => (
