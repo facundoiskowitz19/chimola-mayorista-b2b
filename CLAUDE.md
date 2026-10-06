@@ -250,8 +250,17 @@ web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  �
   estado con `key=` en el padre.
 - **Stock nunca sale al cliente**: la API devuelve `disponible` y acota al
   agregar al carrito con avisos; `stock` solo si `es_admin`.
-- Deploy pendiente: servicios Cloud Run `mayorista-api-dev` + `mayorista-web-dev`
-  (DEV primero). El Streamlit `mayorista-b2b-dev` sigue vivo hasta el corte.
+- **DEV vivo (2026-10-06)**: web https://mayorista-web-dev-vhnuyigzqa-uc.a.run.app ·
+  API https://mayorista-api-dev-vhnuyigzqa-uc.a.run.app (`chimola-deteccion`, misma SA
+  `sa-mayorista-dev@`). Deploy: `./deploy/deploy_rediseno.sh dev [api|web]` (Cloud Build
+  con `api/cloudbuild.yaml` contexto root y `web/cloudbuild.yaml`; Next standalone).
+  El Streamlit `mayorista-b2b-dev` sigue vivo: ahí está el admin (pestaña «Home del
+  sitio» edita `config/home`, imágenes a `gs://chimola-mayorista-pedidos-dev/sitio/`
+  servidas por la API en `/media/…`). PROD pendiente.
+- **Reposición** (franquicias): API `/reposicion?dias=` sobre `reposicion.sugerencias`;
+  página `/reposicion` con cantidades precargadas → carrito.
+- Gotcha build Next: todo client component que use `useSearchParams` va dentro de
+  `<Suspense>` o el prerender de la página estática falla (pasó con `/login`).
 
 ---
 
