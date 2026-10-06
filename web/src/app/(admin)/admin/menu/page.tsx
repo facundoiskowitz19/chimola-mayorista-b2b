@@ -67,17 +67,17 @@ export default function MenuAdmin() {
       <div className="mt-4"><Pills value={sec} onChange={setSec} options={SECS} /></div>
       <Muted className="mt-2">{personalizado ? "Menú personalizado guardado para esta sección." : "Menú automático (nada guardado)."} · {r.efectivo.n} productos · {r.efectivo.oportunidades} con descuento</Muted>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-3">
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.5fr_1.1fr_0.9fr]">
         {LISTAS.map((L) => (
           <Panel key={L.key}>
             <Kicker>{L.titulo}{r.efectivo.personalizado[L.key] && <span className="ml-2 text-[#006786]">personalizado</span>}</Kicker>
             <Muted className="mt-1">{L.ayuda}</Muted>
             <table className="vt mt-3 text-[12px]">
-              <thead><tr><th>Mostrar</th><th>Nombre a mostrar</th><th className="text-right">Prod.</th>{L.key === "temporadas" && <><th>Nuevo</th><th>Anterior</th></>}<th /></tr></thead>
+              <thead><tr><th className="whitespace-nowrap">Mostrar</th><th className="whitespace-nowrap">Nombre a mostrar</th><th className="text-right">Prod.</th>{L.key === "temporadas" && <><th>Nuevo</th><th>Anterior</th></>}<th /></tr></thead>
               <tbody>{filas[L.key].map((f, i) => (
                 <tr key={f.valor} className={f.mostrar ? "" : "opacity-50"}>
                   <td><Check checked={f.mostrar} onChange={(v) => set(L.key, i, { mostrar: v })} /></td>
-                  <td><input className="input !py-1 !text-[12px]" value={f.nombre} onChange={(e) => set(L.key, i, { nombre: e.target.value })} /><div className="card-meta">{f.valor !== f.nombre && <>Aleph: {f.valor}</>}</div></td>
+                  <td className="min-w-[170px]"><input className="input !py-1 !text-[12px]" value={f.nombre} onChange={(e) => set(L.key, i, { nombre: e.target.value })} /><div className="card-meta">{f.valor !== f.nombre && <>Aleph: {f.valor}</>}</div></td>
                   <td className="text-right text-muted">{f.n}</td>
                   {L.key === "temporadas" && <><td><Check checked={!!f.nuevo} onChange={(v) => set(L.key, i, { nuevo: v })} /></td><td><Check checked={!!f.anterior} onChange={(v) => set(L.key, i, { anterior: v })} /></td></>}
                   <td className="whitespace-nowrap"><button onClick={() => mover(L.key, i, -1)} className="px-1 text-faint hover:text-ink">↑</button><button onClick={() => mover(L.key, i, 1)} className="px-1 text-faint hover:text-ink">↓</button></td>

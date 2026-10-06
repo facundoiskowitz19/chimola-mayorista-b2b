@@ -206,8 +206,11 @@ Rediseño completo del lado cliente a partir de las 18 vistas de Vale
 (`vistas_vale/*.pdf`, no versionadas: identidad Lautin negro/blanco, Montserrat +
 Roboto, mega-menú, home por sección, cards con swatches, panel inline, curva
 sugerida). Decisión: **Streamlit no alcanza para esa UI** → el cliente pasa a
-Next.js y la lógica Python se expone como API. **El admin sigue en Streamlit**
-(`admin_ui.py`) sin cambios: lee/escribe el mismo Firestore.
+Next.js y la lógica Python se expone como API. **El admin también se migró a Next**
+(`/admin`, decisión del usuario 2026-10-06): `api/routers/admin.py` replica 1:1 lo que hacía
+`admin_ui.py` sobre los mismos módulos; `adminlib.py` tiene la lógica pura. El Streamlit
+(`app.py` + `admin_ui.py`) queda vivo como referencia hasta validar paridad y después se
+apaga (`mayorista-b2b-dev`).
 
 ```
 web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  ──▶ catalog.py, pedidos.py, stock.py,
@@ -248,6 +251,17 @@ web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  �
   convenciones (params/searchParams/cookies son async; `proxy.ts`; Turbopack).
   Lint de React 19 prohíbe `setState` directo dentro de `useEffect`: resetear
   estado con `key=` en el padre.
+- **Admin Next** (`web/src/app/(admin)/admin/*`, guard `es_admin` en el layout): Inicio,
+  Catálogo (lote/masivo/fotomap), Producto (vista ↔ edición de overrides, variantes
+  manuales, fotos por color, portada), Clientes + ficha (cuenta, comercial, reset password,
+  activo, import Aleph, reposición), Pedidos + detalle (`PedidoAdmin`: estado, reenviar,
+  modificar), Config, Emails (preview/prueba/reset), Home del sitio (upload a
+  `/admin/home/upload`), Menú. Piezas en `components/admin/ui.tsx`.
+- **Menú autoadministrable**: `config/home.menu.<sec>` con `temporadas/tipos/tendencias`
+  [{valor, nombre, nuevo, anterior}]; vacío = automático por cantidad de productos
+  (`sitio.menu_auto/menu_efectivo`). Solo se muestran valores que hoy tienen productos.
+- Lint React 19 `set-state-in-effect` apagado en `eslint.config.mjs`: el patrón
+  `useEffect(() => { cargar(); })` con await+setState lo disparaba en todo el admin.
 - **Stock nunca sale al cliente**: la API devuelve `disponible` y acota al
   agregar al carrito con avisos; `stock` solo si `es_admin`.
 - **DEV vivo (2026-10-06)**: web https://mayorista-web-dev-vhnuyigzqa-uc.a.run.app ·
