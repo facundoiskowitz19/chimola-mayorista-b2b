@@ -65,8 +65,18 @@ def set_catalogo_override(producto_cod: str, campos: dict, por: str) -> None:
     precios, ub} y de variante `variantes: {sku: {stock, oculta, precios}}`.
     ub = múltiplo/mínimo de compra (unidad de bulto). Ver SPECS §3."""
     permitidos = {"publicado", "destacado", "nombre", "descripcion", "precios", "ub", "variantes",
-                  "variantes_extra", "fotos_color", "portada", "descuento_pct"}
+                  "variantes_extra", "fotos_color", "portada", "descuento_pct", "categoria", "rubro", "relacionados"}
     campos = {k: v for k, v in campos.items() if k in permitidos}
+    for k in ("categoria", "rubro"):
+        if k in campos:   # reclasificación manual (pisa tipo_producto/rubro de Aleph); vacío = Aleph
+            campos[k] = (str(campos[k]).strip() or None) if campos[k] is not None else None
+    if "relacionados" in campos:   # productos relacionados elegidos a mano (orden = el de la lista)
+        vistos, lista = set(), []
+        for c in campos["relacionados"] or []:
+            c = str(c).strip().upper()
+            if c and c != str(producto_cod).upper() and c not in vistos:
+                vistos.add(c); lista.append(c)
+        campos["relacionados"] = lista
     if "descuento_pct" in campos:
         # % de descuento por producto (pisa articulosol.descvta). None/0 = sin override.
         d = campos["descuento_pct"]
@@ -154,6 +164,10 @@ def aplicar_overrides(df: pd.DataFrame, incluir_ocultos: bool = False) -> pd.Dat
             out["producto_nombre"] = idx.map(nombres).fillna(out["producto_nombre"])
         if descrs and "descripcion" in out:
             out["descripcion"] = idx.map(descrs).fillna(out["descripcion"])
+        for campo in ("categoria", "rubro"):   # reclasificación manual
+            m = {p: o[campo] for p, o in ov.items() if o.get(campo)}
+            if m and campo in out.columns:
+                out[campo] = idx.map(m).fillna(out[campo])
         for p, o in ov.items():
             for lista, precio in (o.get("precios") or {}).items():
                 col = f"precio{int(lista)}"

@@ -68,7 +68,7 @@ export interface Pedido extends PedidoResumen {
   email?: { enviado: boolean; destinatarios: string[]; error: string };
 }
 
-export interface HomeBloque { img: string; titulo: string; subtitulo?: string; cta?: string; link?: string; ancho?: "doble" | "simple"; tag?: string; kicker?: string; temporada?: string; rubro?: string; categoria?: string }
+export interface HomeBloque { img: string; titulo: string; subtitulo?: string; cta?: string; link?: string; ancho?: "doble" | "simple"; tag?: string; kicker?: string; temporada?: string; rubro?: string; categoria?: string; oculto?: boolean }
 export interface Home {
   seccion: Seccion; nombre: string; hero: HomeBloque[]; bloques: HomeBloque[]; banner_grilla: HomeBloque | null;
   secciones: { titulo: string; link: string | null; tipo: string; productos: Card[] }[];

@@ -185,14 +185,21 @@ def producto(cod: str, c: deps.Ctx = Depends(deps.ctx_requerido)):
     talles = sorted({v["talle"] for v in p["variantes"]}, key=catalog.talle_key)
     cols = sorted({v["color"] for v in p["variantes"]})
 
-    # Relacionados: misma "familia" por nombre; si no alcanza, mismo rubro+marca.
+    # Relacionados: 1º los elegidos a mano en el admin (y los productos que lo eligieron a él),
+    # 2º misma "familia" por nombre, 3º mismo rubro+marca. Siempre con foto, máx 8.
+    import overrides
+    ov = overrides.get_catalogo_overrides()
+    manuales = list((ov.get(p["producto_cod"]) or {}).get("relacionados") or [])
+    manuales += [c for c, o in ov.items() if p["producto_cod"] in (o.get("relacionados") or []) and c not in manuales]
     prods = catalog.productos(df[df["producto_cod"] != p["producto_cod"]])
     fam = _familia(p["producto_nombre"])
-    rel = prods[prods["producto_nombre"].str.contains(rf"\b{re.escape(fam)}\b", case=False, regex=True)] if fam else prods.iloc[0:0]
+    rel_man = prods[prods["producto_cod"].isin(manuales)]
+    rel_man = rel_man.assign(_o=rel_man["producto_cod"].map({c: i for i, c in enumerate(manuales)})).sort_values("_o").drop(columns="_o")
+    rel_fam = prods[prods["producto_nombre"].str.contains(rf"\b{re.escape(fam)}\b", case=False, regex=True)] if fam else prods.iloc[0:0]
+    rel = pd.concat([rel_man, rel_fam[~rel_fam["producto_cod"].isin(rel_man["producto_cod"])]])
     if len(rel) < 4:
         mismo = prods[(prods["rubro"] == p["rubro"]) & (prods["marca"] == p["marca"]) &
                       (~prods["producto_cod"].isin(rel["producto_cod"]))]
-        mismo = mismo[mismo["producto_cod"].map(fotos.tiene_fotos)]
         rel = pd.concat([rel, mismo.head(8 - len(rel))])
     rel = rel[rel["producto_cod"].map(fotos.tiene_fotos)].head(8)
 

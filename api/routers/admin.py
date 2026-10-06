@@ -199,7 +199,26 @@ def producto_admin(cod: str):
                   "por_color": [{"color": c, "auto": mapa_auto.get(fotos.norm(c)),
                                  "manual": (o.get("fotos_color") or {}).get(fotos.norm(c)), "norm": fotos.norm(c)} for c in colores_prod]},
         "colores": [{"color": c, "hex": colores.hex_de(c)} for c in colores_prod],
+        "clasificacion": {"categoria": f0.get("categoria"), "rubro": f0["rubro"],
+                          "categoria_aleph": str(r0.get("tipo_producto") or "") if r0 is not None else "",
+                          "rubro_aleph": str(r0["rubro"]) if r0 is not None else "",
+                          "opciones_categoria": sorted(df["categoria"].dropna().unique().tolist()),
+                          "opciones_rubro": sorted(df["rubro"].dropna().unique().tolist())},
+        "relacionados": _relacionados_info(o.get("relacionados") or [], df),
+        "relacionados_inversos": _relacionados_info(
+            [c for c, oo in overrides.get_catalogo_overrides().items() if cod in (oo.get("relacionados") or [])], df),
     }
+
+
+def _relacionados_info(cods: list[str], df: pd.DataFrame) -> list[dict]:
+    out = []
+    for c in cods:
+        sub = df[df["producto_cod"] == c]
+        files = fotos.indice_fotos().get(c.upper(), [])
+        fn = fotos._portada_filename(c, files) if files else None
+        out.append({"producto_cod": c, "nombre": sub.iloc[0]["producto_nombre"] if not sub.empty else "(sin stock hoy)",
+                    "foto": fotos.url_foto_publica(c, fn) if fn else None, "en_catalogo": not sub.empty})
+    return out
 
 
 class ProductoIn(BaseModel):
@@ -214,6 +233,9 @@ class ProductoIn(BaseModel):
     fotos_color: dict[str, str] | None = None
     variantes: dict[str, dict] = {}
     variantes_extra: dict[str, dict] | None = None
+    categoria: str | None = None
+    rubro: str | None = None
+    relacionados: list[str] | None = None
 
 
 @router.put("/productos/{cod}")
@@ -230,6 +252,10 @@ def guardar_producto(cod: str, body: ProductoIn, c: deps.Ctx = Depends(deps.ctx_
         campos["fotos_color"] = body.fotos_color
     if body.variantes_extra is not None:
         campos["variantes_extra"] = body.variantes_extra
+    campos["categoria"] = body.categoria
+    campos["rubro"] = body.rubro
+    if body.relacionados is not None:
+        campos["relacionados"] = body.relacionados
     overrides.set_catalogo_override(cod.upper(), campos, c.email)
     return {"ok": True}
 
@@ -260,6 +286,29 @@ def agregar_extra(cod: str, body: ExtraIn, c: deps.Ctx = Depends(deps.ctx_admin)
                    "stock": int(body.stock), "precios": {"1": float(body.precio)}, "ean": body.ean.strip()}
     overrides.set_catalogo_override(cod, {"variantes_extra": nuevos}, c.email)
     return {"sku": sku}
+
+
+@router.get("/categorias")
+def categorias():
+    """Árbol Categoría → Tipo de producto con conteo de productos y stock, más los
+    productos reclasificados a mano. Los nombres salen de Aleph (tipo_producto → categoría,
+    rubro → tipo); «Otros» = sin categoría en Aleph."""
+    df = catalog.variantes_admin()
+    ov = overrides.get_catalogo_overrides()
+    g = df.groupby(["categoria", "rubro"]).agg(productos=("producto_cod", "nunique"), stock=("stock", "sum")).reset_index()
+    arbol: dict[str, dict] = {}
+    for _, r in g.iterrows():
+        cat = arbol.setdefault(r["categoria"], {"categoria": r["categoria"], "productos": 0, "stock": 0, "tipos": []})
+        cat["tipos"].append({"rubro": r["rubro"], "productos": int(r["productos"]), "stock": int(r["stock"])})
+        cat["stock"] += int(r["stock"])
+    for cat in arbol.values():
+        cat["productos"] = int(df[df["categoria"] == cat["categoria"]]["producto_cod"].nunique())
+        cat["tipos"].sort(key=lambda t: -t["productos"])
+    reclas = [{"producto_cod": c, "categoria": o.get("categoria"), "rubro": o.get("rubro")}
+              for c, o in ov.items() if o.get("categoria") or o.get("rubro")]
+    por_sec = {k: int(sitio.filtrar_seccion(df, k)["producto_cod"].nunique()) for k in sitio.SECCIONES}
+    return {"arbol": sorted(arbol.values(), key=lambda c: -c["productos"]), "reclasificados": reclas,
+            "por_seccion": por_sec, "secciones": {k: v["nombre"] for k, v in sitio.SECCIONES.items()}}
 
 
 # ---------------------------------------------------------------------------

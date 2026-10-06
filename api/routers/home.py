@@ -47,7 +47,7 @@ def _productos_seccion(sec: dict, df: pd.DataFrame, n: int = 8) -> list[dict]:
 def home(seccion: str, c: deps.Ctx = Depends(deps.ctx_requerido)):
     if seccion not in SECCIONES:
         raise HTTPException(404, "Sección desconocida")
-    cfg = sitio.get_home(seccion)
+    cfg = sitio.home_visible(seccion)
     df = _seccion_df(deps.df_cliente(c), seccion)
     return {
         "seccion": seccion, "nombre": SECCIONES[seccion]["nombre"],
@@ -64,7 +64,7 @@ def banner_grilla(seccion: str, temporada: list[str] | None = Query(None), rubro
     """Banner intercalado en la grilla + banner de arriba del catálogo si algún filtro activo tiene uno."""
     if seccion not in SECCIONES:
         raise HTTPException(404, "Sección desconocida")
-    cfg = sitio.get_home(seccion)
+    cfg = sitio.home_visible(seccion)
     sel = {"temporada": temporada or [], "rubro": rubro or [], "categoria": categoria or []}
     return {"banner_grilla": cfg.get("banner_grilla"), "banner_top": sitio.banner_catalogo(seccion, sel)}
 

@@ -159,7 +159,10 @@ def reset_home(seccion: str, por: str) -> None:
 def _limpiar_bloque(b: dict) -> dict:
     out = {k: (str(b.get(k) or "").strip()) for k in ("img", "titulo", "subtitulo", "tag", "cta", "link", "kicker")}
     out["ancho"] = "doble" if str(b.get("ancho") or "").lower().startswith("d") else "simple"
-    return {k: v for k, v in out.items() if v != "" or k in ("img", "titulo")}
+    out = {k: v for k, v in out.items() if v != "" or k in ("img", "titulo")}
+    if b.get("oculto"):   # guardado pero no visible (pruebas, estacionales)
+        out["oculto"] = True
+    return out
 
 
 FILTROS_BANNER = ("temporada", "rubro", "categoria")
@@ -176,10 +179,20 @@ def _limpiar_banner_cat(b: dict) -> dict | None:
     return out
 
 
+def home_visible(seccion: str) -> dict:
+    """Config efectiva SIN los elementos marcados `oculto` (lo que ve el cliente)."""
+    cfg = get_home(seccion)
+    vis = lambda xs: [x for x in (xs or []) if not x.get("oculto")]  # noqa: E731
+    bg = cfg.get("banner_grilla")
+    return {**cfg, "hero": vis(cfg.get("hero")), "bloques": vis(cfg.get("bloques")),
+            "secciones": vis(cfg.get("secciones")), "banner_grilla": bg if bg and not bg.get("oculto") else None,
+            "banners_catalogo": vis(cfg.get("banners_catalogo"))}
+
+
 def banner_catalogo(seccion: str, seleccion: dict) -> dict | None:
     """El banner cuya condición matchea la selección actual del catálogo (listas de valores
     por filtro). Primera regla que matchea, todas sus condiciones incluidas en la selección."""
-    for b in sitio_get_home_safe(seccion).get("banners_catalogo") or []:
+    for b in (home_visible(seccion) if seccion in DEFAULTS else {}).get("banners_catalogo") or []:
         cond = {k: b[k] for k in FILTROS_BANNER if b.get(k)}
         if cond and all(b[k] in (seleccion.get(k) or []) for k in cond):
             return b
@@ -205,7 +218,7 @@ def _limpiar_seccion(s: dict) -> dict:
             filtro[k] = [x.strip() for x in v.split(",") if x.strip()]
     filtro = {k: v for k, v in filtro.items() if v}
     return {"titulo": str(s.get("titulo") or "").strip(), "tipo": tipo, "link": str(s.get("link") or "").strip() or None,
-            "productos": [str(p).strip().upper() for p in prods], "filtro": filtro}
+            "productos": [str(p).strip().upper() for p in prods], "filtro": filtro, "oculto": bool(s.get("oculto"))}
 
 
 # ---------------------------------------------------------------------------

@@ -13,16 +13,21 @@ interface Data {
   producto_cod: string;
   efectivo: { nombre: string; descripcion: string; marca: string; temporada: string; rubro: string; categoria: string; precios: Record<string, number | null> };
   aleph: { nombre: string; descripcion: string; precios: Record<string, number>; descvta: number };
-  override: { publicado?: boolean | null; destacado?: boolean; nombre?: string; descripcion?: string; precios?: Record<string, number>; ub?: number; descuento_pct?: number | null; portada?: string; fotos_color?: Record<string, string>; variantes?: Record<string, Var["ov"]>; variantes_extra?: Record<string, Extra>; updated_by?: string; updated_at?: string | null };
+  override: { publicado?: boolean | null; destacado?: boolean; nombre?: string; descripcion?: string; precios?: Record<string, number>; ub?: number; descuento_pct?: number | null; portada?: string; fotos_color?: Record<string, string>; variantes?: Record<string, Var["ov"]>; variantes_extra?: Record<string, Extra>; updated_by?: string; updated_at?: string | null; categoria?: string; rubro?: string; relacionados?: string[] };
   variantes: Var[];
   fotos: { files: string[]; n: number; portada_auto: string | null; portada: string | null; principal: string | null; urls: Record<string, string>; por_color: { color: string; auto: string | null; manual: string | null; norm: string }[] };
   colores: { color: string; hex: string }[];
+  clasificacion: { categoria: string; rubro: string; categoria_aleph: string; rubro_aleph: string; opciones_categoria: string[]; opciones_rubro: string[] };
+  relacionados: RelInfo[];
+  relacionados_inversos: RelInfo[];
 }
+interface RelInfo { producto_cod: string; nombre: string; foto: string | null; en_catalogo: boolean }
 interface Form {
   publicado: "auto" | "si" | "no"; destacado: boolean; ub: string; descuento_pct: string; nombre: string; descripcion: string;
   precios: Record<string, string>; variantes: Record<string, { stock: string; oculta: boolean; precio1: string }>;
   extras: Record<string, { color: string; talle: string; stock: string; precio: string; ean: string; quitar: boolean }>;
   fotos_color: Record<string, string>; portada: string;
+  categoria: string; rubro: string; relacionados: RelInfo[];
 }
 
 const PUB = [
@@ -42,6 +47,7 @@ function formDe(d: Data): Form {
     extras: Object.fromEntries(Object.entries(o.variantes_extra || {}).map(([sku, x]) => [sku, { color: x.color, talle: x.talle, stock: String(x.stock), precio: String(x.precios?.["1"] || ""), ean: x.ean || "", quitar: false }])),
     fotos_color: Object.fromEntries(d.fotos.por_color.map((c) => [c.norm, c.manual || ""])),
     portada: d.fotos.portada || "",
+    categoria: o.categoria || "", rubro: o.rubro || "", relacionados: d.relacionados,
   };
 }
 
@@ -53,6 +59,16 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
   const [busy, setBusy] = useState(false);
   const [confirmQuitar, setConfirmQuitar] = useState(false);
   const [nuevaExtra, setNuevaExtra] = useState({ color: "", talle: "U", stock: "", precio: "", ean: "" });
+  const [relQ, setRelQ] = useState("");
+  const [relRes, setRelRes] = useState<{ producto_cod: string; nombre: string; foto: string | null }[]>([]);
+  useEffect(() => {
+    if (relQ.trim().length < 2) return;
+    const t = setTimeout(async () => {
+      const r = await api<{ items: { producto_cod: string; nombre: string; foto: string | null }[] }>(`/admin/catalogo?q=${encodeURIComponent(relQ.trim())}&per_page=8`);
+      setRelRes(r.items.filter((i) => i.producto_cod !== cod));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [relQ, cod]);
   const { notify } = useToast();
 
   const cargar = useCallback(async () => {
@@ -82,6 +98,7 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
         ub: f.ub ? parseInt(f.ub, 10) : null, descuento_pct: f.descuento_pct === "" ? null : parseFloat(f.descuento_pct),
         portada: f.portada, fotos_color: Object.fromEntries(Object.entries(f.fotos_color).filter(([, v]) => v)),
         variantes, variantes_extra: Object.keys(d.override.variantes_extra || {}).length || Object.keys(extras).length ? extras : null,
+        categoria: f.categoria || null, rubro: f.rubro || null, relacionados: f.relacionados.map((r) => r.producto_cod),
       } });
       notify(`${cod} guardado`); setEdit(false); await cargar();
     } catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); }
@@ -163,6 +180,50 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
                 ))}
               </Panel>
               <Panel>
+                <Kicker>Clasificación — pisa a Aleph solo en el sitio</Kicker>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <Field label="Categoría" hint={<>Aleph: {d.clasificacion.categoria_aleph || "— (Otros)"} · vacío = usa Aleph</>}>
+                    <input className="input" list="cats" value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })} placeholder={d.clasificacion.categoria} />
+                    <datalist id="cats">{d.clasificacion.opciones_categoria.map((x) => <option key={x} value={x} />)}</datalist>
+                  </Field>
+                  <Field label="Tipo de producto" hint={<>Aleph: {d.clasificacion.rubro_aleph || "—"} · vacío = usa Aleph</>}>
+                    <input className="input" list="rubros" value={f.rubro} onChange={(e) => setF({ ...f, rubro: e.target.value })} placeholder={d.clasificacion.rubro} />
+                    <datalist id="rubros">{d.clasificacion.opciones_rubro.map((x) => <option key={x} value={x} />)}</datalist>
+                  </Field>
+                </div>
+                <Muted className="mt-2">Un producto con categoría Indumentaria o Pijamas aparece en la sección Indumentaria del header; el resto de Chimola en Marroquinería. Podés escribir un valor nuevo; aparece en los filtros y en el menú.</Muted>
+              </Panel>
+              <Panel>
+                <Kicker>Productos relacionados</Kicker>
+                <Muted className="mt-1">Lo que el cliente ve en «Otros productos que te pueden interesar». Si no elegís nada, se arma solo por familia (misma última palabra del nombre) y después por tipo de producto. Los que elijas van primero, en este orden.</Muted>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {f.relacionados.map((r, i) => (
+                    <span key={r.producto_cod} className={`inline-flex items-center gap-2 rounded-sm border border-line bg-[#fafafa] px-2 py-1 font-sans text-[12px] ${r.en_catalogo ? "" : "opacity-60"}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {r.foto && <img src={r.foto} alt="" className="h-[28px] w-[28px] object-contain" />}
+                      <b>{r.producto_cod}</b> {r.nombre}
+                      <button type="button" onClick={() => setF({ ...f, relacionados: f.relacionados.filter((_, k) => k !== i) })} className="text-faint hover:text-[#aa0b56]">×</button>
+                    </span>
+                  ))}
+                  {f.relacionados.length === 0 && <Muted>Sin relacionados manuales (automático).</Muted>}
+                </div>
+                <div className="relative mt-3">
+                  <input className="input" value={relQ} onChange={(e) => setRelQ(e.target.value)} placeholder="Buscar producto por código o nombre para agregar…" />
+                  {relQ.trim().length >= 2 && relRes.length > 0 && (
+                    <div className="absolute z-20 mt-1 w-full border border-line bg-white shadow-lg">
+                      {relRes.filter((r) => !f.relacionados.some((x) => x.producto_cod === r.producto_cod)).map((r) => (
+                        <button key={r.producto_cod} type="button" onClick={() => { setF({ ...f, relacionados: [...f.relacionados, { producto_cod: r.producto_cod, nombre: r.nombre, foto: r.foto, en_catalogo: true }] }); setRelQ(""); setRelRes([]); }}
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left font-sans text-[12.5px] hover:bg-[#f5f5f5]">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          {r.foto && <img src={r.foto} alt="" className="h-[32px] w-[32px] object-contain" />}<b>{r.producto_cod}</b> {r.nombre}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {d.relacionados_inversos.length > 0 && <Muted className="mt-3">Además lo eligieron como relacionado: {d.relacionados_inversos.map((r) => r.producto_cod).join(", ")} (aparecen en su ficha automáticamente).</Muted>}
+              </Panel>
+              <Panel>
                 <Kicker>Variantes manuales</Kicker>
                 <Muted className="mt-1">No existen en Aleph: stock y precio son 100% tuyos y el Excel las marca. <Manual>«Agregar» se aplica al instante</Manual>; las ediciones de la tabla van con Guardar.</Muted>
                 {Object.keys(f.extras).length > 0 ? (
@@ -242,6 +303,9 @@ function Vista({ d, hex }: { d: Data; hex: (c: string) => string | undefined }) 
         {attr("Múltiplo (U.B.)", o.ub ? `${o.ub} unidades` : "Libre", !!o.ub)}
         {attr("Descuento", o.descuento_pct !== null && o.descuento_pct !== undefined ? `${o.descuento_pct}%` : d.aleph.descvta > 0 ? `${d.aleph.descvta}% (Aleph)` : "Sin descuento", o.descuento_pct !== null && o.descuento_pct !== undefined)}
         {attr("Fotos", d.fotos.n ? `${d.fotos.n} cargada(s)` : "Sin foto", false)}
+        {attr("Categoría", d.clasificacion.categoria, !!o.categoria)}
+        {attr("Tipo de producto", d.clasificacion.rubro, !!o.rubro)}
+        {attr("Relacionados", d.relacionados.length ? d.relacionados.map((r) => r.producto_cod).join(", ") : "Automático", d.relacionados.length > 0)}
       </Panel>
       <div className="space-y-5">
         <Panel>

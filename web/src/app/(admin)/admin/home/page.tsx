@@ -3,12 +3,12 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ClientError } from "@/lib/client";
 import type { HomeBloque } from "@/lib/types";
 import { useToast } from "@/components/Toast";
-import { Confirm, Field, H1, Kicker, Muted, Panel, Pills, Spinner } from "@/components/admin/ui";
+import { Check, Confirm, Field, H1, Kicker, Muted, Panel, Pills, Spinner } from "@/components/admin/ui";
 
 type Sec = "marro" | "indu" | "lima";
 const SECS: { value: Sec; label: string }[] = [{ value: "marro", label: "Marroquinería (Chimola)" }, { value: "indu", label: "Indumentaria (Chimola)" }, { value: "lima", label: "LIMA" }];
-interface Fila { titulo: string; tipo: string; productos: string; rubro: string; temporada: string; link: string }
-interface Cfg { hero: HomeBloque[]; bloques: HomeBloque[]; secciones: { titulo: string; tipo: string; productos?: string[]; filtro?: { rubro?: string[]; temporada?: string[] }; link?: string | null }[]; banner_grilla: HomeBloque | null; banners_catalogo?: HomeBloque[] }
+interface Fila { titulo: string; tipo: string; productos: string; rubro: string; temporada: string; categoria: string; link: string; oculto: boolean }
+interface Cfg { hero: HomeBloque[]; bloques: HomeBloque[]; secciones: { titulo: string; tipo: string; productos?: string[]; filtro?: { rubro?: string[]; temporada?: string[]; categoria?: string[] }; link?: string | null; oculto?: boolean }[]; banner_grilla: HomeBloque | null; banners_catalogo?: HomeBloque[] }
 interface Opciones { temporadas: { valor: string }[]; tipos: { valor: string }[]; tendencias: { valor: string }[] }
 interface Res { seccion: Sec; config: Cfg; personalizada: boolean; tipos_seccion: Record<string, string> }
 
@@ -31,7 +31,7 @@ export default function HomeAdmin() {
     const d = await api<Res>(`/admin/home/${sec}`); setR(d);
     setHero(d.config.hero.map((h) => ({ ...vacio(), ...h })));
     setBloques(d.config.bloques.map((b) => ({ ...vacio(), ...b })));
-    setFilas(d.config.secciones.map((s) => ({ titulo: s.titulo, tipo: s.tipo, productos: (s.productos || []).join(", "), rubro: (s.filtro?.rubro || []).join(", "), temporada: (s.filtro?.temporada || []).join(", "), link: s.link || "" })));
+    setFilas(d.config.secciones.map((s) => ({ titulo: s.titulo, tipo: s.tipo, productos: (s.productos || []).join(", "), rubro: (s.filtro?.rubro || []).join(", "), temporada: (s.filtro?.temporada || []).join(", "), categoria: (s.filtro?.categoria || []).join(", "), link: s.link || "", oculto: !!s.oculto })));
     setBanner(d.config.banner_grilla ? { ...vacio(), ...d.config.banner_grilla } : null);
     setCats((d.config.banners_catalogo || []).map((b) => ({ ...vacio(), ...b })));
     api<{ auto: Opciones }>(`/admin/menu/${sec}`).then((m) => setOps(m.auto)).catch(() => setOps(null));
@@ -50,7 +50,7 @@ export default function HomeAdmin() {
     try {
       await api(`/admin/home/${sec}`, { method: "PUT", json: {
         hero, bloques,
-        secciones: filas.filter((f) => f.titulo.trim()).map((f) => ({ titulo: f.titulo, tipo: f.tipo, productos: f.productos, filtro: { rubro: f.rubro, temporada: f.temporada }, link: f.link })),
+        secciones: filas.filter((f) => f.titulo.trim()).map((f) => ({ titulo: f.titulo, tipo: f.tipo, productos: f.productos, filtro: { rubro: f.rubro, temporada: f.temporada, categoria: f.categoria }, link: f.link, oculto: f.oculto })),
         banner_grilla: banner && (banner.img || banner.titulo) ? banner : null,
         banners_catalogo: cats,
       } });
@@ -83,17 +83,19 @@ export default function HomeAdmin() {
       </Panel>
       <Panel className="mt-5">
         <Kicker>Filas de productos</Kicker>
-        <Muted className="mt-1">Cada fila muestra hasta 8 productos con flechas. <b>destacados</b> = los marcados en Catálogo (completa con lo más nuevo) · <b>ofertas</b> = con descuento · <b>manual</b> = los códigos que pongas · <b>filtro</b> = por tipo de producto / temporada.</Muted>
+        <Muted className="mt-1">Cada fila muestra hasta 8 productos con flechas. <b>destacados</b> = los marcados en Catálogo (completa con lo más nuevo) · <b>ofertas</b> = con descuento · <b>manual</b> = los códigos que pongas, en ese orden · <b>filtro</b> = por tipo de producto, categoría y/o temporada. Destildá «Visible» para guardar una fila sin mostrarla.</Muted>
         <table className="vt mt-3 text-[12.5px]">
-          <thead><tr><th>Título</th><th>Tipo</th><th>Códigos (manual)</th><th>Tipo de producto (filtro)</th><th>Temporada (filtro)</th><th>Link «Ver todo»</th><th /></tr></thead>
+          <thead><tr><th>Visible</th><th>Título</th><th>Tipo</th><th>Códigos (manual)</th><th>Tipo de producto (filtro)</th><th>Categoría (filtro)</th><th>Temporada (filtro)</th><th>Link «Ver todo»</th><th /></tr></thead>
           <tbody>{filas.map((f, i) => {
             const set = (k: keyof Fila, v: string) => setFilas(filas.map((x, kk) => kk === i ? { ...x, [k]: v } : x));
             return (
-              <tr key={i}>
+              <tr key={i} className={f.oculto ? "opacity-50" : ""}>
+                <td><Check checked={!f.oculto} onChange={(v) => setFilas(filas.map((x, kk) => kk === i ? { ...x, oculto: !v } : x))} /></td>
                 <td><input className="input !py-1" value={f.titulo} onChange={(e) => set("titulo", e.target.value)} /></td>
                 <td><select className="input !py-1" value={f.tipo} onChange={(e) => set("tipo", e.target.value)}>{Object.entries(r.tipos_seccion).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
                 <td><input className="input !py-1" value={f.productos} onChange={(e) => set("productos", e.target.value)} placeholder="M211, BP171" disabled={f.tipo !== "manual"} /></td>
                 <td><input className="input !py-1" value={f.rubro} onChange={(e) => set("rubro", e.target.value)} placeholder="Mochilas, Bolsos y totes" disabled={f.tipo !== "filtro"} /></td>
+                <td><input className="input !py-1" value={f.categoria} onChange={(e) => set("categoria", e.target.value)} placeholder="Bazar, Librería" disabled={f.tipo !== "filtro"} /></td>
                 <td><input className="input !py-1" value={f.temporada} onChange={(e) => set("temporada", e.target.value)} placeholder="Summer 2027" disabled={f.tipo !== "filtro"} /></td>
                 <td><input className="input !py-1" value={f.link} onChange={(e) => set("link", e.target.value)} placeholder={`/c/${sec}?rubro=Mochilas`} /></td>
                 <td><button onClick={() => setFilas(filas.filter((_, k) => k !== i))} className="text-faint hover:text-[#aa0b56]">×</button></td>
@@ -101,7 +103,7 @@ export default function HomeAdmin() {
             );
           })}</tbody>
         </table>
-        <button onClick={() => setFilas([...filas, { titulo: "", tipo: "destacados", productos: "", rubro: "", temporada: "", link: `/c/${sec}` }])} className="btn btn-light btn-sm mt-3">+ Agregar fila</button>
+        <button onClick={() => setFilas([...filas, { titulo: "", tipo: "destacados", productos: "", rubro: "", temporada: "", categoria: "", link: `/c/${sec}`, oculto: false }])} className="btn btn-light btn-sm mt-3">+ Agregar fila</button>
       </Panel>
       <Panel className="mt-5">
         <Kicker>Banner dentro de la grilla del catálogo</Kicker><Muted className="mt-1">Franja angosta después de la segunda fila de productos del catálogo de esta sección. Vacío = no se muestra.</Muted>
@@ -141,9 +143,9 @@ function BloqueForm({ b, onChange, onQuitar, subir, conSubtitulo, conTag, conAnc
   const [up, setUp] = useState(false);
   const { notify } = useToast();
   return (
-    <div className="grid gap-4 rounded border border-line p-3 md:grid-cols-[220px_1fr]">
+    <div className={`grid gap-4 rounded border border-line p-3 md:grid-cols-[220px_1fr] ${b.oculto ? "bg-[#f7f7f7]" : ""}`}>
       <div>
-        <div className="aspect-[16/9] w-full overflow-hidden bg-[#eee]">{b.img && /* eslint-disable-next-line @next/next/no-img-element */ <img src={b.img} alt="" className="h-full w-full object-cover" />}</div>
+        <div className={`aspect-[16/9] w-full overflow-hidden bg-[#eee] ${b.oculto ? "opacity-40" : ""}`}>{b.img && /* eslint-disable-next-line @next/next/no-img-element */ <img src={b.img} alt="" className="h-full w-full object-cover" />}</div>
         <Muted className="mt-1 truncate">{b.img ? (b.img.startsWith("/banners/") ? "Imagen por defecto" : "Imagen subida") : "Sin imagen"}</Muted>
         <label className={`btn btn-light btn-sm mt-2 cursor-pointer ${up ? "opacity-50" : ""}`}>{up ? "Subiendo…" : "Subir imagen"}<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; setUp(true); try { onChange({ ...b, img: await subir(f) }); } catch (er) { notify(er instanceof ClientError ? er.message : "Error al subir", "error"); } finally { setUp(false); } }} /></label>
         <input className="input mt-2 !py-1 !text-[11px]" placeholder="…o pegá la URL de una imagen (https://…)" value={b.img && b.img.startsWith("http") ? b.img : ""} onChange={(e) => onChange({ ...b, img: e.target.value.trim() })} />
@@ -155,7 +157,10 @@ function BloqueForm({ b, onChange, onQuitar, subir, conSubtitulo, conTag, conAnc
         <Field label="Texto del botón"><input className="input" value={b.cta || ""} onChange={(e) => onChange({ ...b, cta: e.target.value })} /></Field>
         <Field label="Link" hint="Ej: /c/marro?rubro=Mochilas · /c/lima?solo_desc=1 · /p/M211"><input className="input" value={b.link || ""} onChange={(e) => onChange({ ...b, link: e.target.value })} /></Field>
         {conAncho && <Field label="Tamaño"><select className="input" value={b.ancho || "simple"} onChange={(e) => onChange({ ...b, ancho: e.target.value as "doble" | "simple" })}><option value="doble">doble</option><option value="simple">simple</option></select></Field>}
-        <div className="self-end"><button onClick={onQuitar} className="font-sans text-[12px] text-[#aa0b56] hover:underline">Quitar este elemento</button></div>
+        <div className="flex items-center justify-between self-end">
+          <Check checked={!b.oculto} onChange={(v) => onChange({ ...b, oculto: !v })} label={b.oculto ? <span className="text-[#aa0b56]">Oculto (guardado, no se muestra)</span> : "Visible en el sitio"} />
+          <button onClick={onQuitar} className="font-sans text-[12px] text-[#aa0b56] hover:underline">Quitar</button>
+        </div>
       </div>
     </div>
   );
