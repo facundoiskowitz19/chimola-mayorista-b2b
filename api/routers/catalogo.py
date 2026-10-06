@@ -15,38 +15,25 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 import catalog
 import fotos
+import sitio
 
 from api import colores, deps
 
 router = APIRouter(tags=["catalogo"])
 
-SECCIONES = {
-    "marro": {"nombre": "Marroquinería", "marca": "Chimola", "excluir_cat": {"Indumentaria", "Pijamas"}},
-    "indu": {"nombre": "Indumentaria", "marca": "Chimola", "solo_cat": {"Indumentaria", "Pijamas"}},
-    "lima": {"nombre": "LIMA", "marca": "Lima"},
-}
+SECCIONES = sitio.SECCIONES
 PER_PAGE_DEFAULT = 24
 PER_PAGE_MAX = 96
 
 
 def _seccion_df(df: pd.DataFrame, seccion: str | None) -> pd.DataFrame:
-    if not seccion:
-        return df
-    s = SECCIONES.get(seccion)
-    if not s:
+    if seccion and seccion not in SECCIONES:
         raise HTTPException(404, "Sección desconocida")
-    sub = df[df["marca"] == s["marca"]]
-    if "excluir_cat" in s:
-        sub = sub[~sub["categoria"].isin(s["excluir_cat"])]
-    if "solo_cat" in s:
-        sub = sub[sub["categoria"].isin(s["solo_cat"])]
-    return sub
+    return sitio.filtrar_seccion(df, seccion)
 
 
 def _seccion_de(row) -> str:
-    if row["marca"] == "Lima":
-        return "lima"
-    return "indu" if row["categoria"] in SECCIONES["indu"]["solo_cat"] else "marro"
+    return sitio.seccion_de(row["marca"], row["categoria"])
 
 
 def _lista(v: list[str] | None) -> list[str]:
@@ -160,23 +147,9 @@ def _facetas(df: pd.DataFrame, sel: dict) -> dict:
 
 @router.get("/catalogo/menu")
 def menu(c: deps.Ctx = Depends(deps.ctx_requerido)):
-    """Estructura del mega-menú por sección: temporadas, tipos de producto, tendencias."""
+    """Mega-menú por sección: lo configurado en el admin (config/home.menu) o automático."""
     df = deps.df_cliente(c)
-    df = df[df["precio"].notna()]
-    out = {}
-    for key, s in SECCIONES.items():
-        sub = _seccion_df(df, key)
-        def cnt(col):
-            g = sub.groupby(col)["producto_cod"].nunique().sort_values(ascending=False)
-            return [{"valor": k, "n": int(v)} for k, v in g.items() if k and k != "Otros"]
-        tend = [t for t in cnt("categoria") if t["valor"] not in ("Marroquineria", "Indumentaria")]
-        out[key] = {
-            "nombre": s["nombre"], "marca": s["marca"],
-            "temporadas": cnt("temporada"), "tipos": cnt("rubro"), "tendencias": tend,
-            "oportunidades": int(sub[sub["pct_desc"] > 0]["producto_cod"].nunique()),
-            "n": int(sub["producto_cod"].nunique()),
-        }
-    return out
+    return {key: sitio.menu_efectivo(df, key) for key in SECCIONES}
 
 
 # ---------------------------------------------------------------------------

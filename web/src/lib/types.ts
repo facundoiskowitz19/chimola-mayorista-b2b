@@ -20,7 +20,7 @@ export interface Card {
   foto: string | null; tiene_foto: boolean; colores: Swatch[]; destacado: boolean; n_variantes: number; stock?: number;
 }
 
-export interface Faceta { valor: string; n: number; hex?: string }
+export interface Faceta { valor: string; n: number; hex?: string; nombre?: string; nuevo?: boolean; anterior?: boolean }
 
 export interface Catalogo {
   seccion: Seccion | null; total: number; page: number; per_page: number; pages: number;

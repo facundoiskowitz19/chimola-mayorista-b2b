@@ -5,6 +5,11 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    // Data fetching en useEffect (cargar() → await api() → setState) es el patrón de todo el admin;
+    // la regla heurística de React 19 lo marca igual aunque el setState sea asíncrono.
+    rules: { "react-hooks/set-state-in-effect": "off" },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

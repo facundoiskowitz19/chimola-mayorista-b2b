@@ -210,3 +210,123 @@ def leer_media_url(url: str) -> tuple[bytes, str] | None:
     if not es_media(url):
         return None
     return leer_media(url[len(MEDIA_URL):])
+
+
+# ---------------------------------------------------------------------------
+# Secciones del header (los 3 "homes") — compartido por API y admin
+# ---------------------------------------------------------------------------
+SECCIONES = {
+    "marro": {"nombre": "Marroquinería", "marca": "Chimola", "excluir_cat": {"Indumentaria", "Pijamas"}},
+    "indu": {"nombre": "Indumentaria", "marca": "Chimola", "solo_cat": {"Indumentaria", "Pijamas"}},
+    "lima": {"nombre": "LIMA", "marca": "Lima"},
+}
+
+
+def filtrar_seccion(df, seccion: str | None):
+    """Variantes de una sección del header (None = todo)."""
+    if not seccion:
+        return df
+    s = SECCIONES[seccion]
+    sub = df[df["marca"] == s["marca"]]
+    if "excluir_cat" in s:
+        sub = sub[~sub["categoria"].isin(s["excluir_cat"])]
+    if "solo_cat" in s:
+        sub = sub[sub["categoria"].isin(s["solo_cat"])]
+    return sub
+
+
+def seccion_de(marca: str, categoria: str) -> str:
+    if marca == "Lima":
+        return "lima"
+    return "indu" if categoria in SECCIONES["indu"]["solo_cat"] else "marro"
+
+
+# ---------------------------------------------------------------------------
+# Mega-menú: automático desde BQ, pisado por `config/home.menu.<seccion>` si existe
+# ---------------------------------------------------------------------------
+# Config por sección: {"temporadas": [{valor, nombre, nuevo, anterior}], "tipos": [{valor, nombre}],
+#                      "tendencias": [{valor, nombre}]}   — lista vacía/ausente = automático.
+MENU_LISTAS = ("temporadas", "tipos", "tendencias")
+MENU_AUTO_TOPE = {"temporadas": 9, "tipos": 12, "tendencias": 20}
+
+
+def _conteo(sub, col: str) -> list[dict]:
+    g = sub.groupby(col)["producto_cod"].nunique().sort_values(ascending=False)
+    return [{"valor": str(k), "n": int(v)} for k, v in g.items() if k and k != "Otros"]
+
+
+def menu_auto(df, seccion: str) -> dict:
+    """Todas las opciones disponibles en BQ para la sección, con conteo de productos
+    (sin tope: el tope se aplica al mostrar, y el admin ve la lista completa)."""
+    sub = filtrar_seccion(df, seccion)
+    if "precio" in sub.columns:
+        sub = sub[sub["precio"].notna()]
+    tend = [t for t in _conteo(sub, "categoria") if t["valor"] not in ("Marroquineria", "Indumentaria")]
+    return {
+        "temporadas": _conteo(sub, "temporada"), "tipos": _conteo(sub, "rubro"), "tendencias": tend,
+        "oportunidades": int(sub[sub["pct_desc"] > 0]["producto_cod"].nunique()) if "pct_desc" in sub.columns else 0,
+        "n": int(sub["producto_cod"].nunique()),
+    }
+
+
+def get_menu(seccion: str) -> dict | None:
+    """Config guardada del menú de la sección (None = todo automático)."""
+    return (get_home_raw().get("menu") or {}).get(seccion) or None
+
+
+def set_menu(seccion: str, data: dict, por: str) -> None:
+    if seccion not in SECCIONES:
+        raise KeyError(seccion)
+    limpio = {}
+    for lista in MENU_LISTAS:
+        items = []
+        for it in data.get(lista) or []:
+            valor = str(it.get("valor") or "").strip()
+            if not valor:
+                continue
+            d = {"valor": valor, "nombre": str(it.get("nombre") or "").strip() or valor}
+            if lista == "temporadas":
+                d["nuevo"] = bool(it.get("nuevo"))
+                d["anterior"] = bool(it.get("anterior"))
+            items.append(d)
+        limpio[lista] = items
+    _ref().set({"menu": {seccion: limpio}, "updated_at": dt.datetime.now(dt.timezone.utc), "updated_by": por},
+               merge=True)
+    # merge=True fusiona listas por posición en mapas anidados: reemplazar explícito.
+    _ref().update({f"menu.{seccion}": limpio})
+    invalidar()
+
+
+def reset_menu(seccion: str, por: str) -> None:
+    from google.cloud import firestore
+    _ref().set({"updated_at": dt.datetime.now(dt.timezone.utc), "updated_by": por}, merge=True)
+    _ref().update({f"menu.{seccion}": firestore.DELETE_FIELD})
+    invalidar()
+
+
+def menu_efectivo(df, seccion: str) -> dict:
+    """Lo que ve el cliente: config del admin si existe (solo valores que hoy tienen
+    productos), si no automático. Cada ítem: {valor, nombre, n, (nuevo, anterior)}."""
+    auto = menu_auto(df, seccion)
+    cfg = get_menu(seccion) or {}
+    out = {"nombre": SECCIONES[seccion]["nombre"], "marca": SECCIONES[seccion]["marca"],
+           "oportunidades": auto["oportunidades"], "n": auto["n"], "personalizado": {}}
+    for lista in MENU_LISTAS:
+        disponibles = {a["valor"]: a["n"] for a in auto[lista]}
+        conf = cfg.get(lista) or []
+        if conf:
+            items = [{**it, "n": disponibles[it["valor"]]} for it in conf if it["valor"] in disponibles]
+            out["personalizado"][lista] = True
+        else:
+            items = [{"valor": a["valor"], "nombre": a["valor"], "n": a["n"]} for a in auto[lista][:MENU_AUTO_TOPE[lista]]]
+            if lista == "temporadas":
+                for i, it in enumerate(items):
+                    it["nuevo"] = i == 0
+                    it["anterior"] = i >= 3
+            out["personalizado"][lista] = False
+        if lista == "temporadas":
+            for it in items:
+                it.setdefault("nuevo", False)
+                it.setdefault("anterior", False)
+        out[lista] = items
+    return out

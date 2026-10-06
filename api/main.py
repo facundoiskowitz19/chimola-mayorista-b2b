@@ -19,7 +19,7 @@ if ROOT not in sys.path:
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from api.routers import auth, carrito, catalogo, cuenta, home, pedidos, reposicion  # noqa: E402
+from api.routers import admin, auth, carrito, catalogo, cuenta, home, pedidos, reposicion  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("api")
@@ -33,7 +33,7 @@ app.add_middleware(CORSMiddleware, allow_origins=_origins, allow_credentials=Tru
                    allow_methods=["*"], allow_headers=["*"])
 
 for r in (auth.router, catalogo.router, carrito.router, pedidos.router, cuenta.router, home.router,
-          reposicion.router):
+          reposicion.router, admin.router):
     app.include_router(r)
 
 

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import type { Me, Menu, Seccion } from "@/lib/types";
+import type { Faceta, Me, Menu, Seccion } from "@/lib/types";
 import { api } from "@/lib/client";
 import { useCart } from "./CartContext";
 import { CartIcon, Chevron, Chimola, Lima, UserIcon, Wordmark } from "./Brand";
@@ -50,7 +50,7 @@ export default function Header({ me, menu }: { me: Me; menu: Menu }) {
             {me.es_franquicia && <Link href="/reposicion" className="nav-link hidden md:inline">Reposición</Link>}
             <Link href="/pedidos" className="nav-link">Mis Pedidos</Link>
             <Link href="/mis-datos" className="nav-link">Mis Datos</Link>
-            {me.es_admin && <a href={process.env.NEXT_PUBLIC_ADMIN_URL || "#"} className="nav-link" target="_blank" rel="noreferrer">Admin</a>}
+            {me.es_admin && <Link href="/admin" className="nav-link font-bold">Admin</Link>}
             <button onClick={salir} className="font-sans text-[11px] text-muted hover:text-ink">Salir &gt;</button>
           </nav>
         </div>
@@ -91,35 +91,36 @@ export default function Header({ me, menu }: { me: Me; menu: Menu }) {
 
 function MegaMenu({ sec, data, onEnter }: { sec: Seccion; data: Menu[Seccion]; onEnter: () => void }) {
   const temps = data.temporadas;
-  const actuales = temps.slice(0, 3);
-  const anteriores = temps.slice(3, 9);
+  const actuales = temps.filter((t) => !t.anterior);
+  const anteriores = temps.filter((t) => t.anterior);
   const col = "space-y-[7px] font-sans text-[13px]";
+  const nombre = (t: Faceta) => t.nombre || t.valor;
   return (
     <div onMouseEnter={onEnter} className="fade-in absolute inset-x-0 top-full z-50 bg-white px-9 pb-9 pt-7 shadow-[0_18px_30px_-20px_rgba(0,0,0,.35)]">
       <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
         <div>
           <h4 className="kicker mb-3">Temporada</h4>
           <ul className={col}>
-            {actuales.map((t, i) => (
-              <li key={t.valor}><Link href={`/c/${sec}?temporada=${encodeURIComponent(t.valor)}`} className="hover:underline">{t.valor}</Link>
-                {i === 0 && <span className="ml-2 rounded-full bg-ink px-2 py-[2px] font-brand text-[8px] font-bold uppercase text-white">New</span>}</li>
+            {actuales.map((t) => (
+              <li key={t.valor}><Link href={`/c/${sec}?temporada=${encodeURIComponent(t.valor)}`} className="hover:underline">{nombre(t)}</Link>
+                {t.nuevo && <span className="ml-2 rounded-full bg-ink px-2 py-[2px] font-brand text-[8px] font-bold uppercase text-white">New</span>}</li>
             ))}
           </ul>
           {anteriores.length > 0 && (
             <>
               <h5 className="mb-2 mt-5 font-sans text-[13px] font-bold">Temporadas anteriores</h5>
-              <ul className={col}>{anteriores.map((t) => <li key={t.valor}><Link href={`/c/${sec}?temporada=${encodeURIComponent(t.valor)}`} className="hover:underline">{t.valor}</Link></li>)}</ul>
+              <ul className={col}>{anteriores.map((t) => <li key={t.valor}><Link href={`/c/${sec}?temporada=${encodeURIComponent(t.valor)}`} className="hover:underline">{nombre(t)}</Link></li>)}</ul>
             </>
           )}
         </div>
         <div>
           <h4 className="kicker mb-3">Tipo de producto</h4>
-          <ul className={col}>{data.tipos.slice(0, 12).map((t) => <li key={t.valor}><Link href={`/c/${sec}?rubro=${encodeURIComponent(t.valor)}`} className="hover:underline">{t.valor}</Link></li>)}</ul>
+          <ul className={col}>{data.tipos.map((t) => <li key={t.valor}><Link href={`/c/${sec}?rubro=${encodeURIComponent(t.valor)}`} className="hover:underline">{nombre(t)}</Link></li>)}</ul>
         </div>
         <div>
           <h4 className="kicker mb-3">Tendencia</h4>
           <ul className={col}>
-            {data.tendencias.map((t) => <li key={t.valor}><Link href={`/c/${sec}?categoria=${encodeURIComponent(t.valor)}`} className="hover:underline">{t.valor}</Link></li>)}
+            {data.tendencias.map((t) => <li key={t.valor}><Link href={`/c/${sec}?categoria=${encodeURIComponent(t.valor)}`} className="hover:underline">{nombre(t)}</Link></li>)}
             {data.tendencias.length === 0 && <li className="text-muted">—</li>}
           </ul>
         </div>
