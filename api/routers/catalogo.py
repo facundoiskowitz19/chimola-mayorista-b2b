@@ -221,7 +221,9 @@ def producto(cod: str, c: deps.Ctx = Depends(deps.ctx_requerido)):
 
     row = df[df["producto_cod"] == p["producto_cod"]].iloc[0]
     ft = catalog.ficha_texto(p.get("descripcion"))
-    med_struct = catalog.medidas_formato(row.get("alto_cm"), row.get("ancho_cm"), row.get("profundidad_cm"))
+    # En Tienda Nube las medidas de la ropa son del paquete (ej. 10 × 10 × 5 para un vestido): solo valen para marroquinería/bazar.
+    es_ropa = str(row.get("categoria") or "") in catalog.CATEGORIAS_ROPA
+    med_struct = None if es_ropa else catalog.medidas_formato(row.get("alto_cm"), row.get("ancho_cm"), row.get("profundidad_cm"))
     peso = row.get("peso_kg")
     _j = deps.jsonable
     return {

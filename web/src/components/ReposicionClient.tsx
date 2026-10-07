@@ -77,7 +77,7 @@ export default function ReposicionClient() {
       </div>
 
       {err && <p className="mt-6 rounded-md border border-[#f3b7cc] bg-[#fff1f4] px-4 py-3 font-sans text-[13px] text-[#aa0b56]">{err}</p>}
-      {!res && !err && <div className="mt-6 h-64 animate-pulse bg-white" />}
+      {!res && !err && <div className="mt-6 flex h-64 items-center justify-center bg-white font-sans text-[13px] text-muted">Calculando la reposición sugerida (puede tardar unos segundos)…</div>}
 
       {res && (
         <>

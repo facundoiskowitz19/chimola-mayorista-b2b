@@ -1,7 +1,7 @@
 "use client";
 /* Panel "Cargar cantidades" que se abre debajo de la fila de cards. */
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Producto } from "@/lib/types";
 import { api, ClientError } from "@/lib/client";
 import { fichaDesdeDescripcion, money } from "@/lib/format";
@@ -26,6 +26,15 @@ export default function InlinePanel({ cod, onClose, onGaleria }: { cod: string; 
   const [busy, setBusy] = useState(false);
   const { agregar } = useCart();
   const { notify } = useToast();
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Al abrirse debajo de la fila suele quedar fuera de la vista: lo traemos (sin tapar la card con el header fijo).
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [p]);
 
   useEffect(() => {
     let vivo = true;
@@ -58,7 +67,7 @@ export default function InlinePanel({ cod, onClose, onGaleria }: { cod: string; 
   const foto = fotos[idx]?.url;
 
   return (
-    <div className="fade-in relative col-span-full bg-white px-8 pb-8 pt-5 outline outline-1 outline-line-2">
+    <div ref={ref} className="fade-in relative col-span-full bg-white px-8 pb-8 pt-5 outline outline-1 outline-line-2">
       <div className="flex items-center justify-between">
         <Link href={`/p/${cod}`} className="font-sans text-[12px] text-muted hover:text-ink">Ir a ficha de producto &gt;</Link>
         <button onClick={onClose} aria-label="Cerrar" className="text-ink"><XIcon size={22} /></button>

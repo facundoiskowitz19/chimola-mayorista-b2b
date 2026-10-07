@@ -81,7 +81,7 @@ export default function CarritoClient({ me }: { me: Me }) {
     <div className="container-lt pb-10 pt-8">
       <h1 className="font-brand text-[28px] font-extrabold">Tu carrito</h1>
       {err && <p className="mt-4 rounded-md border border-[#f3b7cc] bg-[#fff1f4] px-4 py-3 font-sans text-[13px] text-[#aa0b56]">{err}</p>}
-      {!c && !err && <div className="mt-6 h-40 animate-pulse bg-white" />}
+      {!c && !err && <div className="mt-6 flex h-40 items-center justify-center bg-white font-sans text-[13px] text-muted">Cargando tu carrito…</div>}
       {c && c.items.length === 0 && (
         <div className="mt-6 bg-white p-12 text-center">
           <p className="font-sans text-[15px]">Tu carrito está vacío.</p>
@@ -89,9 +89,10 @@ export default function CarritoClient({ me }: { me: Me }) {
         </div>
       )}
       {c && c.items.length > 0 && (
-        <div className="mt-6 grid items-start gap-8 lg:grid-cols-[1fr_340px]">
-          <div className="bg-white">
-            <table className="w-full">
+        <div className="mt-6 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-w-0 bg-white">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px]">
               <thead>
                 <tr className="border-b-2 border-ink font-sans text-[11px] uppercase text-ink-2">
                   <th className="px-4 py-3 text-left" colSpan={2}>Producto</th><th className="px-2 py-3 text-left">Variante</th>
@@ -115,6 +116,7 @@ export default function CarritoClient({ me }: { me: Me }) {
                 ))}
               </tbody>
             </table>
+            </div>
             <div className="flex justify-between p-4">
               <Link href="/h/marro" className="font-sans text-[12px] hover:underline">‹ Seguir comprando</Link>
               <button onClick={async () => { const d = await api<Carrito>("/carrito", { method: "DELETE" }); setC(d); }} className="font-sans text-[12px] text-muted hover:text-ink">Vaciar carrito</button>

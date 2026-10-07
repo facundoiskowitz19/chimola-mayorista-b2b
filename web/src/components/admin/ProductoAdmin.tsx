@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ClientError } from "@/lib/client";
 import { money } from "@/lib/format";
 import { useToast } from "@/components/Toast";
+import Thumb from "@/components/Thumb";
 import { Check, Confirm, Field, H1, Kicker, Manual, Muted, Panel, Spinner } from "@/components/admin/ui";
 import { FotoGrid } from "@/components/admin/FotoPicker";
 
@@ -136,7 +137,7 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
           <Muted><b className="text-ink">Nada se aplica hasta tocar Guardar</b>. Descartar vuelve a la vista sin cambios. Única excepción: «Agregar variante manual», que se aplica al instante.</Muted>
           <div className="mt-4 grid gap-6 lg:grid-cols-[260px_1fr]">
             <Panel>
-              {d.fotos.principal && /* eslint-disable-next-line @next/next/no-img-element */ <img src={d.fotos.principal} alt="" className="mb-4 aspect-square w-full object-contain" />}
+              {d.fotos.principal && <Thumb src={d.fotos.principal} className="mb-4 aspect-square w-full object-contain" />}
               <Kicker>Publicación</Kicker>
               <div className="mt-2 space-y-2">
                 {PUB.map((p) => <button key={p.v} type="button" onClick={() => setF({ ...f, publicado: p.v })} className="flex w-full items-start gap-2 text-left"><span className={`mt-[3px] h-[14px] w-[14px] shrink-0 rounded-full border ${f.publicado === p.v ? "border-ink bg-ink" : "border-line-2"}`} /><span><span className="block font-sans text-[13px] font-medium">{p.l}</span><span className="block font-sans text-[11px] text-muted">{p.c}</span></span></button>)}
@@ -313,7 +314,7 @@ function Vista({ d, hex }: { d: Data; hex: (c: string) => string | undefined }) 
   return (
     <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
       <Panel>
-        {d.fotos.principal ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={d.fotos.principal} alt="" className="aspect-square w-full object-contain" /> : <div className="flex aspect-square items-center justify-center text-faint">Sin foto</div>}
+        {d.fotos.principal ? <Thumb src={d.fotos.principal} className="aspect-square w-full object-contain" /> : <div className="flex aspect-square items-center justify-center text-faint">Sin foto</div>}
         {attr("Publicación", regla, pub !== null)}
         {attr("Destacado", o.destacado ? "Sí" : "No", !!o.destacado)}
         {attr("Múltiplo (U.B.)", o.ub ? `${o.ub} unidades` : "Libre", !!o.ub)}

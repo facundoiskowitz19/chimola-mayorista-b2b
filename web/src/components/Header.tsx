@@ -47,7 +47,7 @@ export default function Header({ me, menu, topbar }: { me: Me; menu: Menu; topba
             <Wordmark />
             <span className="pill hidden sm:inline-flex">Venta exclusiva mayorista</span>
           </div>
-          <nav className="flex items-center gap-5">
+          <nav className="flex items-center gap-3 sm:gap-5">
             <span className="hidden items-center gap-2 font-sans text-[13px] md:inline-flex"><UserIcon /> Hola, <b className="font-bold">{nombre}</b></span>
             {me.es_franquicia && <Link href="/reposicion" className="nav-link hidden md:inline">Reposición</Link>}
             <Link href="/pedidos" className="nav-link">Mis Pedidos</Link>
@@ -57,16 +57,16 @@ export default function Header({ me, menu, topbar }: { me: Me; menu: Menu; topba
           </nav>
         </div>
         <div className="relative border-t border-line-2" onMouseLeave={leave}>
-          <div className="flex h-[58px] items-center justify-between gap-4">
-            <div className="flex h-full items-center">
-              <Link href="/h/marro" className="mr-4 flex items-center"><Chimola className="text-[20px]" /></Link>
+          <div className="flex min-h-[58px] flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2 md:flex-nowrap md:py-0">
+            <div className="flex h-[42px] items-center md:h-full">
+              <Link href="/h/marro" className="mr-2 hidden items-center sm:mr-4 sm:flex"><Chimola className="text-[20px]" /></Link>
               <div className="flex h-full items-stretch">
                 {TABS.map((t, i) => (
                   <div key={t.key} className="flex items-stretch">
                     {i > 0 && t.key !== "lima" && <span className="my-auto h-5 w-px bg-line-2" />}
                     {t.key === "lima" && <span className="my-auto mx-2 h-5 w-px bg-transparent" />}
                     <Link href={`/h/${t.key}`} onMouseEnter={() => enter(t.key)} onClick={() => setOpen(null)}
-                      className={`relative flex items-center px-4 font-sans text-[15px] transition-colors ${
+                      className={`relative flex items-center px-2 font-sans text-[14px] transition-colors sm:px-4 sm:text-[15px] ${
                         open === t.key ? "bg-white" : ""} ${activa === t.key || open === t.key ? "text-ink" : "text-ink-2 hover:text-ink"}`}>
                       {(activa === t.key || open === t.key) && <span className="absolute inset-x-0 top-0 h-[3px] bg-ink" />}
                       {t.label}
@@ -75,7 +75,7 @@ export default function Header({ me, menu, topbar }: { me: Me; menu: Menu; topba
                 ))}
               </div>
             </div>
-            <div className="flex items-center gap-3" onMouseEnter={() => { if (closeT.current) clearTimeout(closeT.current); setOpen(null); }}>
+            <div className="flex w-full items-center gap-3 md:w-auto" onMouseEnter={() => { if (closeT.current) clearTimeout(closeT.current); setOpen(null); }}>
               <SearchBox />
               {me.puede_pedir && (
                 <Link href="/carrito" className="btn btn-primary !py-[10px] !pl-5 !pr-3" aria-label="Carrito">

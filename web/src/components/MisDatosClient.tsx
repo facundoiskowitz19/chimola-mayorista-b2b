@@ -54,9 +54,9 @@ export default function MisDatosClient({ me }: { me: Me }) {
         )}
         <form onSubmit={cambiarPwd} className="bg-white p-6">
           <h2 className="font-brand text-[16px] font-bold">Cambiar contraseña</h2>
-          <label className="mt-4 block font-sans text-[12px]">Contraseña actual<input type="password" className="input mt-1" value={pwd.actual} onChange={(e) => setPwd({ ...pwd, actual: e.target.value })} required /></label>
-          <label className="mt-3 block font-sans text-[12px]">Nueva (mín. 8)<input type="password" className="input mt-1" value={pwd.nueva} onChange={(e) => setPwd({ ...pwd, nueva: e.target.value })} minLength={8} required /></label>
-          <label className="mt-3 block font-sans text-[12px]">Repetir nueva<input type="password" className="input mt-1" value={pwd.repetir} onChange={(e) => setPwd({ ...pwd, repetir: e.target.value })} required /></label>
+          <label className="mt-4 block font-sans text-[12px]">Contraseña actual<input type="password" autoComplete="current-password" className="input mt-1" value={pwd.actual} onChange={(e) => setPwd({ ...pwd, actual: e.target.value })} required /></label>
+          <label className="mt-3 block font-sans text-[12px]">Nueva (mín. 8)<input type="password" autoComplete="new-password" className="input mt-1" value={pwd.nueva} onChange={(e) => setPwd({ ...pwd, nueva: e.target.value })} minLength={8} required /></label>
+          <label className="mt-3 block font-sans text-[12px]">Repetir nueva<input type="password" autoComplete="new-password" className="input mt-1" value={pwd.repetir} onChange={(e) => setPwd({ ...pwd, repetir: e.target.value })} required /></label>
           <button type="submit" disabled={busy} className="btn btn-primary mt-5">Actualizar</button>
         </form>
       </div>

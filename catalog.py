@@ -380,6 +380,9 @@ def get_producto(df: pd.DataFrame, producto_cod: str) -> dict | None:
 _CORTE = r"(?=\s(?:Variantes?|Caracter[ií]sticas|Colores|Talles?|Materiales?|Composici[oó]n|Medidas?|¿Qu[eé])\b|\.\s|$)"
 
 
+CATEGORIAS_ROPA = {"Indumentaria", "Pijamas"}   # medidas de TN = empaque, no del producto
+
+
 def medidas_formato(alto, ancho, prof) -> str | None:
     """'25 × 29 × 3 cm' (ancho × alto × profundidad) si están las tres; None si falta alguna."""
     import math as _m
