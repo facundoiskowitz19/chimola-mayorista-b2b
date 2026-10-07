@@ -269,14 +269,15 @@ web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  �
   [{valor, nombre, nuevo, anterior}]; vacío = automático por cantidad de productos
   (`sitio.menu_auto/menu_efectivo`). Solo se muestran valores que hoy tienen productos (los
   configurados sin stock se conservan en la config y el admin los ve en gris).
-- **Versiones y ramas (desde 2026-10-07)**: versionado semántico con tags git. `v0.9.0` = último
-  Streamlit (lo que corre en `mayorista-b2b-dev`). `v1.0.0-rc.N` = rediseño Next+FastAPI en DEV, un
-  rc por cada deploy que Chimola prueba; `v1.0.0` cuando salga a PROD; después `v1.0.x` arreglos y
-  `v1.x.0` funcionalidad. `main` es la rama de lanzamientos (el rediseño se mergeó por PR #1); se
-  trabaja en ramas cortas desde `main` y se mergea por PR con merge commit (no squash).
-  `deploy_rediseno.sh` toma la versión de `git describe --tags`, la pasa a la API (`APP_VERSION`,
-  visible en `/health`) y a la web (`NEXT_PUBLIC_APP_VERSION`, pie de página) y **se niega a deployar
-  PROD si HEAD no es un tag exacto `vX.Y.Z`**. Para taggear: `git tag -a v1.0.0-rc.2 -m "..." && git push --tags`.
+- **Versiones y ramas (desde 2026-10-07)**: versionado semántico con tags git. El Streamlit ya tenía
+  `v1.0.0` y `v1.1.0` (2026-08-30); su último estado es `v1.2.0` (lo que corre en `mayorista-b2b-dev`).
+  El rediseño Next+FastAPI es la **v2**: `v2.0.0-rc.N` en DEV (un rc por cada deploy que Chimola prueba),
+  `v2.0.0` cuando salga a PROD; después `v2.0.x` arreglos y `v2.x.0` funcionalidad. `main` es la rama
+  de lanzamientos (el rediseño se mergeó por PR #1); se trabaja en ramas cortas desde `main` y se
+  mergea por PR con merge commit (no squash). `deploy_rediseno.sh` toma la versión de
+  `git describe --tags`, la pasa a la API (`APP_VERSION`, visible en `/health`) y a la web
+  (`NEXT_PUBLIC_APP_VERSION`, pie de página) y **se niega a deployar PROD si HEAD no es un tag exacto
+  `vX.Y.Z`**. Para taggear: `git tag -a v2.0.0-rc.2 -m "..." && git push origin v2.0.0-rc.2`.
 - **QA 2026-10-07** (revisión completa + corrección; ver commits `74cb6ce`…`621ce26`). Gotchas que quedaron:
   - **CSS**: las clases de componente de `globals.css` (`.btn`, `.pill`, `.input`, `.qty`, `.kicker`…)
     van dentro de `@layer components`; si quedan sin capa le ganan a TODA utility de Tailwind
