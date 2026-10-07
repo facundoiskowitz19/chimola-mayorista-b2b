@@ -345,6 +345,24 @@ def categoria_detalle(nombre: str):
     return {"categoria": nombre, "items": items, "n": len(items)}
 
 
+@router.get("/categorias/{nombre}/banner")
+def categoria_banner(nombre: str):
+    return {"banners": sitio.banners_de_categoria(nombre), "secciones": {k: v["nombre"] for k, v in sitio.SECCIONES.items()}}
+
+
+class CatBannerIn(BaseModel):
+    seccion: str
+    banner: dict | None = None
+
+
+@router.put("/categorias/{nombre}/banner")
+def set_categoria_banner(nombre: str, body: CatBannerIn, c: deps.Ctx = Depends(deps.ctx_admin)):
+    if body.seccion not in sitio.SECCIONES:
+        raise HTTPException(404, "Sección desconocida")
+    sitio.set_banner_categoria(body.seccion, nombre, body.banner, c.email)
+    return {"ok": True}
+
+
 class CatProdIn(BaseModel):
     producto_cod: str
 

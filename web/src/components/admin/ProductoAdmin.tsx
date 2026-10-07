@@ -6,6 +6,7 @@ import { api, ClientError } from "@/lib/client";
 import { money } from "@/lib/format";
 import { useToast } from "@/components/Toast";
 import { Check, Confirm, Field, H1, Kicker, Manual, Muted, Panel, Spinner } from "@/components/admin/ui";
+import { FotoGrid } from "@/components/admin/FotoPicker";
 
 interface Var { sku: string; color: string; talle: string; ean: string | null; stock: number; stock_aleph: number | null; precio1: number | null; es_manual: boolean; ov: { stock?: number; oculta?: boolean; precios?: Record<string, number> } }
 interface Extra { color: string; talle: string; stock: number; precios: Record<string, number>; ean?: string }
@@ -59,6 +60,7 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
   const [busy, setBusy] = useState(false);
   const [confirmQuitar, setConfirmQuitar] = useState(false);
   const [nuevaExtra, setNuevaExtra] = useState({ color: "", talle: "U", stock: "", precio: "", ean: "" });
+  const [fcAbierto, setFcAbierto] = useState<string | null>(null);
   const [relQ, setRelQ] = useState("");
   const [relRes, setRelRes] = useState<{ producto_cod: string; nombre: string; foto: string | null }[]>([]);
   useEffect(() => {
@@ -267,17 +269,23 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
                       <tr key={c.norm}>
                         <td><span className="swatch mr-1" style={{ background: hex(c.color) }} />{c.color}</td>
                         <td className="text-muted">{c.auto || "— (usa portada)"}</td>
-                        <td><select className="input !py-1" value={f.fotos_color[c.norm] || ""} onChange={(e) => setF({ ...f, fotos_color: { ...f.fotos_color, [c.norm]: e.target.value } })}><option value="">(automática)</option>{d.fotos.files.map((fn) => <option key={fn} value={fn}>{fn}</option>)}</select></td>
+                        <td>
+                          <button type="button" onClick={() => setFcAbierto(fcAbierto === c.norm ? null : c.norm)} className="flex items-center gap-2 font-sans text-[12px] hover:underline">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={d.fotos.urls[f.fotos_color[c.norm] || c.auto || ""] || ""} alt="" className="h-[36px] w-[36px] bg-white object-contain" />
+                            {f.fotos_color[c.norm] ? <Manual>{f.fotos_color[c.norm]}</Manual> : <span className="text-muted">(automática) · elegir</span>}
+                          </button>
+                        </td>
                       </tr>
-                    ))}</tbody>
+                    )).flatMap((row, idx) => fcAbierto === d.fotos.por_color[idx].norm ? [row,
+                      <tr key={`${d.fotos.por_color[idx].norm}-picker`}><td colSpan={3} className="bg-[#fafafa] p-3">
+                        <FotoGrid fotos={d.fotos.files.map((fn) => ({ filename: fn, url: d.fotos.urls[fn] }))} value={f.fotos_color[d.fotos.por_color[idx].norm] || null} permitirNinguna
+                          onChange={(ft) => { setF({ ...f, fotos_color: { ...f.fotos_color, [d.fotos.por_color[idx].norm]: ft ? ft.filename : "" } }); setFcAbierto(null); }} />
+                      </td></tr>] : [row])}</tbody>
                   </table>
                   <Kicker className="mt-5">Foto de portada</Kicker>
                   <Muted className="mt-1">Con la que el producto aparece en el catálogo. Automática = la detectada por nombre ({d.fotos.portada_auto}).</Muted>
-                  <div className="mt-2 flex items-center gap-4">
-                    <select className="input !w-auto" value={f.portada} onChange={(e) => setF({ ...f, portada: e.target.value })}><option value="">Automática</option>{d.fotos.files.map((fn) => <option key={fn} value={fn}>{fn}</option>)}</select>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={d.fotos.urls[f.portada || d.fotos.portada_auto || ""] || d.fotos.principal || ""} alt="" className="h-[90px] w-[90px] bg-white object-contain" />
-                  </div>
+                  <div className="mt-2"><FotoGrid fotos={d.fotos.files.map((fn) => ({ filename: fn, url: d.fotos.urls[fn] }))} value={f.portada || null} permitirNinguna onChange={(ft) => setF({ ...f, portada: ft ? ft.filename : "" })} /></div>
                 </Panel>
               )}
               <div className="flex flex-wrap items-center gap-3">

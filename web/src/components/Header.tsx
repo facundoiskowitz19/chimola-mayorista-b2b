@@ -45,7 +45,7 @@ export default function Header({ me, menu, topbar }: { me: Me; menu: Menu; topba
         <div className="flex h-[66px] items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Wordmark />
-            <span className="pill hidden sm:inline-flex">Venta exclusiva mayorista_</span>
+            <span className="pill hidden sm:inline-flex">Venta exclusiva mayorista</span>
           </div>
           <nav className="flex items-center gap-5">
             <span className="hidden items-center gap-2 font-sans text-[13px] md:inline-flex"><UserIcon /> Hola, <b className="font-bold">{nombre}</b></span>

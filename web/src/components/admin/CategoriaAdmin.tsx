@@ -5,7 +5,9 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ClientError } from "@/lib/client";
 import { useToast } from "@/components/Toast";
 import Thumb from "@/components/Thumb";
-import { H1, Muted, Panel, Spinner } from "./ui";
+import { H1, Kicker, Muted, Panel, Pills, Spinner } from "./ui";
+import BloqueForm from "./BloqueForm";
+import type { HomeBloque } from "@/lib/types";
 
 interface Item { producto_cod: string; nombre: string; rubro: string; marca: string; stock: number; publicado: boolean | null; origen: "aleph" | "manual" | "extra"; categoria_principal: string; foto: string | null }
 interface Res { categoria: string; items: Item[]; n: number }
@@ -17,9 +19,17 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
   const [q, setQ] = useState("");
   const [res, setRes] = useState<{ producto_cod: string; nombre: string; foto: string | null }[]>([]);
   const [busy, setBusy] = useState(false);
+  const [banners, setBanners] = useState<{ banners: Record<string, HomeBloque | null>; secciones: Record<string, string> } | null>(null);
+  const [sec, setSec] = useState<string>("marro");
+  const [ban, setBan] = useState<HomeBloque | null>(null);
   const { notify } = useToast();
 
-  const cargar = useCallback(async () => { setD(await api<Res>(`/admin/categorias/${encodeURIComponent(nombre)}`)); }, [nombre]);
+  const cargar = useCallback(async () => {
+    const [d0, b0] = await Promise.all([api<Res>(`/admin/categorias/${encodeURIComponent(nombre)}`), api<{ banners: Record<string, HomeBloque | null>; secciones: Record<string, string> }>(`/admin/categorias/${encodeURIComponent(nombre)}/banner`)]);
+    setD(d0); setBanners(b0);
+    const primera = (["marro", "indu", "lima"] as const).find((k) => b0.banners[k]) || (d0.items.some((i) => i.marca === "Lima") && !d0.items.some((i) => i.marca === "Chimola") ? "lima" : (nombre === "Indumentaria" || nombre === "Pijamas") ? "indu" : "marro");
+    setSec(primera); setBan(b0.banners[primera]);
+  }, [nombre]);
   useEffect(() => { cargar(); }, [cargar]);
   useEffect(() => {
     if (q.trim().length < 2) return;
@@ -38,6 +48,12 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
   async function quitar(cod: string) {
     setBusy(true);
     try { await api(`/admin/categorias/${encodeURIComponent(nombre)}/productos/${cod}`, { method: "DELETE" }); notify(`${cod} quitado de ${nombre}`); await cargar(); }
+    catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); } finally { setBusy(false); }
+  }
+
+  async function guardarBanner(valor: HomeBloque | null) {
+    setBusy(true);
+    try { await api(`/admin/categorias/${encodeURIComponent(nombre)}/banner`, { method: "PUT", json: { seccion: sec, banner: valor } }); notify(valor ? "Banner de la categoría guardado" : "Banner quitado"); await cargar(); }
     catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); } finally { setBusy(false); }
   }
 
@@ -64,6 +80,28 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
           )}
         </div>
       </Panel>
+
+      {banners && (
+        <Panel className="mt-4">
+          <Kicker>Banner de la categoría (arriba del catálogo)</Kicker>
+          <Muted className="mt-1">Lo ve el cliente al entrar a esta categoría desde el menú, un bloque de la home o el rail. Es por sección del header: elegí en cuál aplica (una categoría puede tener productos en más de una). Imagen ideal 1600×420.</Muted>
+          <div className="mt-3"><Pills value={sec} onChange={(k) => { setSec(k); setBan(banners.banners[k]); }} options={Object.entries(banners.secciones).map(([k, n]) => ({ value: k, label: n + (banners.banners[k] ? " ·" : "") }))} /></div>
+          <div className="mt-3">
+            {ban ? (
+              <>
+                <BloqueForm b={ban} onChange={setBan} conKicker previewAspect="1125/300" />
+                <div className="mt-3 flex gap-2">
+                  <button disabled={busy} onClick={() => guardarBanner(ban)} className="btn btn-primary btn-sm">{busy ? "Guardando…" : "Guardar banner"}</button>
+                  <button disabled={busy} onClick={() => guardarBanner(null)} className="btn btn-ghost btn-sm text-[#aa0b56]">Quitar banner</button>
+                  <button disabled={busy} onClick={() => setBan(banners.banners[sec])} className="btn btn-light btn-sm">Descartar cambios</button>
+                </div>
+              </>
+            ) : (
+              <button onClick={() => setBan({ img: "", titulo: nombre, kicker: "", cta: "Ver productos", link: `/c/${sec}?categoria=${encodeURIComponent(nombre)}` })} className="btn btn-light btn-sm">+ Crear banner para {banners.secciones[sec]}</button>
+            )}
+          </div>
+        </Panel>
+      )}
 
       <Panel className="mt-4 !p-0">
         <table className="w-full font-sans text-[13px]">
