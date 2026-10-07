@@ -101,7 +101,7 @@ function MegaMenu({ sec, data, onEnter }: { sec: Seccion; data: Menu[Seccion]; o
   const nombre = (t: Faceta) => t.nombre || t.valor;
   return (
     <div onMouseEnter={onEnter} className="fade-in absolute inset-x-0 top-full z-50 bg-white px-9 pb-9 pt-7 shadow-[0_18px_30px_-20px_rgba(0,0,0,.35)]">
-      <div className="grid grid-cols-2 gap-8" style={{ gridTemplateColumns: `repeat(${3 + Math.max(1, (data.grupos || []).length)}, minmax(0, 1fr))` }}>
+      <div className="grid grid-cols-2 gap-8" style={{ gridTemplateColumns: `repeat(${Math.min(5, 3 + Math.max(1, (data.grupos || []).length))}, minmax(0, 1fr))` }}>
         <div>
           <h4 className="kicker mb-3">Temporada</h4>
           <ul className={col}>

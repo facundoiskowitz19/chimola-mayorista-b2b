@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Carrito, Me, Pedido } from "@/lib/types";
 import { api, ClientError } from "@/lib/client";
 import { money } from "@/lib/format";
@@ -10,6 +10,8 @@ import { useCart } from "./CartContext";
 import { useToast } from "./Toast";
 import QtyInput from "./QtyInput";
 import { capital } from "./ProductCard";
+
+const DEBOUNCE_MS = 500;
 
 export default function CarritoClient({ me }: { me: Me }) {
   const [c, setC] = useState<Carrito | null>(null);
@@ -22,16 +24,60 @@ export default function CarritoClient({ me }: { me: Me }) {
   const [contacto, setContacto] = useState({ contacto_nombre: cli?.contacto_nombre || "", contacto_email: cli?.contacto_email || me.user.email, contacto_telefono: cli?.contacto_telefono || "" });
   const [obs, setObs] = useState("");
 
+  // Cantidades que el usuario está tipeando, por SKU. Se mandan al confirmar (blur/Enter) o tras un debounce;
+  // mientras tanto el input muestra el borrador y no lo que devuelve la API.
+  const [borrador, setBorrador] = useState<Record<string, number>>({});
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // Cada request de carrito lleva un número; solo se aplica la respuesta del último (las anteriores pueden llegar después).
+  const seq = useRef(0);
+
   useEffect(() => {
-    api<Carrito>("/carrito").then((d) => { setC(d); setUnidades(d.totales.unidades); }).catch((e) => setErr(e.message));
+    const ts = timers.current;
+    return () => Object.values(ts).forEach(clearTimeout);
+  }, []);
+
+  function aplicar(d: Carrito, mio: number) {
+    if (mio !== seq.current) return false;
+    setC(d); setUnidades(d.totales.unidades);
+    return true;
+  }
+  const sinBorrador = (sku: string) => setBorrador((b) => { if (!(sku in b)) return b; const rest = { ...b }; delete rest[sku]; return rest; });
+
+  useEffect(() => {
+    const mio = ++seq.current;
+    api<Carrito>("/carrito").then((d) => { if (mio === seq.current) { setC(d); setUnidades(d.totales.unidades); } }).catch((e) => setErr(e.message));
   }, [setUnidades]);
 
   async function fijar(sku: string, n: number) {
+    const mio = ++seq.current;
     try {
       const d = await api<Carrito>(`/carrito/items/${encodeURIComponent(sku)}`, { method: "PUT", json: { cantidad: n } });
-      d.avisos.forEach((a) => notify(a, "aviso"));
-      setC(d); setUnidades(d.totales.unidades);
+      if (aplicar(d, mio)) d.avisos.forEach((a) => notify(a, "aviso"));
     } catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); }
+    finally { sinBorrador(sku); }
+  }
+
+  function cancelarTimer(sku: string) {
+    if (timers.current[sku]) { clearTimeout(timers.current[sku]); delete timers.current[sku]; }
+  }
+  function tipear(sku: string, n: number) {
+    setBorrador((b) => ({ ...b, [sku]: n }));
+    cancelarTimer(sku);
+    if (n > 0) timers.current[sku] = setTimeout(() => confirmarCantidad(sku, n), DEBOUNCE_MS);
+  }
+  function confirmarCantidad(sku: string, n: number) {
+    cancelarTimer(sku);
+    const actual = c?.items.find((i) => i.sku === sku)?.cantidad;
+    if (n > 0 && n !== actual) fijar(sku, n);
+    else sinBorrador(sku);
+  }
+
+  async function vaciar() {
+    const mio = ++seq.current;
+    try {
+      const d = await api<Carrito>("/carrito", { method: "DELETE" });
+      aplicar(d, mio);
+    } catch (e) { notify(e instanceof ClientError ? e.message : "No se pudo vaciar el carrito.", "error"); }
   }
 
   async function confirmar(e: React.FormEvent) {
@@ -45,7 +91,7 @@ export default function CarritoClient({ me }: { me: Me }) {
     } catch (e) {
       if (e instanceof ClientError) {
         setErr(e.message);
-        if (e.status === 409) { const d = await api<Carrito>("/carrito"); setC(d); }
+        if (e.status === 409) { const mio = ++seq.current; const d = await api<Carrito>("/carrito"); aplicar(d, mio); }
       } else setErr("No pudimos confirmar el pedido. Probá de nuevo.");
     } finally { setBusy(false); }
   }
@@ -76,6 +122,9 @@ export default function CarritoClient({ me }: { me: Me }) {
       </div>
     );
   }
+
+  const minUnidades = c?.minimo_unidades ?? 0;
+  const minMonto = c?.minimo_monto ?? 0;
 
   return (
     <div className="container-lt pb-10 pt-8">
@@ -108,10 +157,13 @@ export default function CarritoClient({ me }: { me: Me }) {
                     <td className="py-3 pr-2"><Link href={`/p/${it.producto_cod}`} className="font-brand text-[13px] font-bold hover:underline">{it.producto_nombre}</Link>
                       <div className="card-meta"><b>{it.producto_cod}</b>{it.manual && <span className="ml-2 text-[#aa0b56]">variante manual</span>}</div></td>
                     <td className="px-2 py-3">{capital(it.color)}{it.talle !== "U" && <span className="text-muted"> · Talle {it.talle}</span>}</td>
-                    <td className="px-2 py-3 text-center"><QtyInput value={it.cantidad} onChange={(n) => n > 0 && n !== it.cantidad && fijar(it.sku, n)} /></td>
+                    <td className="px-2 py-3 text-center">
+                      <QtyInput value={borrador[it.sku] ?? it.cantidad} onChange={(n) => tipear(it.sku, n)}
+                        onCommit={() => confirmarCantidad(it.sku, borrador[it.sku] ?? it.cantidad)} />
+                    </td>
                     <td className="px-2 py-3 text-right">{it.pct_desc > 0 && it.precio_lista ? <div className="price-old">{money(it.precio_lista)}</div> : null}{money(it.precio_unit)}</td>
                     <td className="px-2 py-3 text-right font-bold">{money(it.subtotal)}</td>
-                    <td className="py-3 pr-3 text-right"><button onClick={() => fijar(it.sku, 0)} className="text-faint hover:text-ink" aria-label="Quitar"><XIcon size={16} /></button></td>
+                    <td className="py-3 pr-3 text-right"><button onClick={() => { cancelarTimer(it.sku); fijar(it.sku, 0); }} className="text-faint hover:text-ink" aria-label="Quitar"><XIcon size={16} /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -119,15 +171,15 @@ export default function CarritoClient({ me }: { me: Me }) {
             </div>
             <div className="flex justify-between p-4">
               <Link href="/h/marro" className="font-sans text-[12px] hover:underline">‹ Seguir comprando</Link>
-              <button onClick={async () => { const d = await api<Carrito>("/carrito", { method: "DELETE" }); setC(d); }} className="font-sans text-[12px] text-muted hover:text-ink">Vaciar carrito</button>
+              <button onClick={vaciar} className="font-sans text-[12px] text-muted hover:text-ink">Vaciar carrito</button>
             </div>
           </div>
           <div>
             <div className="bg-white p-6">
               <h2 className="font-brand text-[16px] font-bold">Resumen</h2>
               <Resumen t={c.totales} />
-              {c.minimo_unidades && c.totales.unidades < c.minimo_unidades && <p className="mt-3 font-sans text-[12px] text-[#aa0b56]">El pedido mínimo es de {c.minimo_unidades} unidades.</p>}
-              {c.minimo_monto && c.totales.subtotal < c.minimo_monto && <p className="mt-3 font-sans text-[12px] text-[#aa0b56]">El pedido mínimo es de {money(c.minimo_monto)} a precio de lista.</p>}
+              {minUnidades > 0 && c.totales.unidades < minUnidades && <p className="mt-3 font-sans text-[12px] text-[#aa0b56]">El pedido mínimo es de {minUnidades} unidades.</p>}
+              {minMonto > 0 && c.totales.subtotal < minMonto && <p className="mt-3 font-sans text-[12px] text-[#aa0b56]">El pedido mínimo es de {money(minMonto)} a precio de lista.</p>}
             </div>
             <form onSubmit={confirmar} className="mt-4 bg-white p-6">
               <h2 className="font-brand text-[16px] font-bold">Datos de contacto</h2>

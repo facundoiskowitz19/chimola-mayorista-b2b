@@ -10,18 +10,28 @@ export default function GalleryModal({ cod, onClose }: { cod: string; onClose: (
   const [p, setP] = useState<Producto | null>(null);
   const [idx, setIdx] = useState(0);
   const [color, setColor] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => { api<Producto>(`/productos/${cod}`).then(setP); }, [cod]);
+  useEffect(() => {
+    let vivo = true;
+    api<Producto>(`/productos/${cod}`).then((d) => vivo && setP(d)).catch(() => vivo && setErr("No se pudieron cargar las fotos."));
+    return () => { vivo = false; };
+  }, [cod]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        // En captura y frenando el evento: si el popup se abrió desde el panel inline, Esc cierra solo el popup.
+        e.stopImmediatePropagation();
+        onClose();
+        return;
+      }
       if (!p) return;
       if (e.key === "ArrowRight") setIdx((i) => (i + 1) % p.fotos.length);
       if (e.key === "ArrowLeft") setIdx((i) => (i - 1 + p.fotos.length) % p.fotos.length);
     };
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
     document.body.style.overflow = "hidden";
-    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+    return () => { window.removeEventListener("keydown", onKey, true); document.body.style.overflow = ""; };
   }, [p, onClose]);
 
   function elegirColor(c: string) {
@@ -55,7 +65,9 @@ export default function GalleryModal({ cod, onClose }: { cod: string; onClose: (
           {fotos[idx] ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={fotos[idx].url} alt="" className="max-h-full max-w-full object-contain" />
-          ) : <div className="h-full w-full animate-pulse bg-[#f1f1f1]" />}
+          ) : err ? <p className="font-sans text-[13px] text-[#aa0b56]">{err}</p>
+          : p ? <p className="font-sans text-[13px] text-muted">Sin fotos</p>
+          : <div className="h-full w-full animate-pulse bg-[#f1f1f1]" />}
           {fotos.length > 1 && (
             <>
               <button onClick={() => setIdx((idx - 1 + fotos.length) % fotos.length)} className="absolute left-0 top-1/2 -translate-y-1/2 text-line-2 hover:text-ink" aria-label="Anterior"><Chevron dir="left" size={44} /></button>

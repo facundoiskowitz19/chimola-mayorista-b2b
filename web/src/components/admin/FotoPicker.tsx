@@ -38,8 +38,9 @@ export function FotoDeProducto({ onElegir, onCerrar }: { onElegir: (url: string)
   useEffect(() => {
     if (q.trim().length < 2) return;
     const t = setTimeout(async () => {
-      const r = await api<{ items: { producto_cod: string; nombre: string; foto: string | null }[] }>(`/admin/catalogo?q=${encodeURIComponent(q.trim())}&per_page=8&solo_foto=1`);
-      setRes(r.items.filter((i) => i.foto));
+      // La API no filtra por foto: se piden 40 y se filtran acá (mostrando hasta 8 con foto).
+      const r = await api<{ items: { producto_cod: string; nombre: string; foto: string | null }[] }>(`/admin/catalogo?q=${encodeURIComponent(q.trim())}&per_page=40`);
+      setRes(r.items.filter((i) => i.foto).slice(0, 8));
     }, 250);
     return () => clearTimeout(t);
   }, [q]);

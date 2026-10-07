@@ -1,4 +1,7 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { apiServerOpcional } from "@/lib/api";
+import type { Me } from "@/lib/types";
 import Footer from "@/components/Footer";
 import LoginForm from "./LoginForm";
 import { Wordmark } from "@/components/Brand";
@@ -20,7 +23,10 @@ function Sticker() {
   );
 }
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  // Solo rebota si la cookie es válida; una vencida se queda acá (y /auth/expired ya la borró).
+  const me = await apiServerOpcional<Me>("/auth/me");
+  if (me) redirect("/h/marro");
   return (
     <div className="flex min-h-screen flex-col">
       <main className="flex-1">

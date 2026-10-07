@@ -33,7 +33,8 @@ export default function BloqueForm({ b, onChange, onQuitar, conSubtitulo, conTag
           <label className={`btn btn-light btn-sm cursor-pointer ${up ? "opacity-50" : ""}`}>{up ? "Subiendo…" : "Subir"}<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; setUp(true); try { onChange({ ...b, img: await subirImagen(f) }); } catch (er) { notify(er instanceof ClientError ? er.message : "Error al subir", "error"); } finally { setUp(false); } }} /></label>
           <button type="button" onClick={() => setDeProducto(!deProducto)} className="btn btn-light btn-sm">Foto de un producto</button>
         </div>
-        <input className="input mt-2 !py-1 !text-[11px]" placeholder="…o pegá la URL de una imagen (https://…)" value={b.img && b.img.startsWith("http") ? b.img : ""} onChange={(e) => onChange({ ...b, img: e.target.value.trim() })} />
+        {/* Se muestra todo lo que no sea una ruta del sitio ("/…"): así se puede tipear la URL letra por letra, no solo pegarla. */}
+        <input className="input mt-2 !py-1 !text-[11px]" placeholder="…o pegá la URL de una imagen (https://…)" value={b.img && !b.img.startsWith("/") ? b.img : ""} onChange={(e) => onChange({ ...b, img: e.target.value.trim() })} />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {conKicker && <Field label="Texto chico arriba del título" className="sm:col-span-2"><input className="input" value={b.kicker || ""} onChange={(e) => onChange({ ...b, kicker: e.target.value })} placeholder="Grupo_ Denim Indigo" /></Field>}

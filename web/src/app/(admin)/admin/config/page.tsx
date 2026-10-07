@@ -31,6 +31,7 @@ export default function ConfigAdmin() {
   async function refrescar() {
     setBusy(true);
     try { await api("/admin/config/refrescar", { method: "POST" }); notify("Catálogo actualizado"); await cargar(); }
+    catch (e) { notify(e instanceof ClientError ? e.message : "Error al actualizar el catálogo", "error"); }
     finally { setBusy(false); }
   }
 

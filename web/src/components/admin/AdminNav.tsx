@@ -2,10 +2,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const ITEMS = [
+const ITEMS: { href: string; label: string; exact?: boolean; tambien?: string[] }[] = [
   { href: "/admin", label: "Inicio", exact: true },
   { href: "/admin/catalogo", label: "Catálogo" },
-  { href: "/admin/categorias", label: "Categorías" },
+  { href: "/admin/categorias", label: "Categorías", tambien: ["/admin/tipos"] },
   { href: "/admin/clientes", label: "Clientes" },
   { href: "/admin/pedidos", label: "Pedidos" },
   { href: "/admin/home", label: "Home del sitio" },
@@ -20,7 +20,7 @@ export default function AdminNav() {
     <aside className="hidden w-[190px] shrink-0 md:block">
       <ul className="space-y-[2px]">
         {ITEMS.map((it) => {
-          const on = it.exact ? path === it.href : path.startsWith(it.href);
+          const on = it.exact ? path === it.href : [it.href, ...(it.tambien || [])].some((h) => path.startsWith(h));
           return (
             <li key={it.href}>
               <Link href={it.href} className={`block rounded-sm px-3 py-2 font-sans text-[13.5px] ${on ? "bg-ink text-white" : "text-ink-2 hover:bg-white"}`}>{it.label}</Link>

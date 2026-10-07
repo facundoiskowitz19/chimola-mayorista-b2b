@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, ClientError } from "@/lib/client";
 import type { Me } from "@/lib/types";
+import { destinoSeguro } from "@/lib/nav";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -11,14 +12,14 @@ export default function LoginForm() {
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const expirada = sp.get("expired") === "1";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr(null);
     try {
       await api<Me>("/auth/login", { method: "POST", json: { email, password: pwd } });
-      const next = sp.get("next");
-      router.replace(next && next.startsWith("/") ? next : "/h/marro");
+      router.replace(destinoSeguro(sp.get("next")));
       router.refresh();
     } catch (e) {
       setErr(e instanceof ClientError ? e.message : "No pudimos conectarnos. Probá de nuevo.");
@@ -28,6 +29,7 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} className="mt-6 space-y-4">
+      {expirada && !err && <p className="rounded-md bg-[#fff6d6] px-3 py-2 font-sans text-[13px] text-ink">Tu sesión venció, ingresá de nuevo.</p>}
       <label className="block">
         <span className="font-sans text-[12px] text-ink-2">E-Mail</span>
         <input className="input mt-1" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />

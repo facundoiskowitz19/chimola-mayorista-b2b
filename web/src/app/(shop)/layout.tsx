@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { apiServer, apiServerOpcional } from "@/lib/api";
 import type { Carrito, Me, Menu } from "@/lib/types";
@@ -8,7 +9,11 @@ import { ToastProvider } from "@/components/Toast";
 
 export default async function ShopLayout({ children }: LayoutProps<"/">) {
   const me = await apiServerOpcional<Me>("/auth/me");
-  if (!me) redirect("/login");
+  if (!me) {
+    // Hay cookie (el proxy ya pasó) pero la API no la acepta: vencida o inválida → borrarla y volver al login.
+    const ruta = (await headers()).get("x-ruta-actual");
+    redirect(`/auth/expired${ruta && ruta !== "/" ? `?next=${encodeURIComponent(ruta)}` : ""}`);
+  }
   const [menu, carrito, sitio] = await Promise.all([
     apiServer<Menu>("/catalogo/menu"),
     me.puede_pedir ? apiServerOpcional<Carrito>("/carrito") : Promise.resolve(null),

@@ -15,8 +15,8 @@ export default async function HomePage({ params }: { params: Promise<{ seccion: 
     <div className="container-lt relative pb-10">
       <Hero slides={home.hero} seccion={home.seccion} />
       <Bloques bloques={home.bloques} />
-      {home.secciones.map((s) => (
-        <ProductRow key={s.titulo} titulo={s.titulo} link={s.link} items={s.productos} puedePedir={me.puede_pedir} />
+      {home.secciones.map((s, i) => (
+        <ProductRow key={`${s.titulo}-${i}`} titulo={s.titulo} link={s.link} items={s.productos} puedePedir={me.puede_pedir} />
       ))}
     </div>
   );

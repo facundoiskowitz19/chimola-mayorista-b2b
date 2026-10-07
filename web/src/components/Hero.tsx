@@ -12,7 +12,7 @@ export default function Hero({ slides, seccion }: { slides: HomeBloque[]; seccio
     return () => clearInterval(t);
   }, [slides.length]);
   if (!slides.length) return null;
-  const s = slides[i];
+  const s = slides[i % slides.length];
   const [l1, l2] = (s.titulo || "").split("\n");
   return (
     <section className="relative mt-2">

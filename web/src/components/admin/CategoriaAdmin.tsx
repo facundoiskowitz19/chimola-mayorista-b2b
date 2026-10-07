@@ -1,7 +1,7 @@
 "use client";
 /* Una categoría del admin: sus productos (de Aleph, reclasificados o agregados) y alta/baja de productos. */
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ClientError } from "@/lib/client";
 import { useToast } from "@/components/Toast";
 import Thumb from "@/components/Thumb";
@@ -21,16 +21,19 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
   const [busy, setBusy] = useState(false);
   const [banners, setBanners] = useState<{ banners: Record<string, HomeBloque | null>; secciones: Record<string, string> } | null>(null);
   const [sec, setSec] = useState<string>("marro");
+  const secRef = useRef<string | null>(null);   // sección elegida; null = todavía no se cargó (se elige la inicial una sola vez)
   const [ban, setBan] = useState<HomeBloque | null>(null);
   const { notify } = useToast();
+  const elegirSec = (k: string, b: Record<string, HomeBloque | null>) => { secRef.current = k; setSec(k); setBan(b[k]); };
 
   const cargar = useCallback(async () => {
     const [d0, b0] = await Promise.all([api<Res>(`/admin/categorias/${encodeURIComponent(nombre)}`), api<{ banners: Record<string, HomeBloque | null>; secciones: Record<string, string> }>(`/admin/categorias/${encodeURIComponent(nombre)}/banner`)]);
     setD(d0); setBanners(b0);
-    const primera = (["marro", "indu", "lima"] as const).find((k) => b0.banners[k]) || (d0.items.some((i) => i.marca === "Lima") && !d0.items.some((i) => i.marca === "Chimola") ? "lima" : (nombre === "Indumentaria" || nombre === "Pijamas") ? "indu" : "marro");
-    setSec(primera); setBan(b0.banners[primera]);
+    // La sección inicial se calcula solo en la primera carga; después de guardar/quitar se queda en la que estaba.
+    const inicial = secRef.current || (["marro", "indu", "lima"] as const).find((k) => b0.banners[k]) || (d0.items.some((i) => i.marca === "Lima") && !d0.items.some((i) => i.marca === "Chimola") ? "lima" : (nombre === "Indumentaria" || nombre === "Pijamas") ? "indu" : "marro");
+    elegirSec(inicial, b0.banners);
   }, [nombre]);
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => { secRef.current = null; cargar(); }, [cargar]);
   useEffect(() => {
     if (q.trim().length < 2) return;
     const t = setTimeout(async () => {
@@ -52,6 +55,8 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
   }
 
   async function guardarBanner(valor: HomeBloque | null) {
+    // El backend descarta un banner sin imagen y sin título (quedaría «guardado» pero no existe).
+    if (valor && !valor.img && !valor.titulo?.trim()) { notify("El banner necesita una imagen o un título", "error"); return; }
     setBusy(true);
     try { await api(`/admin/categorias/${encodeURIComponent(nombre)}/banner`, { method: "PUT", json: { seccion: sec, banner: valor } }); notify(valor ? "Banner de la categoría guardado" : "Banner quitado"); await cargar(); }
     catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); } finally { setBusy(false); }
@@ -85,7 +90,7 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
         <Panel className="mt-4">
           <Kicker>Banner de la categoría (arriba del catálogo)</Kicker>
           <Muted className="mt-1">Lo ve el cliente al entrar a esta categoría desde el menú, un bloque de la home o el rail. Es por sección del header: elegí en cuál aplica (una categoría puede tener productos en más de una). Imagen ideal 1600×420.</Muted>
-          <div className="mt-3"><Pills value={sec} onChange={(k) => { setSec(k); setBan(banners.banners[k]); }} options={Object.entries(banners.secciones).map(([k, n]) => ({ value: k, label: n + (banners.banners[k] ? " ·" : "") }))} /></div>
+          <div className="mt-3"><Pills value={sec} onChange={(k) => elegirSec(k, banners.banners)} options={Object.entries(banners.secciones).map(([k, n]) => ({ value: k, label: n + (banners.banners[k] ? " ·" : "") }))} /></div>
           <div className="mt-3">
             {ban ? (
               <>

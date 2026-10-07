@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api } from "@/lib/client";
+import { api, ClientError } from "@/lib/client";
 import { money } from "@/lib/format";
 import { H1, Metric, Muted, Panel, Spinner } from "@/components/admin/ui";
 
@@ -14,7 +14,9 @@ interface Inicio {
 
 export default function AdminInicio() {
   const [d, setD] = useState<Inicio | null>(null);
-  useEffect(() => { api<Inicio>("/admin/inicio").then(setD); }, []);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { api<Inicio>("/admin/inicio").then(setD).catch((e) => setErr(e instanceof ClientError ? e.message : "No se pudo cargar el inicio")); }, []);
+  if (err) return <><H1>Inicio</H1><p className="text-[#aa0b56]">{err}</p></>;
   if (!d) return <><H1>Inicio</H1><Spinner /></>;
   return (
     <>

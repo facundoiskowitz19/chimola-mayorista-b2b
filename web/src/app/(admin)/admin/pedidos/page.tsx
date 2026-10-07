@@ -6,7 +6,7 @@ import { money } from "@/lib/format";
 import { H1, Muted, Panel, Pills, Spinner, Tag } from "@/components/admin/ui";
 import PedidoAdmin from "@/components/admin/PedidoAdmin";
 
-interface Row { numero: number; fecha_str: string; cliente_cod: number; cliente_nombre: string; usuario_email: string; unidades: number; total: number; estado: string; observaciones: string; email_enviado: boolean; n_items: number }
+interface Row { numero: number; fecha_str: string; cliente_cod: number; cliente_nombre: string | null; usuario_email: string; unidades: number; total: number; estado: string; observaciones: string; email_enviado: boolean; n_items: number }
 interface Res { counts: Record<string, number>; clientes: [number, string][]; items: Row[] }
 type Estado = "todos" | "confirmado" | "procesado" | "cancelado";
 
@@ -40,7 +40,7 @@ function PedidosAdmin() {
             <tbody>{res.items.map((p) => (
               <tr key={p.numero} onClick={() => setAbierto(abierto === p.numero ? null : p.numero)} className={`cursor-pointer border-b border-line hover:bg-[#fafafa] ${abierto === p.numero ? "bg-[#f3fbff]" : ""}`}>
                 <td className="px-4 py-2 font-bold">{String(p.numero).padStart(6, "0")}</td><td className="py-2">{p.fecha_str}</td>
-                <td className="py-2">{p.cliente_nombre.slice(0, 40)} <span className="text-muted">· {p.cliente_cod}</span>{p.observaciones && <div className="card-meta">“{p.observaciones.slice(0, 70)}”</div>}</td>
+                <td className="py-2">{(p.cliente_nombre || "").slice(0, 40)} <span className="text-muted">· {p.cliente_cod}</span>{p.observaciones && <div className="card-meta">“{p.observaciones.slice(0, 70)}”</div>}</td>
                 <td className="py-2 text-right">{p.unidades}</td><td className="py-2 text-right">{money(p.total)}</td><td className="py-2 pl-4"><Tag estado={p.estado} /></td><td className="py-2 text-center text-muted">{p.email_enviado ? "sí" : "—"}</td>
               </tr>
             ))}

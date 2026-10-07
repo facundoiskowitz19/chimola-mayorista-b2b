@@ -15,6 +15,7 @@ export default function EmailsAdmin() {
   const [prev, setPrev] = useState<{ asunto: string; cuerpo: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const ta = useRef<HTMLTextAreaElement>(null);
+  const prevReq = useRef(0);   // contador de previews: se ignora toda respuesta que no sea la última pedida
   const { notify } = useToast();
 
   async function cargar(e = ev) {
@@ -26,7 +27,9 @@ export default function EmailsAdmin() {
   useEffect(() => {
     const t = setTimeout(async () => {
       if (!tpl.asunto && !tpl.cuerpo) return;
-      try { setPrev(await api(`/admin/emails/${ev}/preview`, { method: "POST", json: tpl })); } catch (e) { setPrev({ asunto: "", cuerpo: e instanceof ClientError ? e.message : "Error" }); }
+      const n = ++prevReq.current;
+      try { const p = await api<{ asunto: string; cuerpo: string }>(`/admin/emails/${ev}/preview`, { method: "POST", json: tpl }); if (n === prevReq.current) setPrev(p); }
+      catch (e) { if (n === prevReq.current) setPrev({ asunto: "", cuerpo: e instanceof ClientError ? e.message : "Error" }); }
     }, 300);
     return () => clearTimeout(t);
   }, [tpl, ev]);

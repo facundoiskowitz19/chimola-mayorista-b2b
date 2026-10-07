@@ -93,7 +93,12 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
         if (Object.keys(o).length) variantes[sku] = o;
       }
       const extras: Record<string, Extra> = {};
-      for (const [sku, x] of Object.entries(f.extras)) if (!x.quitar) extras[sku] = { color: x.color, talle: x.talle, stock: parseInt(x.stock || "0", 10), precios: { "1": parseFloat(x.precio || "0") }, ean: x.ean };
+      for (const [sku, x] of Object.entries(f.extras)) {
+        if (x.quitar) continue;
+        // El backend descarta en silencio una variante manual sin precio L1 o sin stock: validar acá.
+        if (!(parseFloat(x.precio || "0") > 0) || x.stock === "") { notify(`La variante manual ${sku} necesita stock y precio L1 mayor a 0 (o marcala «quitar»)`, "error"); setBusy(false); return; }
+        extras[sku] = { color: x.color, talle: x.talle, stock: parseInt(x.stock, 10), precios: { "1": parseFloat(x.precio) }, ean: x.ean };
+      }
       await api(`/admin/productos/${cod}`, { method: "PUT", json: {
         nombre: f.nombre, descripcion: f.descripcion,
         precios: Object.fromEntries(Object.entries(f.precios).map(([k, v]) => [k, v ? parseFloat(v) : null])),
@@ -117,7 +122,11 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
   async function agregarExtra() {
     try {
       const r = await api<{ sku: string }>(`/admin/productos/${cod}/variantes-extra`, { method: "POST", json: { ...nuevaExtra, stock: parseInt(nuevaExtra.stock || "0", 10), precio: parseFloat(nuevaExtra.precio || "0") } });
-      notify(`Variante manual ${r.sku} agregada`); setNuevaExtra({ color: "", talle: "U", stock: "", precio: "", ean: "" }); await cargar();
+      notify(`Variante manual ${r.sku} agregada`); setNuevaExtra({ color: "", talle: "U", stock: "", precio: "", ean: "" });
+      // Recargar los datos pero conservar lo que el admin ya editó en el formulario: solo se suma la variante nueva.
+      const x = await api<Data>(`/admin/productos/${cod}`); setD(x);
+      const nueva = x.override.variantes_extra?.[r.sku];
+      if (nueva) setF((prev) => prev ? { ...prev, extras: { ...prev.extras, [r.sku]: { color: nueva.color, talle: nueva.talle, stock: String(nueva.stock), precio: String(nueva.precios?.["1"] || ""), ean: nueva.ean || "", quitar: false } } } : prev);
     } catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); }
   }
 
@@ -236,7 +245,7 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
               </Panel>
               <Panel>
                 <Kicker>Variantes manuales</Kicker>
-                <Muted className="mt-1">No existen en Aleph: stock y precio son 100% tuyos y el Excel las marca. <Manual>«Agregar» se aplica al instante</Manual>; las ediciones de la tabla van con Guardar.</Muted>
+                <Muted className="mt-1">No existen en Aleph: stock y precio son 100% tuyos y el Excel las marca. <Manual>«Agregar» se aplica al instante</Manual> (sin perder lo que estés editando); las ediciones de la tabla van con Guardar. Stock y precio L1 son obligatorios: para sacar una variante, marcá «quitar».</Muted>
                 {Object.keys(f.extras).length > 0 ? (
                   <table className="vt mt-3 text-[12.5px]">
                     <thead><tr><th>SKU</th><th>Color</th><th>Talle</th><th>Stock</th><th>Precio L1</th><th>EAN</th><th>Quitar</th></tr></thead>

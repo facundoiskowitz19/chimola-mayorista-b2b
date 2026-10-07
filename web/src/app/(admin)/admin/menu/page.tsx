@@ -14,7 +14,7 @@ const LISTAS: { key: Lista; titulo: string; ayuda: string }[] = [
   { key: "tendencias", titulo: "Tendencia", ayuda: "Las categorías de Aleph que no son Marroquinería ni Indumentaria (Bazar, Librería, Textil…)." },
 ];
 interface Item { valor: string; nombre: string; n: number; nuevo?: boolean; anterior?: boolean }
-interface Fila extends Item { mostrar: boolean }
+interface Fila extends Item { mostrar: boolean; sinStock?: boolean }   // sinStock: está en la config pero hoy no tiene productos (se conserva igual)
 interface Op { nombre: string; link: string; oculto?: boolean }
 interface Grupo { titulo: string; categoria: string; oculto?: boolean }
 interface Res { seccion: Sec; auto: Record<Lista, { valor: string; n: number }[]>; config: (Partial<Record<Lista, Item[]>> & { oportunidades?: Op[]; grupos?: Grupo[] }) | null; efectivo: Record<Lista, Item[]> & { personalizado: Record<Lista | "oportunidades" | "grupos", boolean>; n: number; oportunidades: number; oportunidades_items: Op[] }; tope_auto: Record<Lista, number> }
@@ -37,14 +37,17 @@ export default function MenuAdmin() {
       const conf = d.config?.[L.key] || [];
       const auto = d.auto[L.key];
       const nAuto = new Map(auto.map((a) => [a.valor, a.n]));
-      const mostrados: Fila[] = (conf.length ? conf.filter((c) => nAuto.has(c.valor)).map((c) => ({ ...c, n: nAuto.get(c.valor)!, mostrar: true }))
+      // Los valores configurados que hoy no tienen stock se conservan (greyed): si se filtraran, cualquier
+      // guardado los borraría de la config para siempre (ej. una temporada que vuelve en unos meses).
+      const mostrados: Fila[] = (conf.length ? conf.map((c) => ({ ...c, n: nAuto.get(c.valor) ?? 0, sinStock: !nAuto.has(c.valor), mostrar: true }))
         : d.efectivo[L.key].map((e) => ({ ...e, mostrar: true })));
       const vistos = new Set(mostrados.map((m) => m.valor));
       const resto: Fila[] = auto.filter((a) => !vistos.has(a.valor)).map((a) => ({ valor: a.valor, nombre: a.valor, n: a.n, nuevo: false, anterior: false, mostrar: false }));
       out[L.key] = [...mostrados, ...resto];
     }
     setFilas(out);
-    setOps(d.config?.oportunidades?.length ? d.config.oportunidades : d.efectivo.oportunidades_items.map((o) => ({ ...o, oculto: false })));
+    // Solo lo guardado: los links automáticos («Ver ofertas (N)») no se precargan, si no cualquier guardado los fijaba con el conteo congelado.
+    setOps(d.config?.oportunidades || []);
     setGrupos(d.config?.grupos || []);
     api<{ arbol: { categoria: string }[] }>("/admin/categorias").then((c) => setCats(c.arbol.map((x) => x.categoria))).catch(() => setCats([]));
   }, [sec]);
@@ -72,7 +75,7 @@ export default function MenuAdmin() {
   return (
     <>
       <H1>Menú desplegable</H1>
-      <Muted>Qué aparece al pasar el mouse por cada sección del header. Marcá «mostrar», renombrá y ordená con las flechas. Si no guardás nada, el menú se arma solo desde BigQuery por cantidad de productos. Lo que no esté marcado no aparece en el menú, pero sigue filtrable en el catálogo.</Muted>
+      <Muted>Qué aparece al pasar el mouse por cada sección del header. Marcá «mostrar», renombrá y ordená con las flechas. Si no guardás nada, el menú se arma solo desde BigQuery por cantidad de productos. Lo que no esté marcado no aparece en el menú, pero sigue filtrable en el catálogo. <b>Una lista sin ninguna fila marcada vuelve a automático</b> (no queda vacía).</Muted>
       <div className="mt-4"><Pills value={sec} onChange={setSec} options={SECS} /></div>
       <Muted className="mt-2">{personalizado ? "Menú personalizado guardado para esta sección." : "Menú automático (nada guardado)."} · {r.efectivo.n} productos · {r.efectivo.oportunidades} con descuento</Muted>
 
@@ -81,13 +84,14 @@ export default function MenuAdmin() {
           <Panel key={L.key}>
             <Kicker>{L.titulo}{r.efectivo.personalizado[L.key] && <span className="ml-2 text-[#006786]">personalizado</span>}</Kicker>
             <Muted className="mt-1">{L.ayuda}</Muted>
+            {!filas[L.key].some((f) => f.mostrar) && <Muted className="mt-1 text-[#aa0b56]">Ninguna marcada: al guardar, esta lista vuelve a automático.</Muted>}
             <table className="vt mt-3 text-[12px]">
               <thead><tr><th className="whitespace-nowrap">Mostrar</th><th className="whitespace-nowrap">Nombre a mostrar</th><th className="text-right">Prod.</th>{L.key === "temporadas" && <><th>Nuevo</th><th>Anterior</th></>}<th /></tr></thead>
               <tbody>{filas[L.key].map((f, i) => (
-                <tr key={f.valor} className={f.mostrar ? "" : "opacity-50"}>
+                <tr key={f.valor} className={f.mostrar && !f.sinStock ? "" : "opacity-50"}>
                   <td><Check checked={f.mostrar} onChange={(v) => set(L.key, i, { mostrar: v })} /></td>
-                  <td className="min-w-[170px]"><input className="input !py-1 !text-[12px]" value={f.nombre} onChange={(e) => set(L.key, i, { nombre: e.target.value })} /><div className="card-meta">{f.valor !== f.nombre && <>Aleph: {f.valor}</>}</div></td>
-                  <td className="text-right text-muted">{f.n}</td>
+                  <td className="min-w-[170px]"><input className="input !py-1 !text-[12px]" value={f.nombre} onChange={(e) => set(L.key, i, { nombre: e.target.value })} /><div className="card-meta">{f.valor !== f.nombre && <>Aleph: {f.valor} · </>}{f.sinStock && <span className="text-[#aa0b56]">sin stock hoy (se conserva, no se muestra hasta que vuelva)</span>}</div></td>
+                  <td className="text-right text-muted">{f.sinStock ? "—" : f.n}</td>
                   {L.key === "temporadas" && <><td><Check checked={!!f.nuevo} onChange={(v) => set(L.key, i, { nuevo: v })} /></td><td><Check checked={!!f.anterior} onChange={(v) => set(L.key, i, { anterior: v })} /></td></>}
                   <td className="whitespace-nowrap"><button onClick={() => mover(L.key, i, -1)} className="px-1 text-faint hover:text-ink">↑</button><button onClick={() => mover(L.key, i, 1)} className="px-1 text-faint hover:text-ink">↓</button></td>
                 </tr>
@@ -97,7 +101,8 @@ export default function MenuAdmin() {
         ))}
         <Panel>
           <Kicker>Oportunidades{r.efectivo.personalizado.oportunidades && <span className="ml-2 text-[#006786]">personalizado</span>}</Kicker>
-          <Muted className="mt-1">Links libres de la cuarta columna. Por defecto: «Ver ofertas», que son los productos con descuento ({r.efectivo.oportunidades} hoy: el descvta de Aleph o el descuento por producto del admin), y «Ver todo». Podés sumar links a una categoría, una colección o una URL externa.</Muted>
+          <Muted className="mt-1">Links libres de la cuarta columna. <b>Lista vacía = automático</b>: «Ver ofertas», que son los productos con descuento ({r.efectivo.oportunidades} hoy: el descvta de Aleph o el descuento por producto del admin), y «Ver todo». Si agregás links, reemplazan a los automáticos. Podés sumar links a una categoría, una colección o una URL externa.</Muted>
+          {ops.length === 0 && <Muted className="mt-2">Hoy, automático: {r.efectivo.oportunidades_items.map((o) => o.nombre).join(" · ")}</Muted>}
           <table className="vt mt-3 text-[12px]">
             <thead><tr><th>Mostrar</th><th>Texto</th><th>Link</th><th /></tr></thead>
             <tbody>{ops.map((o, i) => (
@@ -130,7 +135,7 @@ export default function MenuAdmin() {
       </Panel>
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button onClick={guardar} disabled={busy} className="btn btn-primary">{busy ? "Guardando…" : "Guardar menú"}</button>
-        {personalizado && (!confirmReset ? <button onClick={() => setConfirmReset(true)} className="btn btn-ghost">Volver al menú automático</button> : <Confirm busy={busy} texto="Se descarta lo personalizado y el menú vuelve a armarse solo." onYes={async () => { setBusy(true); await api(`/admin/menu/${sec}`, { method: "DELETE" }); setConfirmReset(false); setBusy(false); notify("Menú automático restaurado"); cargar(); }} onNo={() => setConfirmReset(false)} />)}
+        {personalizado && (!confirmReset ? <button onClick={() => setConfirmReset(true)} className="btn btn-ghost">Volver al menú automático</button> : <Confirm busy={busy} texto="Se descarta lo personalizado y el menú vuelve a armarse solo." onYes={async () => { setBusy(true); try { await api(`/admin/menu/${sec}`, { method: "DELETE" }); setConfirmReset(false); notify("Menú automático restaurado"); await cargar(); } catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); } finally { setBusy(false); } }} onNo={() => setConfirmReset(false)} />)}
       </div>
     </>
   );

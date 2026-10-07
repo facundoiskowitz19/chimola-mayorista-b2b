@@ -3,19 +3,23 @@
  *  - lista:  un talle → una fila por color (marroquinería)
  *  - matriz: varios talles → color × talle, con "Curva personalizada" / "Curva sugerida" (indumentaria)
  * Nunca muestra stock. El tope lo aplica la API al agregar (avisa si recortó).
+ * Una variante con `disponible=false` (stock manual en 0) se muestra como "Sin stock", sin input.
  */
 import { useMemo, useState } from "react";
 import type { Curva, Producto } from "@/lib/types";
-import { api } from "@/lib/client";
+import { api, ClientError } from "@/lib/client";
 import { Chevron } from "./Brand";
 import QtyInput from "./QtyInput";
 import { capital } from "./ProductCard";
+import { useToast } from "./Toast";
 
 export type Cants = Record<string, number>;
 
 export function esMatriz(p: Producto) {
   return p.talles.length > 1;
 }
+
+const SinStock = ({ className = "" }: { className?: string }) => <span className={`font-sans text-[11px] text-faint ${className}`}>Sin stock</span>;
 
 export default function VariantPicker({ p, cants, setCants, onAgregar, busy }: {
   p: Producto; cants: Cants; setCants: (c: Cants) => void; onAgregar: () => void; busy: boolean;
@@ -26,6 +30,7 @@ export default function VariantPicker({ p, cants, setCants, onAgregar, busy }: {
   const [totalCurva, setTotalCurva] = useState(0);
   const [curvaBusy, setCurvaBusy] = useState(false);
   const [recortada, setRecortada] = useState(false);
+  const { notify } = useToast();
 
   const skuDe = (color: string, talle: string) => p.variantes.find((v) => v.color === color && v.talle === talle);
 
@@ -38,6 +43,8 @@ export default function VariantPicker({ p, cants, setCants, onAgregar, busy }: {
       c.items.forEach((i) => { next[i.sku] = i.cantidad; });
       setCants(next);
       setRecortada(c.recortado);
+    } catch (e) {
+      notify(e instanceof ClientError ? e.message : "No se pudo armar la curva sugerida.", "error");
     } finally { setCurvaBusy(false); }
   }
 
@@ -54,10 +61,12 @@ export default function VariantPicker({ p, cants, setCants, onAgregar, busy }: {
               <tr key={v.sku} className={cants[v.sku] > 0 ? "sel" : ""}>
                 <td><span className="inline-flex items-center gap-2"><span className="swatch" style={{ background: p.colores.find((c) => c.color === v.color)?.hex }} />{capital(v.color)}{p.talles[0] !== "U" && <span className="text-muted"> · Talle {v.talle}</span>}</span></td>
                 <td>
-                  <span className="inline-flex items-center gap-2">
-                    <QtyInput value={cants[v.sku] || 0} onChange={(n) => set(v.sku, n)} />
-                    <span className="font-sans text-[12px]">Unidades</span>
-                  </span>
+                  {v.disponible ? (
+                    <span className="inline-flex items-center gap-2">
+                      <QtyInput value={cants[v.sku] || 0} onChange={(n) => set(v.sku, n)} />
+                      <span className="font-sans text-[12px]">Unidades</span>
+                    </span>
+                  ) : <SinStock />}
                 </td>
               </tr>
             ))}
@@ -114,12 +123,12 @@ export default function VariantPicker({ p, cants, setCants, onAgregar, busy }: {
                   const v = skuDe(c.color, t);
                   return (
                     <td key={t} className="!px-1 text-center">
-                      {v ? (
+                      {v ? (v.disponible ? (
                         <span className="inline-flex items-center gap-[3px]">
                           <QtyInput value={cants[v.sku] || 0} onChange={(n) => set(v.sku, n)} className="!min-w-[38px] !w-[44px] !px-1" />
                           <span className="font-sans text-[10px] text-muted">u.</span>
                         </span>
-                      ) : <span className="text-faint">—</span>}
+                      ) : <SinStock className="whitespace-nowrap text-[10px]" />) : <span className="text-faint">—</span>}
                     </td>
                   );
                 })}

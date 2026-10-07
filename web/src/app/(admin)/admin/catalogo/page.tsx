@@ -49,8 +49,9 @@ function CatalogoAdmin() {
   useEffect(() => { const t = setTimeout(cargar, 250); return () => clearTimeout(t); }, [cargar]);
   useEffect(() => { setPage(1); setSel(new Set()); }, [q, pill, f]);
 
-  async function aplicar(cods: string[], campos: Record<string, boolean | null>, desc: string) {
-    if (cods.length > 10 && !confirm) { setConfirm({ cods, campos, desc }); return; }
+  async function aplicar(cods: string[], campos: Record<string, boolean | null>, desc: string, confirmado = false) {
+    // Solo el «Sí» del Confirm pasa confirmado=true: otro botón con un Confirm pendiente vuelve a pedir confirmación.
+    if (cods.length > 10 && !confirmado) { setConfirm({ cods, campos, desc }); return; }
     setBusy(true);
     try {
       const r = await api<{ n: number }>("/admin/catalogo/lote", { method: "POST", json: { cods, campos } });
@@ -99,7 +100,7 @@ function CatalogoAdmin() {
         </div>
       )}
       {confirm && (
-        <div className="mt-3"><Confirm busy={busy} texto={<>Vas a <b>{confirm.desc}</b> {confirm.cods.length} productos. ¿Seguro?</>} onYes={() => aplicar(confirm.cods, confirm.campos, confirm.desc)} onNo={() => setConfirm(null)} /></div>
+        <div className="mt-3"><Confirm busy={busy} texto={<>Vas a <b>{confirm.desc}</b> {confirm.cods.length} productos. ¿Seguro?</>} onYes={() => aplicar(confirm.cods, confirm.campos, confirm.desc, true)} onNo={() => setConfirm(null)} /></div>
       )}
 
       {!res ? <div className="mt-4"><Spinner /></div> : (

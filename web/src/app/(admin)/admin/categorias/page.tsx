@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api } from "@/lib/client";
+import { api, ClientError } from "@/lib/client";
 import { H1, Muted, Panel, Spinner } from "@/components/admin/ui";
 
 interface Tipo { rubro: string; productos: number; stock: number }
@@ -11,9 +11,11 @@ interface Res { arbol: Cat[]; reclasificados: { producto_cod: string; categoria:
 
 export default function CategoriasAdmin() {
   const [d, setD] = useState<Res | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   const [nueva, setNueva] = useState("");
   const router = useRouter();
-  useEffect(() => { api<Res>("/admin/categorias").then(setD); }, []);
+  useEffect(() => { api<Res>("/admin/categorias").then(setD).catch((e) => setErr(e instanceof ClientError ? e.message : "No se pudieron cargar las categorías")); }, []);
+  if (err) return <><H1>Categorías</H1><p className="text-[#aa0b56]">{err}</p></>;
   if (!d) return <><H1>Categorías</H1><Spinner /></>;
   return (
     <>

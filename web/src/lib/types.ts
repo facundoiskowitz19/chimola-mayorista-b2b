@@ -31,6 +31,8 @@ export interface MenuSeccion {
   nombre: string; marca: string; temporadas: Faceta[]; tipos: Faceta[]; tendencias: Faceta[]; oportunidades: number; n: number;
   oportunidades_items?: { nombre: string; link: string }[];
   grupos?: { titulo: string; categoria: string; n: number; tipos: Faceta[] }[];
+  /** Qué listas vienen del admin (true) vs. automáticas (false): temporadas/tipos/tendencias/grupos/oportunidades. */
+  personalizado?: Partial<Record<"temporadas" | "tipos" | "tendencias" | "grupos" | "oportunidades", boolean>>;
 }
 export type Menu = Record<Seccion, MenuSeccion>;
 

@@ -17,7 +17,8 @@ export default function ClientesAdmin() {
   const [busy, setBusy] = useState(false);
   const { notify } = useToast();
 
-  useEffect(() => { api<{ items: U[] }>("/admin/clientes").then((d) => setItems(d.items)); }, []);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { api<{ items: U[] }>("/admin/clientes").then((d) => setItems(d.items)).catch((e) => setErr(e instanceof ClientError ? e.message : "No se pudo cargar la lista de clientes")); }, []);
 
   async function crear(e: React.FormEvent) {
     e.preventDefault(); setBusy(true);
@@ -54,7 +55,7 @@ export default function ClientesAdmin() {
         </Panel>
       )}
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar email, nombre o código" className="input mt-4 !w-[360px]" />
-      {!items ? <div className="mt-4"><Spinner /></div> : (
+      {err ? <p className="mt-4 text-[#aa0b56]">{err}</p> : !items ? <div className="mt-4"><Spinner /></div> : (
         <Panel className="mt-4 !p-0">
           <table className="w-full font-sans text-[13px]">
             <thead><tr className="border-b-2 border-ink text-left text-[11px] uppercase text-ink-2"><th className="px-4 py-3">Email</th><th className="py-3">Rol</th><th className="py-3">Cliente</th><th className="py-3">Lista</th><th className="py-3">Desc %</th><th className="py-3">Último login</th></tr></thead>

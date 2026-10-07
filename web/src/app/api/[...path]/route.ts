@@ -5,7 +5,8 @@ const API_URL = process.env.API_URL || "http://localhost:8000";
 
 async function proxy(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
-  const url = new URL(`${API_URL}/${path.join("/")}`);
+  // Next ya decodificó cada segmento: re-encodear para que un nombre con "/" o "%" llegue entero a FastAPI.
+  const url = new URL(`${API_URL}/${path.map((s) => encodeURIComponent(s)).join("/")}`);
   url.search = req.nextUrl.search;
   const headers = new Headers();
   for (const h of ["cookie", "content-type", "accept", "authorization"]) {

@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 type Tipo = "ok" | "aviso" | "error";
 interface T { id: number; msg: string; tipo: Tipo }
@@ -8,10 +8,13 @@ const Ctx = createContext<{ notify: (msg: string, tipo?: Tipo) => void }>({ noti
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [list, setList] = useState<T[]>([]);
   const seq = useRef(0);
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => { const ts = timers.current; return () => { ts.forEach(clearTimeout); ts.clear(); }; }, []);
   const notify = useCallback((msg: string, tipo: Tipo = "ok") => {
     const id = ++seq.current;
     setList((l) => [...l, { id, msg, tipo }]);
-    setTimeout(() => setList((l) => l.filter((t) => t.id !== id)), tipo === "ok" ? 3500 : 6000);
+    const t = setTimeout(() => { timers.current.delete(t); setList((l) => l.filter((x) => x.id !== id)); }, tipo === "ok" ? 3500 : 6000);
+    timers.current.add(t);
   }, []);
   return (
     <Ctx.Provider value={{ notify }}>

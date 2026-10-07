@@ -55,9 +55,12 @@ export default function InlinePanel({ cod, onClose, onGaleria }: { cod: string; 
     setBusy(true);
     try {
       const c = await agregar(items);
-      if (c.avisos.length) c.avisos.forEach((a) => notify(a, "aviso"));
-      notify(`Agregaste ${c.agregadas ?? 0} unidades de ${p.producto_nombre} al carrito.`);
-      onClose();
+      c.avisos.forEach((a) => notify(a, "aviso"));
+      const n = c.agregadas ?? 0;
+      if (n > 0) {
+        notify(`Agregaste ${n} unidades de ${p.producto_nombre} al carrito.`);
+        onClose();
+      } else if (!c.avisos.length) notify("No se pudo agregar: sin disponibilidad para lo elegido.", "aviso");
     } catch (e) {
       notify(e instanceof ClientError ? e.message : "No se pudo agregar", "error");
     } finally { setBusy(false); }

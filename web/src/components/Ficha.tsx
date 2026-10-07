@@ -31,8 +31,9 @@ export default function Ficha({ p, puedePedir }: { p: Producto; puedePedir: bool
     try {
       const c = await agregar(items);
       c.avisos.forEach((a) => notify(a, "aviso"));
-      notify(`Agregaste ${c.agregadas ?? 0} unidades al carrito.`);
-      setCants({});
+      const n = c.agregadas ?? 0;
+      if (n > 0) { notify(`Agregaste ${n} unidades al carrito.`); setCants({}); }
+      else if (!c.avisos.length) notify("No se pudo agregar: sin disponibilidad para lo elegido.", "aviso");
     } catch (e) { notify(e instanceof ClientError ? e.message : "No se pudo agregar", "error"); }
     finally { setBusy(false); }
   }
@@ -47,8 +48,10 @@ export default function Ficha({ p, puedePedir }: { p: Producto; puedePedir: bool
           <div className="relative aspect-square w-full bg-white">
             <Ribbon pct={p.pct_desc} />
             {fotos[idx] ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={fotos[idx].url} alt={p.producto_nombre} onClick={() => setGal(true)} className="h-full w-full cursor-zoom-in object-contain" />
+              <button type="button" onClick={() => setGal(true)} aria-label="Ampliar foto" className="block h-full w-full cursor-zoom-in">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={fotos[idx].url} alt={p.producto_nombre} className="h-full w-full object-contain" />
+              </button>
             ) : <div className="flex h-full items-center justify-center text-faint">Sin foto</div>}
             {fotos.length > 1 && (
               <>

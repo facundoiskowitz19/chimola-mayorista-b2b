@@ -30,12 +30,13 @@ export default function PedidoAdmin({ numero, onChange }: { numero: number; onCh
 
   if (!p) return <Spinner />;
   const contacto = [p.contacto_nombre, p.contacto_email, p.contacto_telefono].filter(Boolean).join(" · ");
+  const usuarioEmail = (p as unknown as { usuario_email?: string }).usuario_email || "";
   return (
     <Panel>
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="font-brand text-[20px] font-bold">Pedido N° {String(p.numero).padStart(6, "0")}</h2><Tag estado={p.estado} />
       </div>
-      <Muted className="mt-1">{p.fecha_str} · <b className="text-ink">{p.cliente_nombre}</b> (cliente <Link href={`/admin/clientes`} className="underline">{p.cliente_cod}</Link>) · {(p as unknown as { usuario_email: string }).usuario_email} · {p.unidades} u. · <b className="text-ink">{money(p.total)}</b> (desc. {p.descuento_pct}%)</Muted>
+      <Muted className="mt-1">{p.fecha_str} · <b className="text-ink">{p.cliente_nombre}</b> (cliente <Link href={usuarioEmail ? `/admin/clientes/${encodeURIComponent(usuarioEmail)}` : "/admin/clientes"} className="underline">{p.cliente_cod}</Link>) · {usuarioEmail} · {p.unidades} u. · <b className="text-ink">{money(p.total)}</b> (desc. {p.descuento_pct}%)</Muted>
       {contacto && <Muted>Contacto del pedido: {contacto}</Muted>}
       {p.observaciones && <Muted>Obs: {p.observaciones}</Muted>}
       {p.historial?.map((h, i) => <Muted key={i}>{new Date(h.en).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} — <b className="text-ink">{h.estado}</b> por {h.por}{h.detalle && <span className="block whitespace-pre-line pl-4">{h.detalle}</span>}</Muted>)}

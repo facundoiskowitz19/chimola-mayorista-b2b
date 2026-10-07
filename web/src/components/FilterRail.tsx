@@ -32,13 +32,13 @@ export default function FilterRail({ seccion, sel, facetas, rango }: {
     navegar((u) => { const vals = u.getAll(k); u.delete(k); (vals.includes(v) ? vals.filter((x) => x !== v) : [...vals, v]).forEach((x) => u.append(k, x)); });
   }
 
-  const chips: { label: string; quitar: (u: URLSearchParams) => void }[] = [];
+  const chips: { key: string; label: string; quitar: (u: URLSearchParams) => void }[] = [];
   (["categoria", "rubro", "marca", "temporada", "color", "talle"] as const).forEach((k) => sel[k].forEach((v) =>
-    chips.push({ label: k === "talle" ? `Talle ${v}` : k === "color" ? capital(v) : v, quitar: (u) => { const vals = u.getAll(k).filter((x) => x !== v); u.delete(k); vals.forEach((x) => u.append(k, x)); } })));
-  if (sel.q) chips.push({ label: `“${sel.q}”`, quitar: (u) => u.delete("q") });
-  if (sel.solo_foto) chips.push({ label: "Sólo con foto", quitar: (u) => u.set("solo_foto", "0") });
-  if (sel.solo_desc) chips.push({ label: "Sólo ofertas", quitar: (u) => u.delete("solo_desc") });
-  if (sel.precio_min || sel.precio_max) chips.push({ label: `$${sel.precio_min || "0"} – $${sel.precio_max || "∞"}`, quitar: (u) => { u.delete("precio_min"); u.delete("precio_max"); } });
+    chips.push({ key: `${k}:${v}`, label: k === "talle" ? `Talle ${v}` : k === "color" ? capital(v) : v, quitar: (u) => { const vals = u.getAll(k).filter((x) => x !== v); u.delete(k); vals.forEach((x) => u.append(k, x)); } })));
+  if (sel.q) chips.push({ key: "q", label: `“${sel.q}”`, quitar: (u) => u.delete("q") });
+  if (sel.solo_foto) chips.push({ key: "solo_foto", label: "Sólo con foto", quitar: (u) => u.set("solo_foto", "0") });
+  if (sel.solo_desc) chips.push({ key: "solo_desc", label: "Sólo ofertas", quitar: (u) => u.delete("solo_desc") });
+  if (sel.precio_min || sel.precio_max) chips.push({ key: "precio", label: `$${sel.precio_min || "0"} – $${sel.precio_max || "∞"}`, quitar: (u) => { u.delete("precio_min"); u.delete("precio_max"); } });
 
   const mostrarGrupo = (k: FK) => {
     if (k === "marca" && seccion !== "todo") return false;
@@ -55,7 +55,7 @@ export default function FilterRail({ seccion, sel, facetas, rango }: {
       <div className="mt-3 flex flex-wrap gap-2">
         {chips.length === 0 && <span className="font-sans text-[12px] text-muted">Sin filtros</span>}
         {chips.map((c) => (
-          <button key={c.label} onClick={() => navegar(c.quitar)} className="chip hover:bg-[#d6d6d6]">{c.label} <XIcon size={11} /></button>
+          <button key={c.key} onClick={() => navegar(c.quitar)} className="chip hover:bg-[#d6d6d6]">{c.label} <XIcon size={11} /></button>
         ))}
       </div>
 

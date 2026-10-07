@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ClientError } from "@/lib/client";
 import type { HomeBloque } from "@/lib/types";
 import { useToast } from "@/components/Toast";
@@ -16,38 +16,51 @@ interface Res { seccion: Sec; config: Cfg; personalizada: boolean; tipos_seccion
 
 const vacio = (): HomeBloque => ({ img: "", titulo: "", subtitulo: "", cta: "", link: "", tag: "", ancho: "simple" });
 
+/* Los ítems de las listas llevan una clave local estable (`_k`): BloqueForm tiene estado interno
+   (spinner de subida, selector de fotos abierto) y con key={i} al quitar el 0 ese estado pasaba al 1. */
+type Keyed<T> = T & { _k: number };
+type TipoBanner = "temporada" | "rubro" | "categoria";
+type CatBanner = Keyed<HomeBloque & { tipo: TipoBanner }>;
+const tipoDe = (b: HomeBloque): TipoBanner => b.temporada ? "temporada" : b.rubro ? "rubro" : "categoria";
+/* Lo que va a la API: sin la clave local ni el `tipo` del selector (el banner lleva solo el filtro elegido). */
+const limpiar = (x: object): HomeBloque => Object.fromEntries(Object.entries(x).filter(([k]) => k !== "_k" && k !== "tipo")) as HomeBloque;
+
 export default function HomeAdmin() {
   const [sec, setSec] = useState<Sec>("marro");
   const [r, setR] = useState<Res | null>(null);
-  const [hero, setHero] = useState<HomeBloque[]>([]);
-  const [bloques, setBloques] = useState<HomeBloque[]>([]);
+  const [hero, setHero] = useState<Keyed<HomeBloque>[]>([]);
+  const [bloques, setBloques] = useState<Keyed<HomeBloque>[]>([]);
   const [filas, setFilas] = useState<Fila[]>([]);
   const [banner, setBanner] = useState<HomeBloque | null>(null);
-  const [cats, setCats] = useState<HomeBloque[]>([]);
+  const [cats, setCats] = useState<CatBanner[]>([]);
   const [ops, setOps] = useState<Opciones | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const kRef = useRef(0);
+  const nk = () => ++kRef.current;
   const { notify } = useToast();
 
   const cargar = useCallback(async () => {
     const d = await api<Res>(`/admin/home/${sec}`); setR(d);
-    setHero(d.config.hero.map((h) => ({ ...vacio(), ...h })));
-    setBloques(d.config.bloques.map((b) => ({ ...vacio(), ...b })));
+    setHero(d.config.hero.map((h) => ({ ...vacio(), ...h, _k: ++kRef.current })));
+    setBloques(d.config.bloques.map((b) => ({ ...vacio(), ...b, _k: ++kRef.current })));
     setFilas(d.config.secciones.map((s) => ({ titulo: s.titulo, tipo: s.tipo, productos: (s.productos || []).join(", "), rubro: (s.filtro?.rubro || []).join(", "), temporada: (s.filtro?.temporada || []).join(", "), categoria: (s.filtro?.categoria || []).join(", "), link: s.link || "", oculto: !!s.oculto })));
     setBanner(d.config.banner_grilla ? { ...vacio(), ...d.config.banner_grilla } : null);
-    setCats((d.config.banners_catalogo || []).map((b) => ({ ...vacio(), ...b })));
+    setCats((d.config.banners_catalogo || []).map((b) => ({ ...vacio(), ...b, tipo: tipoDe(b), _k: ++kRef.current })));
     api<{ auto: Opciones }>(`/admin/menu/${sec}`).then((m) => setOps(m.auto)).catch(() => setOps(null));
   }, [sec]);
   useEffect(() => { setR(null); cargar(); }, [cargar]);
+
+  const listaDe = (t: TipoBanner) => (t === "temporada" ? ops?.temporadas : t === "rubro" ? ops?.tipos : ops?.tendencias) || [];
 
   async function guardar() {
     setBusy(true);
     try {
       await api(`/admin/home/${sec}`, { method: "PUT", json: {
-        hero, bloques,
+        hero: hero.map(limpiar), bloques: bloques.map(limpiar),
         secciones: filas.filter((f) => f.titulo.trim()).map((f) => ({ titulo: f.titulo, tipo: f.tipo, productos: f.productos, filtro: { rubro: f.rubro, temporada: f.temporada, categoria: f.categoria }, link: f.link, oculto: f.oculto })),
         banner_grilla: banner && (banner.img || banner.titulo) ? banner : null,
-        banners_catalogo: cats,
+        banners_catalogo: cats.map(limpiar),
       } });
       notify("Home guardada — el sitio la toma en menos de un minuto"); await cargar();
     } catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); }
@@ -65,15 +78,15 @@ export default function HomeAdmin() {
       <Panel className="mt-5">
         <Kicker>Carrusel principal</Kicker><Muted className="mt-1">Hasta 3 imágenes. Con una sola, no rota. En el título, | corta en dos líneas.</Muted>
         <div className="mt-3 space-y-3">
-          {hero.map((h, i) => <BloqueForm key={i} b={h} onChange={(nb) => setHero(hero.map((x, k) => k === i ? nb : x))} onQuitar={() => setHero(hero.filter((_, k) => k !== i))} conTag previewAspect="1125/340" />)}
-          {hero.length < 3 && <button onClick={() => setHero([...hero, vacio()])} className="btn btn-light btn-sm">+ Agregar imagen</button>}
+          {hero.map((h) => <BloqueForm key={h._k} b={h} onChange={(nb) => setHero(hero.map((x) => x._k === h._k ? { ...nb, _k: h._k } : x))} onQuitar={() => setHero(hero.filter((x) => x._k !== h._k))} conTag previewAspect="1125/340" />)}
+          {hero.length < 3 && <button onClick={() => setHero([...hero, { ...vacio(), _k: nk() }])} className="btn btn-light btn-sm">+ Agregar imagen</button>}
         </div>
       </Panel>
       <Panel className="mt-5">
         <Kicker>Bloques destacados</Kicker><Muted className="mt-1">Hasta 3: uno «doble» (grande, a la izquierda) y dos «simples» apilados a la derecha. Con dos, lado a lado.</Muted>
         <div className="mt-3 space-y-3">
-          {bloques.map((b, i) => <BloqueForm key={i} b={b} onChange={(nb) => setBloques(bloques.map((x, k) => k === i ? nb : x))} onQuitar={() => setBloques(bloques.filter((_, k) => k !== i))} conSubtitulo conAncho />)}
-          {bloques.length < 3 && <button onClick={() => setBloques([...bloques, vacio()])} className="btn btn-light btn-sm">+ Agregar bloque</button>}
+          {bloques.map((b) => <BloqueForm key={b._k} b={b} onChange={(nb) => setBloques(bloques.map((x) => x._k === b._k ? { ...nb, _k: b._k } : x))} onQuitar={() => setBloques(bloques.filter((x) => x._k !== b._k))} conSubtitulo conAncho />)}
+          {bloques.length < 3 && <button onClick={() => setBloques([...bloques, { ...vacio(), _k: nk() }])} className="btn btn-light btn-sm">+ Agregar bloque</button>}
         </div>
       </Panel>
       <Panel className="mt-5">
@@ -108,26 +121,27 @@ export default function HomeAdmin() {
         <Kicker>Banners por colección / temporada (arriba del catálogo)</Kicker>
         <Muted className="mt-1">Cuando el cliente entra a una temporada que tenga banner, lo ve arriba de la grilla (como «Verano 2027» en el diseño). Los banners de una <b>categoría</b> o un <b>tipo de producto</b> se editan en su propia página dentro de <Link href="/admin/categorias" className="underline">Categorías</Link>. Imagen ideal 1600×420.</Muted>
         <div className="mt-3 space-y-3">
-          {cats.map((b, i) => {
-            const tipo: "temporada" | "rubro" | "categoria" = b.temporada ? "temporada" : b.rubro ? "rubro" : "categoria";
-            const valores = tipo === "temporada" ? ops?.temporadas : tipo === "rubro" ? ops?.tipos : ops?.tendencias;
-            const set = (nb: HomeBloque) => setCats(cats.map((x, k) => k === i ? nb : x));
+          {cats.map((b) => {
+            // `tipo` es estado explícito de la fila: no se deriva del valor (con «—» elegido se volvía a Categoría).
+            const valores = listaDe(b.tipo);
+            const set = (nb: Partial<CatBanner>) => setCats(cats.map((x) => x._k === b._k ? { ...x, ...nb, _k: b._k } : x));
             return (
-              <div key={i} className="rounded border border-line p-3">
+              <div key={b._k} className="rounded border border-line p-3">
                 <div className="mb-3 grid gap-3 sm:grid-cols-2">
-                  <Field label="Se muestra cuando el filtro es"><select className="input" value={tipo} onChange={(e) => set({ ...b, temporada: "", rubro: "", categoria: "", [e.target.value]: valores?.[0]?.valor || "" })}><option value="temporada">Temporada</option><option value="rubro">Tipo de producto</option><option value="categoria">Categoría</option></select></Field>
-                  <Field label="Valor"><select className="input" value={b[tipo] || ""} onChange={(e) => set({ ...b, [tipo]: e.target.value })}><option value="">—</option>{(valores || []).map((v) => <option key={v.valor} value={v.valor}>{v.valor}</option>)}</select></Field>
+                  <Field label="Se muestra cuando el filtro es"><select className="input" value={b.tipo} onChange={(e) => { const t = e.target.value as TipoBanner; set({ tipo: t, temporada: "", rubro: "", categoria: "", [t]: listaDe(t)[0]?.valor || "" }); }}><option value="temporada">Temporada</option><option value="rubro">Tipo de producto</option><option value="categoria">Categoría</option></select></Field>
+                  <Field label="Valor"><select className="input" value={b[b.tipo] || ""} onChange={(e) => set({ [b.tipo]: e.target.value })}><option value="">—</option>{valores.map((v) => <option key={v.valor} value={v.valor}>{v.valor}</option>)}</select></Field>
                 </div>
-                <BloqueForm b={b} onChange={set} onQuitar={() => setCats(cats.filter((_, k) => k !== i))} conKicker previewAspect="1125/300" />
+                {!b[b.tipo] && <Muted className="mb-2 text-[#aa0b56]">Sin valor elegido, este banner no se muestra nunca.</Muted>}
+                <BloqueForm b={b} onChange={(nb) => set(nb)} onQuitar={() => setCats(cats.filter((x) => x._k !== b._k))} conKicker previewAspect="1125/300" />
               </div>
             );
           })}
-          <button onClick={() => setCats([...cats, { ...vacio(), temporada: ops?.temporadas?.[0]?.valor || "", cta: "Ver productos" }])} className="btn btn-light btn-sm">+ Agregar banner de colección</button>
+          <button onClick={() => setCats([...cats, { ...vacio(), tipo: "temporada", temporada: ops?.temporadas?.[0]?.valor || "", cta: "Ver productos", _k: nk() }])} className="btn btn-light btn-sm">+ Agregar banner de colección</button>
         </div>
       </Panel>
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button onClick={guardar} disabled={busy} className="btn btn-primary">{busy ? "Guardando…" : "Guardar home"}</button>
-        {r.personalizada && (!confirmReset ? <button onClick={() => setConfirmReset(true)} className="btn btn-ghost">Volver a los valores por defecto</button> : <Confirm busy={busy} texto="Se descarta lo personalizado de esta sección y vuelve la home por defecto." onYes={async () => { setBusy(true); await api(`/admin/home/${sec}`, { method: "DELETE" }); setConfirmReset(false); setBusy(false); notify("Home restaurada"); cargar(); }} onNo={() => setConfirmReset(false)} />)}
+        {r.personalizada && (!confirmReset ? <button onClick={() => setConfirmReset(true)} className="btn btn-ghost">Volver a los valores por defecto</button> : <Confirm busy={busy} texto="Se descarta lo personalizado de esta sección y vuelve la home por defecto." onYes={async () => { setBusy(true); try { await api(`/admin/home/${sec}`, { method: "DELETE" }); setConfirmReset(false); notify("Home restaurada"); await cargar(); } catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); } finally { setBusy(false); } }} onNo={() => setConfirmReset(false)} />)}
       </div>
     </>
   );

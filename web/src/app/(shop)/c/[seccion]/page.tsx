@@ -78,9 +78,9 @@ export default async function CatalogoPage({ params, searchParams }: { params: P
         <div>
           <details className="group lg:hidden">
             <summary className="btn btn-light w-full justify-between">Filtros <span className="transition-transform group-open:rotate-180">⌄</span></summary>
-            <div className="mt-4"><FilterRail seccion={seccion} sel={sel} facetas={cat.facetas} rango={cat.precio_rango} /></div>
+            <div className="mt-4"><FilterRail key={queryDe(sel, seccion)} seccion={seccion} sel={sel} facetas={cat.facetas} rango={cat.precio_rango} /></div>
           </details>
-          <div className="hidden lg:block"><FilterRail seccion={seccion} sel={sel} facetas={cat.facetas} rango={cat.precio_rango} /></div>
+          <div className="hidden lg:block"><FilterRail key={queryDe(sel, seccion)} seccion={seccion} sel={sel} facetas={cat.facetas} rango={cat.precio_rango} /></div>
         </div>
         <CatalogGrid key={queryDe(sel, seccion)} inicial={cat} query={queryDe(sel, seccion)} puedePedir={me.puede_pedir} banner={ban?.banner_grilla ?? null} />
       </div>

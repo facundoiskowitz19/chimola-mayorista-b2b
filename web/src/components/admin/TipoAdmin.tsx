@@ -1,7 +1,7 @@
 "use client";
 /* Un tipo de producto (rubro de Aleph) en el admin: productos, mover a otro tipo, traer productos y banner. */
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ClientError } from "@/lib/client";
 import type { HomeBloque } from "@/lib/types";
 import { useToast } from "@/components/Toast";
@@ -17,7 +17,9 @@ export default function TipoAdmin({ rubro, categoria }: { rubro: string; categor
   const [d, setD] = useState<Res | null>(null);
   const [bans, setBans] = useState<Banners | null>(null);
   const [sec, setSec] = useState("marro");
+  const secRef = useRef<string | null>(null);   // sección elegida; null = todavía no se cargó (se elige la inicial una sola vez)
   const [ban, setBan] = useState<HomeBloque | null>(null);
+  const elegirSec = (k: string, b: Record<string, HomeBloque | null>) => { secRef.current = k; setSec(k); setBan(b[k]); };
   const [q, setQ] = useState("");
   const [res, setRes] = useState<{ producto_cod: string; nombre: string; foto: string | null; rubro: string }[]>([]);
   const [mover, setMover] = useState<string | null>(null);
@@ -30,10 +32,11 @@ export default function TipoAdmin({ rubro, categoria }: { rubro: string; categor
       api<Banners>(`/admin/tipos/${encodeURIComponent(rubro)}/banner`),
     ]);
     setD(d0); setBans(b0);
-    const sec0 = (["marro", "indu", "lima"] as const).find((k) => b0.banners[k]) || (categoria === "Indumentaria" || categoria === "Pijamas" || d0.items.some((i) => i.categoria === "Indumentaria") ? "indu" : d0.items.length && d0.items.every((i) => i.marca === "Lima") ? "lima" : "marro");
-    setSec(sec0); setBan(b0.banners[sec0]);
+    // La sección inicial se calcula solo en la primera carga; después de guardar/quitar se queda en la que estaba.
+    const sec0 = secRef.current || (["marro", "indu", "lima"] as const).find((k) => b0.banners[k]) || (categoria === "Indumentaria" || categoria === "Pijamas" || d0.items.some((i) => i.categoria === "Indumentaria") ? "indu" : d0.items.length && d0.items.every((i) => i.marca === "Lima") ? "lima" : "marro");
+    elegirSec(sec0, b0.banners);
   }, [rubro, categoria]);
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => { secRef.current = null; cargar(); }, [cargar]);
   useEffect(() => {
     if (q.trim().length < 2) return;
     const t = setTimeout(async () => {
@@ -59,13 +62,13 @@ export default function TipoAdmin({ rubro, categoria }: { rubro: string; categor
       <Panel className="mt-5">
         <Kicker>Banner del tipo (arriba del catálogo)</Kicker>
         <Muted className="mt-1">Lo ve el cliente al entrar a «{rubro}» desde el menú o los filtros. Por sección del header.</Muted>
-        <div className="mt-3"><Pills value={sec} onChange={(k) => { setSec(k); setBan(bans.banners[k]); }} options={Object.entries(bans.secciones).map(([k, n]) => ({ value: k, label: n + (bans.banners[k] ? " ·" : "") }))} /></div>
+        <div className="mt-3"><Pills value={sec} onChange={(k) => elegirSec(k, bans.banners)} options={Object.entries(bans.secciones).map(([k, n]) => ({ value: k, label: n + (bans.banners[k] ? " ·" : "") }))} /></div>
         <div className="mt-3">
           {ban ? (
             <>
               <BloqueForm b={ban} onChange={setBan} conKicker previewAspect="1125/300" />
               <div className="mt-3 flex gap-2">
-                <button disabled={busy} onClick={() => accion(async () => { await api(`/admin/tipos/${encodeURIComponent(rubro)}/banner`, { method: "PUT", json: { seccion: sec, banner: ban } }); }, "Banner guardado")} className="btn btn-primary btn-sm">{busy ? "Guardando…" : "Guardar banner"}</button>
+                <button disabled={busy} onClick={() => { if (!ban.img && !ban.titulo?.trim()) { notify("El banner necesita una imagen o un título", "error"); return; } accion(async () => { await api(`/admin/tipos/${encodeURIComponent(rubro)}/banner`, { method: "PUT", json: { seccion: sec, banner: ban } }); }, "Banner guardado"); }} className="btn btn-primary btn-sm">{busy ? "Guardando…" : "Guardar banner"}</button>
                 <button disabled={busy} onClick={() => accion(async () => { await api(`/admin/tipos/${encodeURIComponent(rubro)}/banner`, { method: "PUT", json: { seccion: sec, banner: null } }); }, "Banner quitado")} className="btn btn-ghost btn-sm text-[#aa0b56]">Quitar banner</button>
                 <button disabled={busy} onClick={() => setBan(bans.banners[sec])} className="btn btn-light btn-sm">Descartar cambios</button>
               </div>

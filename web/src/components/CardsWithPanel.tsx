@@ -2,6 +2,7 @@
 /* Grilla o fila de cards con el panel "Cargar cantidades" que se abre debajo de la fila. */
 import { useCallback, useState } from "react";
 import type { Card, HomeBloque } from "@/lib/types";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import ProductCard from "./ProductCard";
 import InlinePanel from "./InlinePanel";
 import GalleryModal from "./GalleryModal";
@@ -35,8 +36,12 @@ export default function CardsWithPanel({ items, cols = 3, puedePedir = true, ban
   const cerrar = useCallback(() => setAbierta(null), []);
   const cerrarGal = useCallback(() => setGaleria(null), []);
 
+  // Las filas lógicas tienen que coincidir con la grilla visual (2 columnas bajo `md`) para que el panel
+  // se abra justo debajo de la card clickeada también en el celular.
+  const desktop = useMediaQuery("(min-width: 768px)");
+  const porFila = desktop ? cols : 2;
   const filas: Card[][] = [];
-  for (let i = 0; i < items.length; i += cols) filas.push(items.slice(i, i + cols));
+  for (let i = 0; i < items.length; i += porFila) filas.push(items.slice(i, i + porFila));
   const gridCls = cols === 4 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2 md:grid-cols-3";
 
   return (

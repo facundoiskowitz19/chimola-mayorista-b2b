@@ -19,10 +19,14 @@ export default function SearchBox() {
 
   useEffect(() => {
     if (q.trim().length < 2) return;
+    const ac = new AbortController();
     const t = setTimeout(async () => {
-      try { setRes(await api<Res>(`/buscar?q=${encodeURIComponent(q.trim())}`)); setOpen(true); } catch { /* ignorar */ }
+      try {
+        const r = await api<Res>(`/buscar?q=${encodeURIComponent(q.trim())}`, { signal: ac.signal });
+        if (!ac.signal.aborted) { setRes(r); setOpen(true); }
+      } catch { /* abortada o falló: ignorar */ }
     }, 220);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); ac.abort(); };
   }, [q]);
 
   useEffect(() => {

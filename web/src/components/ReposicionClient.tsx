@@ -56,7 +56,9 @@ export default function ReposicionClient() {
     try {
       const c = await agregar(items);
       c.avisos.forEach((a) => notify(a, "aviso"));
-      notify(`Se cargaron ${c.agregadas ?? 0} unidades de reposición al carrito.`);
+      const n = c.agregadas ?? 0;
+      if (n > 0) notify(`Se cargaron ${n} unidades de reposición al carrito.`);
+      else if (!c.avisos.length) notify("No se cargó nada: sin disponibilidad para lo elegido.", "aviso");
     } catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); }
     finally { setBusy(false); }
   }
@@ -94,7 +96,8 @@ export default function ReposicionClient() {
             <div className="mt-4 bg-white p-10 text-center font-sans text-[14px] text-muted">No hay nada para reponer con estos filtros.</div>
           ) : (
             <div className="mt-4 bg-white">
-              <table className="w-full">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px]">
                 <thead>
                   <tr className="border-b-2 border-ink font-sans text-[11px] uppercase text-ink-2">
                     <th className="px-4 py-3 text-left" colSpan={2}>Producto</th><th className="px-2 py-3 text-left">Variante</th>
@@ -120,6 +123,7 @@ export default function ReposicionClient() {
                   ))}
                 </tbody>
               </table>
+              </div>
               <div className="flex flex-wrap items-center justify-between gap-4 p-4">
                 <span className="font-sans text-[13px]"><b>{total}</b> unidades · {money(monto)} a precio de lista</span>
                 <button onClick={onAgregar} disabled={busy || total === 0} className="btn btn-primary">{busy ? "Agregando…" : "Agregar reposición al carrito"} <Chevron size={15} /></button>

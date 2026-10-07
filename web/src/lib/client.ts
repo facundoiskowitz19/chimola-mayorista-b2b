@@ -17,9 +17,10 @@ export async function api<T>(path: string, init?: RequestInit & { json?: unknown
   if (init?.json !== undefined) { headers["content-type"] = "application/json"; body = JSON.stringify(init.json); }
   const res = await fetch(`/api${path}`, { ...init, headers, body, credentials: "same-origin" });
   if (res.status === 401 && typeof window !== "undefined" && !path.startsWith("/auth/")) {
-    // Redirección dura a propósito: la sesión venció y conviene descartar todo el estado del cliente.
+    // Navegación completa a propósito: /auth/expired borra la cookie vencida y manda al login,
+    // y de paso se descarta todo el estado del cliente.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+    window.location.href = `/auth/expired?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
   }
   if (!res.ok) {
     let detail: unknown = await res.text();

@@ -71,8 +71,9 @@ export default function PedidosClient({ me, lista }: { me: Me; lista: PedidoResu
                   {!d && <div className="h-24 animate-pulse bg-[#f3f3f3]" />}
                   {d && (
                     <div className="grid gap-8 lg:grid-cols-[1fr_300px]">
-                      <div>
-                        <table className="w-full font-sans text-[13px]">
+                      <div className="min-w-0">
+                        <div className="overflow-x-auto">
+                        <table className="w-full min-w-[520px] font-sans text-[13px]">
                           <thead><tr className="border-b border-ink text-[11px] uppercase text-ink-2"><th className="py-2 text-left" colSpan={2}>Producto</th><th className="py-2 text-left">Variante</th><th className="py-2 text-right">Cant.</th><th className="py-2 text-right">Precio</th><th className="py-2 text-right">Subtotal</th></tr></thead>
                           <tbody>
                             {d.items.map((it) => (
@@ -87,6 +88,7 @@ export default function PedidosClient({ me, lista }: { me: Me; lista: PedidoResu
                             ))}
                           </tbody>
                         </table>
+                        </div>
                         {d.historial && d.historial.length > 0 && (
                           <ul className="mt-4 space-y-1 font-sans text-[11.5px] text-muted">
                             {d.historial.map((h, i) => <li key={i}>{new Date(h.en).toLocaleString("es-AR")} · {ESTADO[h.estado]?.label || h.estado} · {h.por}{h.detalle && <> · {h.detalle}</>}</li>)}
