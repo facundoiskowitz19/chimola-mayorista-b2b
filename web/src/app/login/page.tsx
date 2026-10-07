@@ -33,7 +33,7 @@ export default function LoginPage() {
           <div className="relative">
             <div className="relative aspect-[1125/475] w-full overflow-hidden bg-[#2a2320] lg:w-[calc(100%-60px)]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/banners/login.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+              <img src="/banners/login.jpg" alt="" className="absolute inset-0 h-full w-full object-cover object-top" />
               <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent" />
               <div className="absolute left-[10%] top-[28%] text-white">
                 <h1 className="font-brand text-[44px] font-extrabold leading-[1.02]">Bienvenido<br />a Lautin<br />Accesorios</h1>
