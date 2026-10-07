@@ -120,10 +120,23 @@ def listar(
         "seccion": seccion, "total": total, "page": page, "per_page": per_page,
         "pages": max(1, math.ceil(total / per_page)),
         "items": [card(r, es_admin=c.es_admin) for _, r in pag.iterrows()],
-        "facetas": _facetas(df, sel),
+        "facetas": _facetas(_base_facetas(df, q, solo_desc, solo_foto), sel),
         "precio_rango": {"min": deps.jsonable(prods["precio"].min()) if total else None,
                          "max": deps.jsonable(prods["precio"].max()) if total else None},
     }
+
+
+def _base_facetas(df: pd.DataFrame, q: str, solo_desc: bool, solo_foto: bool) -> pd.DataFrame:
+    """Universo sobre el que se calculan las facetas: ya filtrado por búsqueda, oferta y foto,
+    así el rail nunca ofrece opciones que dejarían la grilla vacía."""
+    base = catalog.filtrar_variantes(df, None, q)
+    if solo_desc and "pct_desc" in base.columns:
+        base = base[base["pct_desc"] > 0]
+    base = base[base["precio"].notna()]
+    if solo_foto and not base.empty:
+        con_foto = {c for c in base["producto_cod"].unique() if fotos.tiene_fotos(c)}
+        base = base[base["producto_cod"].isin(con_foto)]
+    return base
 
 
 def _facetas(df: pd.DataFrame, sel: dict) -> dict:
