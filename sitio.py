@@ -189,23 +189,37 @@ def home_visible(seccion: str) -> dict:
             "banners_catalogo": vis(cfg.get("banners_catalogo"))}
 
 
-def banners_de_categoria(nombre: str) -> dict[str, dict | None]:
-    """{seccion: banner} para la categoría (el banner de colección atado a categoria=nombre)."""
+def banners_de_filtro(clave: str, valor: str) -> dict[str, dict | None]:
+    """{seccion: banner} del banner de colección atado a `clave=valor` (categoria / rubro / temporada)."""
+    if clave not in FILTROS_BANNER:
+        raise KeyError(clave)
     out = {}
     for sec in SECCIONES:
-        out[sec] = next((b for b in get_home(sec).get("banners_catalogo") or [] if b.get("categoria") == nombre), None)
+        out[sec] = next((b for b in get_home(sec).get("banners_catalogo") or []
+                         if b.get(clave) == valor and not any(b.get(k) for k in FILTROS_BANNER if k != clave)), None)
     return out
 
 
-def set_banner_categoria(seccion: str, nombre: str, banner: dict | None, por: str) -> None:
-    """Crea/reemplaza/borra el banner de colección de `categoria=nombre` en la sección,
-    conservando el resto de la home (incluidos los defaults, que pasan a quedar guardados)."""
+def set_banner_filtro(seccion: str, clave: str, valor: str, banner: dict | None, por: str) -> None:
+    """Crea/reemplaza/borra el banner de colección de `clave=valor` en la sección, conservando el
+    resto de la home (incluidos los defaults, que pasan a quedar guardados)."""
+    if clave not in FILTROS_BANNER:
+        raise KeyError(clave)
     cfg = get_home(seccion)
-    resto = [b for b in cfg.get("banners_catalogo") or [] if b.get("categoria") != nombre]
+    es_este = lambda b: b.get(clave) == valor and not any(b.get(k) for k in FILTROS_BANNER if k != clave)  # noqa: E731
+    resto = [b for b in cfg.get("banners_catalogo") or [] if not es_este(b)]
     if banner:
-        banner = {**banner, "temporada": "", "rubro": "", "categoria": nombre}
+        banner = {**banner, **{k: "" for k in FILTROS_BANNER}, clave: valor}
         resto.append(banner)
     set_home(seccion, {**cfg, "banners_catalogo": resto}, por)
+
+
+def banners_de_categoria(nombre: str) -> dict[str, dict | None]:
+    return banners_de_filtro("categoria", nombre)
+
+
+def set_banner_categoria(seccion: str, nombre: str, banner: dict | None, por: str) -> None:
+    set_banner_filtro(seccion, "categoria", nombre, banner, por)
 
 
 def banner_catalogo(seccion: str, seleccion: dict) -> dict | None:

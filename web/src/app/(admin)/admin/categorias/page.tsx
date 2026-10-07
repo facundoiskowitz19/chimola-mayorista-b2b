@@ -15,11 +15,10 @@ export default function CategoriasAdmin() {
   const router = useRouter();
   useEffect(() => { api<Res>("/admin/categorias").then(setD); }, []);
   if (!d) return <><H1>Categorías</H1><Spinner /></>;
-  const sec = (cat: string) => (cat === "Indumentaria" || cat === "Pijamas") ? "indu" : "marro";
   return (
     <>
       <H1 right={<form onSubmit={(e) => { e.preventDefault(); if (nueva.trim()) router.push(`/admin/categorias/${encodeURIComponent(nueva.trim())}`); }} className="flex gap-2"><input className="input !w-[220px]" value={nueva} onChange={(e) => setNueva(e.target.value)} placeholder="Nueva categoría…" /><button type="submit" className="btn btn-primary btn-sm">Crear</button></form>}>Categorías</H1>
-      <Muted>Un producto puede estar en varias categorías: la principal de Aleph más las que agregues. Click en una categoría para ver y editar sus productos. Cómo está clasificado hoy el catálogo. Los nombres vienen de Aleph: el campo «tipo_producto» es la <b>categoría</b> y el campo «rubro» es el <b>tipo de producto</b>; «Otros» son productos sin categoría en Aleph. Para cambiar la clasificación de un producto, abrilo en Catálogo y editá «Categoría» y «Tipo de producto»: el cambio pisa a Aleph solo en el sitio. Los nombres que ve el cliente en el menú se editan en <Link href="/admin/menu" className="underline">Menú</Link>.</Muted>
+      <Muted>Un producto puede estar en varias categorías: la principal de Aleph más las que agregues. Click en una categoría o en un tipo de producto para ver y editar sus productos y su banner. Cómo está clasificado hoy el catálogo. Los nombres vienen de Aleph: el campo «tipo_producto» es la <b>categoría</b> y el campo «rubro» es el <b>tipo de producto</b>; «Otros» son productos sin categoría en Aleph. Para cambiar la clasificación de un producto, abrilo en Catálogo y editá «Categoría» y «Tipo de producto»: el cambio pisa a Aleph solo en el sitio. Los nombres que ve el cliente en el menú se editan en <Link href="/admin/menu" className="underline">Menú</Link>.</Muted>
       <div className="mt-4 flex flex-wrap gap-3 font-sans text-[13px]">
         {Object.entries(d.secciones).map(([k, n]) => <span key={k} className="pill">{n}: <b className="ml-1">{d.por_seccion[k]}</b> productos</span>)}
       </div>
@@ -33,7 +32,7 @@ export default function CategoriasAdmin() {
             <table className="mt-2 w-full font-sans text-[12.5px]">
               <tbody>{c.tipos.map((t) => (
                 <tr key={t.rubro} className="border-t border-line">
-                  <td className="py-[6px]"><Link href={`/c/${sec(c.categoria)}?rubro=${encodeURIComponent(t.rubro)}&categoria=${encodeURIComponent(c.categoria)}`} target="_blank" className="hover:underline">{t.rubro}</Link></td>
+                  <td className="py-[6px]"><Link href={`/admin/tipos/${encodeURIComponent(t.rubro)}?categoria=${encodeURIComponent(c.categoria)}`} className="hover:underline">{t.rubro}</Link></td>
                   <td className="py-[6px] text-right text-muted">{t.productos} prod.</td>
                   <td className="py-[6px] text-right text-muted">{t.stock.toLocaleString("es-AR")} u.</td>
                 </tr>

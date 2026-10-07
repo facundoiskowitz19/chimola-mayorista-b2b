@@ -363,6 +363,74 @@ def set_categoria_banner(nombre: str, body: CatBannerIn, c: deps.Ctx = Depends(d
     return {"ok": True}
 
 
+# ---------------------------------------------------------------------------
+# Tipos de producto (rubro): vista, mover productos, banner
+# ---------------------------------------------------------------------------
+@router.get("/tipos/{rubro}")
+def tipo_detalle(rubro: str, categoria: str | None = None):
+    """Productos de un tipo de producto (opcionalmente dentro de una categoría), con origen."""
+    df = catalog.variantes_admin()
+    ov = overrides.get_catalogo_overrides()
+    sub = df[df["rubro"] == rubro]
+    if categoria:
+        sub = sub[catalog.mask_categoria(sub, [categoria])]
+    prods = sub.groupby("producto_cod", sort=True).agg(
+        nombre=("producto_nombre", "first"), categoria=("categoria", "first"), marca=("marca", "first"),
+        stock=("stock", "sum"), publicado=("publicado", "first")).reset_index()
+    raw = catalog.load_variantes()
+    rubro_aleph = raw.groupby("producto_cod")["rubro"].first().to_dict()
+    items = []
+    for _, r in prods.iterrows():
+        cod = r["producto_cod"]; o = ov.get(cod, {})
+        files = fotos.indice_fotos().get(cod.upper(), [])
+        fn = fotos._portada_filename(cod, files) if files else None
+        items.append({"producto_cod": cod, "nombre": r["nombre"], "categoria": r["categoria"], "marca": r["marca"],
+                      "stock": int(r["stock"]), "publicado": _pub(r["publicado"]),
+                      "origen": "manual" if o.get("rubro") == rubro else "aleph", "rubro_aleph": rubro_aleph.get(cod),
+                      "foto": fotos.url_foto_publica(cod, fn) if fn else None})
+    return {"rubro": rubro, "categoria": categoria, "items": items, "n": len(items),
+            "opciones_rubro": sorted(df["rubro"].dropna().unique().tolist())}
+
+
+class MoverIn(BaseModel):
+    rubro: str | None = None     # None = volver al de Aleph
+
+
+@router.post("/tipos/{rubro}/productos")
+def tipo_agregar(rubro: str, body: CatProdIn, c: deps.Ctx = Depends(deps.ctx_admin)):
+    """Trae un producto a este tipo (pisa el rubro de Aleph en el sitio)."""
+    cod = body.producto_cod.strip().upper()
+    if catalog.variantes_admin().query("producto_cod == @cod").empty:
+        raise HTTPException(404, f"{cod} no está en el catálogo actual")
+    overrides.set_catalogo_override(cod, {"rubro": rubro}, c.email)
+    return {"ok": True}
+
+
+@router.put("/productos/{cod}/rubro")
+def mover_rubro(cod: str, body: MoverIn, c: deps.Ctx = Depends(deps.ctx_admin)):
+    """Mueve el producto a otro tipo (o None = vuelve al rubro de Aleph)."""
+    overrides.set_catalogo_override(cod.upper(), {"rubro": body.rubro}, c.email)
+    return {"ok": True}
+
+
+@router.get("/tipos/{rubro}/banner")
+def tipo_banner(rubro: str):
+    return {"banners": sitio.banners_de_filtro("rubro", rubro), "secciones": {k: v["nombre"] for k, v in sitio.SECCIONES.items()}}
+
+
+class TipoBannerIn(BaseModel):
+    seccion: str
+    banner: dict | None = None
+
+
+@router.put("/tipos/{rubro}/banner")
+def set_tipo_banner(rubro: str, body: TipoBannerIn, c: deps.Ctx = Depends(deps.ctx_admin)):
+    if body.seccion not in sitio.SECCIONES:
+        raise HTTPException(404, "Sección desconocida")
+    sitio.set_banner_filtro(body.seccion, "rubro", rubro, body.banner, c.email)
+    return {"ok": True}
+
+
 class CatProdIn(BaseModel):
     producto_cod: str
 

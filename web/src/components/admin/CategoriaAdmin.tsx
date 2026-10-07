@@ -111,7 +111,7 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
               <tr key={i.producto_cod} className="border-b border-line hover:bg-[#fafafa]">
                 <td className="w-[56px] px-4 py-2"><Thumb src={i.foto} className="h-[44px] w-[44px] object-contain" /></td>
                 <td className="py-2"><Link href={`/admin/catalogo/${i.producto_cod}`} className="font-bold hover:underline">{i.nombre}</Link><div className="card-meta"><b>{i.producto_cod}</b> · {i.marca}</div></td>
-                <td className="py-2">{i.rubro}</td>
+                <td className="py-2"><Link href={`/admin/tipos/${encodeURIComponent(i.rubro)}?categoria=${encodeURIComponent(nombre)}`} className="hover:underline">{i.rubro}</Link></td>
                 <td className={`py-2 ${ORIGEN[i.origen].cls}`}>{ORIGEN[i.origen].l}{i.origen === "extra" && <span className="text-muted"> · principal: {i.categoria_principal}</span>}</td>
                 <td className="py-2 pr-6 text-right">{i.stock}</td>
                 <td className="py-2">{i.publicado === false ? <span className="text-[#aa0b56]">Oculto</span> : i.publicado === true ? "Publicado" : <span className="text-muted">Automático</span>}</td>
