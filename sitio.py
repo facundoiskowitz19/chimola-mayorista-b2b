@@ -393,6 +393,12 @@ def set_menu(seccion: str, data: dict, por: str) -> None:
         if nombre and link:
             ops.append({"nombre": nombre, "link": link, "oculto": bool(it.get("oculto"))})
     limpio["oportunidades"] = ops
+    grupos = []
+    for g in data.get("grupos") or []:   # columnas extra: tipos de producto DENTRO de una categoría
+        titulo = str(g.get("titulo") or "").strip(); cat = str(g.get("categoria") or "").strip()
+        if titulo and cat:
+            grupos.append({"titulo": titulo, "categoria": cat, "oculto": bool(g.get("oculto"))})
+    limpio["grupos"] = grupos
     _ref().set({"menu": {seccion: limpio}, "updated_at": dt.datetime.now(dt.timezone.utc), "updated_by": por},
                merge=True)
     # merge=True fusiona listas por posición en mapas anidados: reemplazar explícito.
@@ -432,6 +438,26 @@ def menu_efectivo(df, seccion: str) -> dict:
                 it.setdefault("nuevo", False)
                 it.setdefault("anterior", False)
         out[lista] = items
+    # Grupos (vista 7 de Vale: GIRLS / BOYS): una columna por categoría con los tipos de producto
+    # que tiene esa categoría en la sección. Los nombres/orden de tipos respetan la config de "tipos".
+    sub = filtrar_seccion(df, seccion)
+    if "precio" in sub.columns:
+        sub = sub[sub["precio"].notna()]
+    renombres = {t["valor"]: t["nombre"] for t in out["tipos"]}
+    orden_tipos = {t["valor"]: i for i, t in enumerate(out["tipos"])}
+    grupos_out = []
+    for g in cfg.get("grupos") or []:
+        if g.get("oculto"):
+            continue
+        import catalog as _cat
+        sg = sub[_cat.mask_categoria(sub, [g["categoria"]])]
+        cnt = sg.groupby("rubro")["producto_cod"].nunique()
+        tipos_g = [{"valor": r, "nombre": renombres.get(r, r), "n": int(n)} for r, n in cnt.items() if r and r != "Otros"]
+        tipos_g.sort(key=lambda t: (orden_tipos.get(t["valor"], 999), -t["n"]))
+        grupos_out.append({"titulo": g["titulo"], "categoria": g["categoria"], "tipos": tipos_g,
+                           "n": int(sg["producto_cod"].nunique())})
+    out["grupos"] = grupos_out
+    out["personalizado"]["grupos"] = bool(grupos_out)
     # Cuarta columna: links libres. Default = ofertas (productos con descuento) + ver todo.
     conf_ops = cfg.get("oportunidades") or []
     if conf_ops:

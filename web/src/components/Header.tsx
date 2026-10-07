@@ -77,11 +77,13 @@ export default function Header({ me, menu, topbar }: { me: Me; menu: Menu; topba
             </div>
             <div className="flex items-center gap-3" onMouseEnter={() => { if (closeT.current) clearTimeout(closeT.current); setOpen(null); }}>
               <SearchBox />
-              <Link href="/carrito" className="btn btn-primary !py-[10px] !pl-5 !pr-3" aria-label="Carrito">
-                <span className="font-brand text-[14px] font-semibold">{unidades}</span>
-                <CartIcon />
-                <Chevron size={16} />
-              </Link>
+              {me.puede_pedir && (
+                <Link href="/carrito" className="btn btn-primary !py-[10px] !pl-5 !pr-3" aria-label="Carrito">
+                  <span className="font-brand text-[14px] font-semibold">{unidades}</span>
+                  <CartIcon />
+                  <Chevron size={16} />
+                </Link>
+              )}
             </div>
           </div>
           {open && <div onClick={() => setOpen(null)}><MegaMenu sec={open} data={menu[open]} onEnter={() => enter(open)} /></div>}
@@ -99,7 +101,7 @@ function MegaMenu({ sec, data, onEnter }: { sec: Seccion; data: Menu[Seccion]; o
   const nombre = (t: Faceta) => t.nombre || t.valor;
   return (
     <div onMouseEnter={onEnter} className="fade-in absolute inset-x-0 top-full z-50 bg-white px-9 pb-9 pt-7 shadow-[0_18px_30px_-20px_rgba(0,0,0,.35)]">
-      <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-8" style={{ gridTemplateColumns: `repeat(${3 + Math.max(1, (data.grupos || []).length)}, minmax(0, 1fr))` }}>
         <div>
           <h4 className="kicker mb-3">Temporada</h4>
           <ul className={col}>
@@ -115,10 +117,17 @@ function MegaMenu({ sec, data, onEnter }: { sec: Seccion; data: Menu[Seccion]; o
             </>
           )}
         </div>
-        <div>
-          <h4 className="kicker mb-3">Tipo de producto</h4>
-          <ul className={col}>{data.tipos.map((t) => <li key={t.valor}><Link href={`/c/${sec}?rubro=${encodeURIComponent(t.valor)}`} className="hover:underline">{nombre(t)}</Link></li>)}</ul>
-        </div>
+        {(data.grupos || []).length > 0 ? (data.grupos || []).map((g) => (
+          <div key={g.titulo}>
+            <h4 className="kicker mb-3"><Link href={`/c/${sec}?categoria=${encodeURIComponent(g.categoria)}`} className="hover:underline">{g.titulo}</Link></h4>
+            <ul className={col}>{g.tipos.map((t) => <li key={t.valor}><Link href={`/c/${sec}?categoria=${encodeURIComponent(g.categoria)}&rubro=${encodeURIComponent(t.valor)}`} className="hover:underline">{nombre(t)}</Link></li>)}</ul>
+          </div>
+        )) : (
+          <div>
+            <h4 className="kicker mb-3">Tipo de producto</h4>
+            <ul className={col}>{data.tipos.map((t) => <li key={t.valor}><Link href={`/c/${sec}?rubro=${encodeURIComponent(t.valor)}`} className="hover:underline">{nombre(t)}</Link></li>)}</ul>
+          </div>
+        )}
         <div>
           <h4 className="kicker mb-3">Tendencia</h4>
           <ul className={col}>

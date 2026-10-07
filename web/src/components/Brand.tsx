@@ -33,9 +33,11 @@ export function UserIcon() {
 }
 
 export function CartIcon() {
+  /* Carrito de supermercado en línea, como el del header de las vistas de Vale. */
   return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden>
-      <path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM3 3h2.4l2.6 10.2A2 2 0 0 0 10 15h8.3a2 2 0 0 0 1.9-1.4L22 6H6.3L5.6 3.6A1 1 0 0 0 4.6 3H3Z" />
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2.5 3.5h2.6l2.3 10.4a1.6 1.6 0 0 0 1.6 1.3h8.6a1.6 1.6 0 0 0 1.6-1.2L21 7H6" />
+      <circle cx="9.5" cy="19.5" r="1.4" /><circle cx="17.5" cy="19.5" r="1.4" />
     </svg>
   );
 }

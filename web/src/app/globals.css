@@ -39,6 +39,8 @@
 }
 
 html { color-scheme: light; }
+button:not(:disabled), [role="button"], select, summary, label:has(input[type="file"]) { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
 body {
   background: var(--bg);
   color: var(--ink);

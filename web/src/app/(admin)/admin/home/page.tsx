@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, ClientError } from "@/lib/client";
 import type { HomeBloque } from "@/lib/types";
@@ -104,8 +105,8 @@ export default function HomeAdmin() {
         <div className="mt-3">{banner ? <BloqueForm b={banner} onChange={setBanner} onQuitar={() => setBanner(null)} conSubtitulo previewAspect="1200/160" /> : <button onClick={() => setBanner(vacio())} className="btn btn-light btn-sm">+ Agregar banner</button>}</div>
       </Panel>
       <Panel className="mt-5">
-        <Kicker>Banners por colección o categoría (arriba del catálogo)</Kicker>
-        <Muted className="mt-1">Cuando el cliente entra a una temporada, tipo de producto o categoría que tenga banner, lo ve arriba de la grilla (como «Verano 2027» en el diseño). Imagen ideal 1600×420. El título admite | para cortar en dos líneas.</Muted>
+        <Kicker>Banners por colección / temporada (arriba del catálogo)</Kicker>
+        <Muted className="mt-1">Cuando el cliente entra a una temporada que tenga banner, lo ve arriba de la grilla (como «Verano 2027» en el diseño). Los banners de una <b>categoría</b> o un <b>tipo de producto</b> se editan en su propia página dentro de <Link href="/admin/categorias" className="underline">Categorías</Link>. Imagen ideal 1600×420.</Muted>
         <div className="mt-3 space-y-3">
           {cats.map((b, i) => {
             const tipo: "temporada" | "rubro" | "categoria" = b.temporada ? "temporada" : b.rubro ? "rubro" : "categoria";

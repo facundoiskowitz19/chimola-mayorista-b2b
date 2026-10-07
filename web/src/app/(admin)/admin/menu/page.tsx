@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, ClientError } from "@/lib/client";
 import { useToast } from "@/components/Toast";
@@ -15,13 +16,16 @@ const LISTAS: { key: Lista; titulo: string; ayuda: string }[] = [
 interface Item { valor: string; nombre: string; n: number; nuevo?: boolean; anterior?: boolean }
 interface Fila extends Item { mostrar: boolean }
 interface Op { nombre: string; link: string; oculto?: boolean }
-interface Res { seccion: Sec; auto: Record<Lista, { valor: string; n: number }[]>; config: (Partial<Record<Lista, Item[]>> & { oportunidades?: Op[] }) | null; efectivo: Record<Lista, Item[]> & { personalizado: Record<Lista | "oportunidades", boolean>; n: number; oportunidades: number; oportunidades_items: Op[] }; tope_auto: Record<Lista, number> }
+interface Grupo { titulo: string; categoria: string; oculto?: boolean }
+interface Res { seccion: Sec; auto: Record<Lista, { valor: string; n: number }[]>; config: (Partial<Record<Lista, Item[]>> & { oportunidades?: Op[]; grupos?: Grupo[] }) | null; efectivo: Record<Lista, Item[]> & { personalizado: Record<Lista | "oportunidades" | "grupos", boolean>; n: number; oportunidades: number; oportunidades_items: Op[] }; tope_auto: Record<Lista, number> }
 
 export default function MenuAdmin() {
   const [sec, setSec] = useState<Sec>("marro");
   const [r, setR] = useState<Res | null>(null);
   const [filas, setFilas] = useState<Record<Lista, Fila[]>>({ temporadas: [], tipos: [], tendencias: [] });
   const [ops, setOps] = useState<Op[]>([]);
+  const [grupos, setGrupos] = useState<Grupo[]>([]);
+  const [cats, setCats] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const { notify } = useToast();
@@ -41,6 +45,8 @@ export default function MenuAdmin() {
     }
     setFilas(out);
     setOps(d.config?.oportunidades?.length ? d.config.oportunidades : d.efectivo.oportunidades_items.map((o) => ({ ...o, oculto: false })));
+    setGrupos(d.config?.grupos || []);
+    api<{ arbol: { categoria: string }[] }>("/admin/categorias").then((c) => setCats(c.arbol.map((x) => x.categoria))).catch(() => setCats([]));
   }, [sec]);
   useEffect(() => { setR(null); cargar(); }, [cargar]);
 
@@ -55,7 +61,7 @@ export default function MenuAdmin() {
     try {
       const body: Record<string, Item[]> = {};
       for (const L of LISTAS) body[L.key] = filas[L.key].filter((f) => f.mostrar).map(({ valor, nombre, nuevo, anterior }) => ({ valor, nombre: nombre || valor, n: 0, ...(L.key === "temporadas" ? { nuevo: !!nuevo, anterior: !!anterior } : {}) }));
-      await api(`/admin/menu/${sec}`, { method: "PUT", json: { ...body, oportunidades: ops.filter((o) => o.nombre.trim() && o.link.trim()) } });
+      await api(`/admin/menu/${sec}`, { method: "PUT", json: { ...body, oportunidades: ops.filter((o) => o.nombre.trim() && o.link.trim()), grupos: grupos.filter((g) => g.titulo.trim() && g.categoria) } });
       notify("Menú guardado — el sitio lo toma en menos de un minuto"); await cargar();
     } catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); }
     finally { setBusy(false); }
@@ -70,7 +76,7 @@ export default function MenuAdmin() {
       <div className="mt-4"><Pills value={sec} onChange={setSec} options={SECS} /></div>
       <Muted className="mt-2">{personalizado ? "Menú personalizado guardado para esta sección." : "Menú automático (nada guardado)."} · {r.efectivo.n} productos · {r.efectivo.oportunidades} con descuento</Muted>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.5fr_1.1fr_0.9fr_1fr]">
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
         {LISTAS.map((L) => (
           <Panel key={L.key}>
             <Kicker>{L.titulo}{r.efectivo.personalizado[L.key] && <span className="ml-2 text-[#006786]">personalizado</span>}</Kicker>
@@ -106,6 +112,22 @@ export default function MenuAdmin() {
           <button onClick={() => setOps([...ops, { nombre: "", link: `/c/${sec}?categoria=`, oculto: false }])} className="btn btn-light btn-sm mt-3">+ Agregar link</button>
         </Panel>
       </div>
+      <Panel className="mt-5">
+        <Kicker>Columnas por categoría (ej. GIRLS / BOYS en Indumentaria){r.efectivo.personalizado.grupos && <span className="ml-2 text-[#006786]">activo</span>}</Kicker>
+        <Muted className="mt-1">Como en la vista de Indumentaria del diseño: en vez de una sola columna «Tipo de producto», una columna por categoría con los tipos que esa categoría tiene. Primero creá las categorías (ej. Girls y Boys en <Link href="/admin/categorias" className="underline">Categorías</Link>) y asignales productos; acá solo elegís cuáles son columnas. Sin grupos, se muestra la columna única.</Muted>
+        <table className="vt mt-3 max-w-[640px] text-[12px]">
+          <thead><tr><th>Mostrar</th><th>Título de la columna</th><th>Categoría</th><th /></tr></thead>
+          <tbody>{grupos.map((g, i) => (
+            <tr key={i} className={g.oculto ? "opacity-50" : ""}>
+              <td><Check checked={!g.oculto} onChange={(v) => setGrupos(grupos.map((x, k) => k === i ? { ...x, oculto: !v } : x))} /></td>
+              <td><input className="input !py-1 !text-[12px]" value={g.titulo} onChange={(e) => setGrupos(grupos.map((x, k) => k === i ? { ...x, titulo: e.target.value } : x))} placeholder="GIRLS" /></td>
+              <td><select className="input !py-1 !text-[12px]" value={g.categoria} onChange={(e) => setGrupos(grupos.map((x, k) => k === i ? { ...x, categoria: e.target.value } : x))}><option value="">—</option>{cats.map((c) => <option key={c} value={c}>{c}</option>)}</select></td>
+              <td className="whitespace-nowrap"><button onClick={() => { if (i > 0) { const a = [...grupos]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; setGrupos(a); } }} className="px-1 text-faint hover:text-ink">↑</button><button onClick={() => { if (i < grupos.length - 1) { const a = [...grupos]; [a[i + 1], a[i]] = [a[i], a[i + 1]]; setGrupos(a); } }} className="px-1 text-faint hover:text-ink">↓</button><button onClick={() => setGrupos(grupos.filter((_, k) => k !== i))} className="px-1 text-faint hover:text-[#aa0b56]">×</button></td>
+            </tr>
+          ))}</tbody>
+        </table>
+        <button onClick={() => setGrupos([...grupos, { titulo: "", categoria: "", oculto: false }])} className="btn btn-light btn-sm mt-3">+ Agregar columna</button>
+      </Panel>
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button onClick={guardar} disabled={busy} className="btn btn-primary">{busy ? "Guardando…" : "Guardar menú"}</button>
         {personalizado && (!confirmReset ? <button onClick={() => setConfirmReset(true)} className="btn btn-ghost">Volver al menú automático</button> : <Confirm busy={busy} texto="Se descarta lo personalizado y el menú vuelve a armarse solo." onYes={async () => { setBusy(true); await api(`/admin/menu/${sec}`, { method: "DELETE" }); setConfirmReset(false); setBusy(false); notify("Menú automático restaurado"); cargar(); }} onNo={() => setConfirmReset(false)} />)}
