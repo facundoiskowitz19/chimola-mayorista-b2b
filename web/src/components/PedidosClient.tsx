@@ -29,7 +29,7 @@ export default function PedidosClient({ me, lista }: { me: Me; lista: PedidoResu
   async function abrir(n: number) {
     if (abierto === n) { setAbierto(null); return; }
     setAbierto(n);
-    if (!det[n]) setDet({ ...det, [n]: await api<Pedido>(`/pedidos/${n}`) });
+    if (!det[n]) { const d = await api<Pedido>(`/pedidos/${n}`); setDet((prev) => ({ ...prev, [n]: d })); }
   }
   async function repetir(n: number) {
     try {
@@ -43,7 +43,7 @@ export default function PedidosClient({ me, lista }: { me: Me; lista: PedidoResu
   async function cancelar(n: number) {
     try {
       const p = await api<Pedido>(`/pedidos/${n}/cancelar`, { method: "POST" });
-      setDet({ ...det, [n]: p }); setConfirmCancel(null);
+      setDet((prev) => ({ ...prev, [n]: p })); setConfirmCancel(null);
       notify("Pedido cancelado."); router.refresh();
     } catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); }
   }

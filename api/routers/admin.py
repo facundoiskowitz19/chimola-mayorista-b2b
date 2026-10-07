@@ -8,7 +8,7 @@ import math
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 import adminlib
 import aleph_import
@@ -813,11 +813,22 @@ def home_admin(seccion: str):
             "defaults": sitio.DEFAULTS[seccion], "tipos_seccion": sitio.TIPOS_SECCION}
 
 
+class HomeIn(BaseModel):
+    """Forma exacta de la home de una sección. `extra="forbid"`: un payload con otra forma (p. ej. la
+    respuesta del GET reenviada) se rechaza en vez de guardarse como home vacía."""
+    model_config = ConfigDict(extra="forbid")
+    hero: list[dict] = []
+    bloques: list[dict] = []
+    secciones: list[dict] = []
+    banner_grilla: dict | None = None
+    banners_catalogo: list[dict] = []
+
+
 @router.put("/home/{seccion}")
-def set_home(seccion: str, body: dict, c: deps.Ctx = Depends(deps.ctx_admin)):
+def set_home(seccion: str, body: HomeIn, c: deps.Ctx = Depends(deps.ctx_admin)):
     if seccion not in sitio.SECCIONES:
         raise HTTPException(404, "Sección desconocida")
-    sitio.set_home(seccion, body, c.email)
+    sitio.set_home(seccion, body.model_dump(), c.email)
     return {"ok": True}
 
 
@@ -848,11 +859,21 @@ def menu_admin(seccion: str, c: deps.Ctx = Depends(deps.ctx_admin)):
             "efectivo": sitio.menu_efectivo(df, seccion), "tope_auto": sitio.MENU_AUTO_TOPE}
 
 
+class MenuIn(BaseModel):
+    """Listas del menú de una sección (vacías = automático). Misma política estricta que HomeIn."""
+    model_config = ConfigDict(extra="forbid")
+    temporadas: list[dict] = []
+    tipos: list[dict] = []
+    tendencias: list[dict] = []
+    oportunidades: list[dict] = []
+    grupos: list[dict] = []
+
+
 @router.put("/menu/{seccion}")
-def set_menu(seccion: str, body: dict, c: deps.Ctx = Depends(deps.ctx_admin)):
+def set_menu(seccion: str, body: MenuIn, c: deps.Ctx = Depends(deps.ctx_admin)):
     if seccion not in sitio.SECCIONES:
         raise HTTPException(404, "Sección desconocida")
-    sitio.set_menu(seccion, body, c.email)
+    sitio.set_menu(seccion, body.model_dump(), c.email)
     return {"ok": True}
 
 
