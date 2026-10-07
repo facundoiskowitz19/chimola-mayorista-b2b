@@ -276,6 +276,8 @@ def buscar(q: str = Query("", min_length=0), c: deps.Ctx = Depends(deps.ctx_requ
     df = deps.df_cliente(c)
     sub = catalog.filtrar_variantes(df[df["precio"].notna()], None, q)
     prods = catalog.productos(sub)
-    prods = prods[prods["producto_cod"].map(fotos.tiene_fotos)]
+    # Los productos sin foto (colecciones nuevas) también se encuentran: van después de los que tienen.
+    if not prods.empty:
+        prods = prods.assign(_f=prods["producto_cod"].map(fotos.tiene_fotos).astype(int)).sort_values(["_f", "producto_cod"], ascending=[False, True]).drop(columns="_f")
     nombres = list(dict.fromkeys(prods["producto_nombre"].tolist()))[:5]
     return {"nombres": nombres, "productos": [card(r) for _, r in prods.head(3).iterrows()], "total": len(prods)}
