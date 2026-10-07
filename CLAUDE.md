@@ -207,8 +207,10 @@ Rediseño completo del lado cliente a partir de las 18 vistas de Vale
 Roboto, mega-menú, home por sección, cards con swatches, panel inline, curva
 sugerida). Decisión: **Streamlit no alcanza para esa UI** → el cliente pasa a
 Next.js y la lógica Python se expone como API. **El admin también se migró a Next**
-(`/admin`, decisión del usuario 2026-10-06): `api/routers/admin.py` replica 1:1 lo que hacía
-`admin_ui.py` sobre los mismos módulos; `adminlib.py` tiene la lógica pura. El Streamlit
+(`/admin`, decisión del usuario 2026-10-06): el paquete `api/routers/admin/` replica 1:1 lo que hacía
+`admin_ui.py` sobre los mismos módulos (un archivo por pantalla: `inicio`, `catalogo`, `categorias`,
+`clientes`, `pedidos`, `configuracion`, `emails`, `home_menu`, helpers en `_common`); `adminlib.py`
+tiene la lógica pura. El Streamlit
 (`app.py` + `admin_ui.py`) queda vivo como referencia hasta validar paridad y después se
 apaga (`mayorista-b2b-dev`).
 
@@ -222,8 +224,11 @@ web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  �
   `colores.py` (nombre de color → hex para swatches), `routers/`: `auth`,
   `catalogo` (grilla con facetas, `/catalogo/menu`, `/productos/{cod}` con
   relacionados por "familia" = última palabra del nombre, `/productos/{cod}/curva`,
-  `/buscar`), `carrito`, `pedidos`, `cuenta`, `home`. Corre con el root del repo en
-  `sys.path`. Local: `./venv/bin/uvicorn api.main:app --port 8000`. Docker:
+  `/buscar`), `carrito`, `pedidos`, `cuenta`, `home`, `reposicion`, `admin/` (paquete). Corre con el root del repo en
+  `sys.path`. `deps.df_cliente()` está memoizado por lista de precios (se recalcula solo si cambian
+  el catálogo BQ, los overrides o la config): el DataFrame es compartido, filtrar/copiar, nunca mutar.
+  `deps.ctx_opcional` relee `usuarios/{email}` (cache 60 s): desactivar, cambiar rol/cliente o resetear
+  la password pegan en ≤1 min aunque el JWT dure 24 h (un token anterior a `password_updated_at` se rechaza). Local: `./venv/bin/uvicorn api.main:app --port 8000`. Docker:
   `docker build -f api/Dockerfile .` (contexto = root).
 - **Secciones del header** (los 3 "homes"): `marro` = Chimola sin
   Indumentaria/Pijamas · `indu` = Chimola Indumentaria + Pijamas · `lima` = Lima.
@@ -233,8 +238,11 @@ web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  �
   `recortado` si no alcanza, sin revelar números (SPECS §12 sigue valiendo).
 - **Home administrable**: doc Firestore `config/home` con una clave por sección
   (`hero[]`, `bloques[]`, `secciones[]` de tipo destacados/ofertas/manual/filtro,
-  `banner_grilla`); `api/routers/home.py::DEFAULTS` si falta. Pendiente: pantalla
-  en el admin Streamlit para editarlo y subir imágenes.
+  `banner_grilla`, `banners_catalogo[]`, `menu.<sec>`); todo vive en el paquete `sitio/`
+  (`_store` doc + cache 60 s, `home` con `DEFAULTS`, `media` upload/lectura GCS, `secciones`,
+  `menu`; `sitio.X` se re-exporta desde `__init__`). Los PUT `/admin/home/{sec}` y `/admin/menu/{sec}`
+  usan modelos Pydantic con `extra="forbid"`: un payload con otra forma (p. ej. la respuesta del GET
+  reenviada) da 422 en vez de guardar una home vacía (pasó el 2026-10-07 y hubo que restaurarla a mano).
 - **`web/`**: `src/app/(shop)/…` páginas (`/h/[seccion]` home, `/c/[seccion]`
   catálogo —`todo` = sin sección—, `/p/[cod]` ficha, `/carrito`, `/pedidos`,
   `/mis-datos`, `/reposicion` placeholder), `src/app/api/[...path]/route.ts` proxy
@@ -259,7 +267,32 @@ web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  �
   `/admin/home/upload`), Menú. Piezas en `components/admin/ui.tsx`.
 - **Menú autoadministrable**: `config/home.menu.<sec>` con `temporadas/tipos/tendencias`
   [{valor, nombre, nuevo, anterior}]; vacío = automático por cantidad de productos
-  (`sitio.menu_auto/menu_efectivo`). Solo se muestran valores que hoy tienen productos.
+  (`sitio.menu_auto/menu_efectivo`). Solo se muestran valores que hoy tienen productos (los
+  configurados sin stock se conservan en la config y el admin los ve en gris).
+- **QA 2026-10-07** (revisión completa + corrección; ver commits `74cb6ce`…`621ce26`). Gotchas que quedaron:
+  - **CSS**: las clases de componente de `globals.css` (`.btn`, `.pill`, `.input`, `.qty`, `.kicker`…)
+    van dentro de `@layer components`; si quedan sin capa le ganan a TODA utility de Tailwind
+    (`hidden`, `w-full`, `justify-between`…) y los `md:`/`sm:` no funcionan sobre ellas.
+  - **Sesión vencida**: `proxy.ts` solo chequea que exista la cookie; si la API devuelve 401 el layout
+    del shop (y `lib/client.ts`) mandan a `/auth/expired`, que borra la cookie y vuelve a `/login?expired=1`.
+    Sin eso, `/login` ↔ `/h/marro` se rebotaban en loop al día siguiente. `lib/nav.ts::destinoSeguro`
+    valida `next` (nada de `//evil.com`).
+  - **Medidas**: `dim_producto.alto_cm/ancho_cm/profundidad_cm/peso_kg` (Tienda Nube vía pipeline)
+    se muestran como «ancho × alto × profundidad cm» SOLO para no-ropa (`catalog.CATEGORIAS_ROPA`):
+    en indumentaria TN carga medidas del paquete. Fallback: `catalog.ficha_texto()` parsea `observa`.
+  - **Catálogo**: `catalog.load_variantes` es stale-while-revalidate (vencido el TTL sirve lo viejo y
+    refresca en un hilo); las cards/ficha respetan `fotos_color` del admin; la ficha usa URLs públicas
+    (sin un `signBlob` por foto); `url_variante_publica` ya no tiene `lru_cache`.
+  - **Carrito**: `PUT /carrito/items/{sku}` acota contra el stock ACTUAL; el input de cantidad lleva
+    borrador + debounce 500 ms + contador de secuencia (una respuesta vieja no pisa una nueva);
+    `VariantPicker` no ofrece input a variantes con `disponible=false`; «agregadas: 0» no es éxito.
+  - **Móvil (400 px)**: header con `flex-wrap` y buscador a ancho completo, rail de filtros en un
+    `<details>`, tablas en `overflow-x-auto` con `min-w-0` en la columna de la grilla, `CardsWithPanel`
+    y `ProductRow` calculan las filas con `useMediaQuery` para que el panel inline caiga bajo la card.
+  - **Admin**: los params dinámicos llegan YA decodificados (no hacer `decodeURIComponent`); el proxy
+    `route.ts` re-encodea cada segmento; `/admin/pedidos?desde=` inválido da 422; crear usuario valida rol.
+  - Tests: `tests/test_qa_rediseno.py` (medidas, ficha_texto, curva, HomeIn/MenuIn). `pyflakes` quedó en
+    el venv: `./venv/bin/python -m pyflakes api sitio` antes de commitear cambios de backend.
 - Lint React 19 `set-state-in-effect` apagado en `eslint.config.mjs`: el patrón
   `useEffect(() => { cargar(); })` con await+setState lo disparaba en todo el admin.
 - **Stock nunca sale al cliente**: la API devuelve `disponible` y acota al
