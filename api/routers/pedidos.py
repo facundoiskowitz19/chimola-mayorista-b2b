@@ -8,6 +8,7 @@ import fotos
 import odoo_export
 import overrides
 import pedidos as ped
+import reposicion
 
 from api import deps
 
@@ -26,7 +27,7 @@ def _pedido_json(p: dict, c: deps.Ctx) -> dict:
     for it in d.get("items", []):
         it["foto"] = fotos.url_variante_publica(it.get("producto_cod") or "", it.get("color")) or None
     d["puede_cancelar"] = ped.puede_cancelar(p, c.usuario_dict())
-    d["odoo"] = c.es_franquicia and p.get("estado") != "cancelado"
+    d["odoo"] = _es_franquicia_pedido(p) and p.get("estado") != "cancelado"
     return d
 
 
@@ -48,6 +49,14 @@ def listar(c: deps.Ctx = Depends(deps.ctx_requerido)):
 def detalle(numero: int, c: deps.Ctx = Depends(deps.ctx_requerido)):
     p = _get(numero, c)
     return _pedido_json(p, c)
+
+
+def _es_franquicia_pedido(p: dict) -> bool:
+    """El export Odoo depende del cliente DEL PEDIDO (no del que mira: un admin no tiene cliente)."""
+    try:
+        return reposicion.pv_de_cliente(int(p.get("cliente_cod"))) is not None
+    except (TypeError, ValueError):
+        return False
 
 
 def _get(numero: int, c: deps.Ctx) -> dict:
@@ -110,10 +119,10 @@ def excel(numero: int, c: deps.Ctx = Depends(deps.ctx_requerido)):
 @router.get("/{numero}/odoo")
 def odoo(numero: int, c: deps.Ctx = Depends(deps.ctx_requerido)):
     p = _get(numero, c)
-    if not c.es_franquicia and not c.es_admin:
+    if not _es_franquicia_pedido(p):
         raise HTTPException(403, "Solo franquicias")
-    cli = c.cliente or {}
-    nombre = cli.get("odoo_cliente") or p.get("cliente_nombre") or ""
+    ov_cli = overrides.get_clientes_overrides().get(int(p.get("cliente_cod") or -1), {})
+    nombre = ov_cli.get("odoo_cliente") or p.get("cliente_nombre") or ""
     data = odoo_export.generar_excel_odoo(p, nombre)
     return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": f'attachment; filename="{odoo_export.nombre_archivo(p)}"'})

@@ -48,7 +48,7 @@ def _j(o):
 # ---------------------------------------------------------------------------
 @router.get("/inicio")
 def inicio():
-    lista = ped.listar_pedidos(None)
+    lista = ped.listar_pedidos(None, limit=2000)
     k = adminlib.kpis(lista, dt.datetime.now(dt.timezone.utc))
     df = catalog.variantes_admin()
     prods = df.groupby("producto_cod").agg(publicado=("publicado", "first"), precio1=("precio1", "first")).reset_index()
@@ -105,7 +105,7 @@ def _prods_admin(q: str, marca, temporada, categoria, rubro, pill: str):
 @router.get("/catalogo")
 def catalogo(q: str = "", marca: list[str] | None = Query(None), temporada: list[str] | None = Query(None),
              categoria: list[str] | None = Query(None), rubro: list[str] | None = Query(None),
-             pill: str = "todos", page: int = 1, per_page: int = 50):
+             pill: str = "todos", page: int = Query(1, ge=1), per_page: int = Query(50, ge=1, le=200)):
     df, _sub, prods, counts = _prods_admin(q, marca, temporada, categoria, rubro, pill)
     total = len(prods)
     per_page = max(1, min(per_page, 200))
@@ -456,7 +456,8 @@ def categoria_quitar(nombre: str, cod: str, c: deps.Ctx = Depends(deps.ctx_admin
     cod = cod.upper()
     o = overrides.get_catalogo_overrides().get(cod, {})
     extras = [e for e in (o.get("categorias_extra") or []) if e.lower() != nombre.strip().lower()]
-    overrides.set_catalogo_override(cod, {"categorias_extra": extras}, c.email)
+    if extras != list(o.get("categorias_extra") or []):   # sin cambios → no crear un override vacío
+        overrides.set_catalogo_override(cod, {"categorias_extra": extras}, c.email)
     return {"ok": True, "categorias_extra": extras}
 
 
@@ -502,6 +503,8 @@ def crear_usuario(body: UsuarioIn):
         if cli is None:
             raise HTTPException(422, f"cliente_cod {body.cliente_cod} no existe en dim_cliente")
         nombre = nombre or cli["nombre_display"]
+    if body.rol not in ("cliente", "admin"):
+        raise HTTPException(422, "Rol inválido (cliente o admin)")
     pwd = auth_mod.generar_password()
     try:
         auth_mod.crear_usuario(body.email, pwd, body.cliente_cod or None, nombre or body.email, rol=body.rol)
@@ -547,6 +550,7 @@ def guardar_cuenta(email: str, body: CuentaIn):
             raise HTTPException(422, f"cliente_cod {nuevo} no existe en dim_cliente")
         cambios["nombre_display"] = cli["nombre_display"]
     db.usuario_ref(email).update(cambios)
+    deps.invalidar_usuario(email)
     return {"ok": True}
 
 
@@ -582,6 +586,7 @@ def reset_password(email: str):
         raise HTTPException(404, "Usuario no encontrado")
     pwd = auth_mod.generar_password()
     auth_mod.cambiar_password(email, pwd)
+    deps.invalidar_usuario(email)
     return {"email": email, **_nueva_password(email, pwd)}
 
 
@@ -594,6 +599,7 @@ def set_activo(email: str, body: ActivoIn):
     if not auth_mod.get_usuario(email):
         raise HTTPException(404, "Usuario no encontrado")
     db.usuario_ref(email).update({"activo": bool(body.activo)})
+    deps.invalidar_usuario(email)
     return {"ok": True}
 
 
@@ -638,14 +644,17 @@ def pedidos_admin(estado: str | None = None, cliente_cod: int | None = None, des
     counts = {"todos": len(lista)}
     for e in ("confirmado", "procesado", "cancelado"):
         counts[e] = sum(1 for p in lista if p.get("estado") == e)
-    d0 = dt.date.fromisoformat(desde) if desde else None
+    try:
+        d0 = dt.date.fromisoformat(desde) if desde else None
+    except ValueError:
+        raise HTTPException(422, "Fecha «desde» inválida (AAAA-MM-DD)")
     filt = [p for p in lista
             if (not estado or p.get("estado") == estado)
             and (cliente_cod is None or int(p.get("cliente_cod", -1)) == cliente_cod)
             and (not d0 or p["confirmed_at"].astimezone(adminlib.TZ).date() >= d0)]
     return {
         "counts": counts,
-        "clientes": sorted({(int(p["cliente_cod"]), p.get("cliente_nombre", "")) for p in lista}),
+        "clientes": sorted({(int(p["cliente_cod"]), str(p.get("cliente_nombre") or "")) for p in lista}),
         "items": [{**{k: _j(p.get(k)) for k in ("numero", "fecha_str", "confirmed_at", "cliente_cod", "cliente_nombre",
                                                   "usuario_email", "unidades", "total", "estado", "observaciones")},
                    "email_enviado": bool((p.get("email") or {}).get("enviado")), "n_items": len(p.get("items", []))}
@@ -728,6 +737,8 @@ def refrescar():
     fotos.indice_fotos(force=True)
     overrides.invalidar()
     sitio.invalidar()
+    deps.invalidar_todo()
+    repo.invalidar()
     return {"ok": True, "catalogo_hace_seg": catalog.catalogo_actualizado_hace()}
 
 

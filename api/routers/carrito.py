@@ -91,12 +91,17 @@ def fijar(sku: str, body: CantidadIn, c: deps.Ctx = Depends(deps.ctx_cliente)):
     items = pedidos.cargar_carrito(c.email)
     avisos: list[str] = []
     nuevos = []
+    por_sku = deps.df_cliente(c).drop_duplicates("sku").set_index("sku", drop=False)
     for it in items:
         if it["sku"] != sku:
             nuevos.append(it)
             continue
         if body.cantidad <= 0:
             continue
+        if sku in por_sku.index:   # stock y precio ACTUALES (la línea guarda los del momento de agregar)
+            v = por_sku.loc[sku]
+            if v["precio"] == v["precio"]:
+                it = {**it, **cr.item_desde_variante(v.to_dict(), 1), "cantidad": it["cantidad"]}
         tope = int(it.get("stock") or 0)
         cant = body.cantidad if tope <= 0 else min(body.cantidad, tope)
         if cant < body.cantidad:

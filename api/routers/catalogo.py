@@ -48,7 +48,7 @@ def card(row, df_var: pd.DataFrame | None = None, es_admin: bool = False) -> dic
     cod = row["producto_cod"]
     cols = list(row["colores"]) if isinstance(row.get("colores"), (list, tuple)) else []
     try:
-        por_color = fotos.foto_por_color(cod, cols)
+        por_color = fotos.foto_por_color(cod, cols, None, fotos._overrides_fotos(cod))   # respeta fotos_color del admin
     except Exception:  # noqa: BLE001
         por_color = {}
     fn_portada = fotos._portada_filename(cod, fotos.indice_fotos().get(cod.upper(), []))
@@ -84,7 +84,7 @@ def listar(
     color: list[str] | None = Query(None), talle: list[str] | None = Query(None),
     q: str = "", solo_foto: bool = True, solo_desc: bool = False,
     precio_min: float | None = None, precio_max: float | None = None,
-    orden: str = "destacados", page: int = 1, per_page: int = PER_PAGE_DEFAULT,
+    orden: str = "destacados", page: int = Query(1, ge=1), per_page: int = Query(PER_PAGE_DEFAULT, ge=1, le=PER_PAGE_MAX),
 ):
     df = _seccion_df(deps.df_cliente(c), seccion)
     sel = {"categoria": _lista(categoria), "rubro": _lista(rubro), "marca": _lista(marca),
@@ -98,6 +98,9 @@ def listar(
         prods = prods.merge(sub.groupby("producto_cod")["destacado"].max().reset_index(), on="producto_cod", how="left")
     if solo_foto and not prods.empty:
         prods = prods[prods["producto_cod"].map(fotos.tiene_fotos)]
+    # Rango de precios ANTES de aplicar precio_min/max: así el slider no se achica a medida que se acota.
+    rango = {"min": deps.jsonable(prods["precio"].min()) if len(prods) else None,
+             "max": deps.jsonable(prods["precio"].max()) if len(prods) else None}
     if precio_min is not None:
         prods = prods[prods["precio"] >= precio_min]
     if precio_max is not None:
@@ -121,8 +124,7 @@ def listar(
         "pages": max(1, math.ceil(total / per_page)),
         "items": [card(r, es_admin=c.es_admin) for _, r in pag.iterrows()],
         "facetas": _facetas(_base_facetas(df, q, solo_desc, solo_foto), sel),
-        "precio_rango": {"min": deps.jsonable(prods["precio"].min()) if total else None,
-                         "max": deps.jsonable(prods["precio"].max()) if total else None},
+        "precio_rango": rango,
     }
 
 
@@ -186,10 +188,8 @@ def producto(cod: str, c: deps.Ctx = Depends(deps.ctx_requerido)):
     p = catalog.get_producto(df, cod.upper())
     if not p:
         raise HTTPException(404, "Producto no encontrado")
-    fts = fotos.fotos_producto(p["producto_cod"], p["colores"])
-    por_color = fotos.foto_por_color(p["producto_cod"], p["colores"])
-    for f in fts:
-        f["url"] = fotos.url_foto_publica(p["producto_cod"], f["filename"])
+    fts = fotos.fotos_producto_publicas(p["producto_cod"], p["colores"])   # URLs públicas: sin signBlob por foto
+    por_color = fotos.foto_por_color(p["producto_cod"], p["colores"], None, fotos._overrides_fotos(p["producto_cod"]))
     variantes = []
     for v in p["variantes"]:
         d = {k: deps.jsonable(v.get(k)) for k in ("sku", "ean", "color_cod", "color", "talle",
@@ -270,7 +270,9 @@ def repartir_proporcional(stocks: dict[str, int], total: int) -> dict[str, int]:
 
 
 @router.get("/productos/{cod}/curva")
-def curva(cod: str, total: int = Query(..., ge=1, le=100_000), c: deps.Ctx = Depends(deps.ctx_requerido)):
+def curva(cod: str, total: int = Query(..., ge=1, le=2_000), c: deps.Ctx = Depends(deps.ctx_requerido)):
+    """Curva sugerida proporcional al stock. `total` acotado: con un total enorme la respuesta
+    sería el stock exacto de cada variante (SPECS §12: nunca revelar números de stock)."""
     df = deps.df_cliente(c)
     p = catalog.get_producto(df, cod.upper())
     if not p:

@@ -1190,7 +1190,7 @@ def page_reposicion() -> None:
                     format_func=lambda d: f"{d} días") or dias_default
     df = df_catalogo()
     with st.spinner("Calculando la reposición sugerida..."):
-        pv, sug = reposicion.sugerencias(int(cli["cliente_cod"]), df, dias)
+        pv, sug = reposicion.sugerencias(int(cli["cliente_cod"]), df, dias, con_foto=True)
     if pv is None:
         st.markdown("<p class='muted'>Tu cuenta no tiene un punto de venta asociado.</p>",
                     unsafe_allow_html=True)

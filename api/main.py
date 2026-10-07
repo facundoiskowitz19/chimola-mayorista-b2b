@@ -24,7 +24,9 @@ from api.routers import admin, auth, carrito, catalogo, cuenta, home, pedidos, r
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("api")
 
-app = FastAPI(title="Mayorista Lautin API", version="0.1.0", docs_url="/docs")
+_es_prod = os.getenv("APP_ENV", "dev").lower() == "prod"
+app = FastAPI(title="Mayorista Lautin API", version="0.1.0",
+              docs_url=None if _es_prod else "/docs", openapi_url=None if _es_prod else "/openapi.json")
 
 # CORS solo hace falta en desarrollo local (Next en :3000 → API en :8000).
 # En Cloud Run el front llega vía rewrite same-origin.

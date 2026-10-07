@@ -99,6 +99,7 @@ WHERE CAST(cliente_cod AS INT64) IN UNNEST(@cods)
 class _Cache:
     df: pd.DataFrame | None = None
     ts: float = 0.0
+    refrescando: bool = False
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
@@ -125,25 +126,49 @@ def normalizar_taxonomia(s: pd.Series) -> pd.Series:
     return claves.map(lambda k: rep.get(k) or "Otros")
 
 
+def _cargar_bq() -> pd.DataFrame:
+    t0 = time.time()
+    df = bq_client.query(SQL_CATALOGO)
+    for c in PRECIO_COLS + ["descvta"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
+    df["stock"] = df["stock"].astype(int)
+    df["color_cod"] = df["color_cod"].astype(str)
+    # Taxonomía (fase 8): en Aleph `rubro` = tipo de producto (Billeteras,
+    # Mochilas...) y `tipo_producto` = categoría (Marroquineria, Textil...).
+    df["categoria"] = normalizar_taxonomia(df["tipo_producto"])
+    df["rubro"] = normalizar_taxonomia(df["rubro"])
+    log.info("Catálogo cargado: %d variantes / %d productos en %.1fs",
+             len(df), df["producto_cod"].nunique(), time.time() - t0)
+    return df
+
+
+def _refrescar_en_segundo_plano() -> None:
+    try:
+        df = _cargar_bq()
+        with _cache.lock:
+            _cache.df, _cache.ts = df, time.time()
+    except Exception:  # noqa: BLE001 — se sigue sirviendo el catálogo viejo; se reintenta en la próxima request
+        log.exception("Refresco del catálogo en segundo plano falló")
+    finally:
+        with _cache.lock:
+            _cache.refrescando = False
+
+
 def load_variantes(force: bool = False) -> pd.DataFrame:
-    """Todas las variantes con stock B2B > 0 (cache TTL `CATALOGO_TTL_SEG`)."""
+    """Todas las variantes con stock B2B > 0 (cache TTL `CATALOGO_TTL_SEG`).
+    Vencido el TTL se sirve el catálogo viejo y se refresca en un hilo aparte
+    (stale-while-revalidate): la query a BQ tarda segundos y antes frenaba TODAS las requests."""
     with _cache.lock:
         vigente = _cache.df is not None and (time.time() - _cache.ts) < config.CATALOGO_TTL_SEG
-        if vigente and not force:
+        if _cache.df is not None and not force:
+            if not vigente and not _cache.refrescando:
+                _cache.refrescando = True
+                threading.Thread(target=_refrescar_en_segundo_plano, name="catalogo-refresh", daemon=True).start()
             return _cache.df
-        t0 = time.time()
-        df = bq_client.query(SQL_CATALOGO)
-        for c in PRECIO_COLS + ["descvta"]:
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
-        df["stock"] = df["stock"].astype(int)
-        df["color_cod"] = df["color_cod"].astype(str)
-        # Taxonomía (fase 8): en Aleph `rubro` = tipo de producto (Billeteras,
-        # Mochilas...) y `tipo_producto` = categoría (Marroquineria, Textil...).
-        df["categoria"] = normalizar_taxonomia(df["tipo_producto"])
-        df["rubro"] = normalizar_taxonomia(df["rubro"])
+    # Primera carga (o refresco forzado desde el admin): bloqueante.
+    df = _cargar_bq()
+    with _cache.lock:
         _cache.df, _cache.ts = df, time.time()
-        log.info("Catálogo cargado: %d variantes / %d productos en %.1fs",
-                 len(df), df["producto_cod"].nunique(), time.time() - t0)
         return df
 
 
@@ -329,6 +354,8 @@ def productos(df_variantes: pd.DataFrame) -> pd.DataFrame:
         aggs["precio_lista"] = ("precio_lista", "min")
     if "pct_desc" in df_variantes.columns:
         aggs["pct_desc"] = ("pct_desc", "max")
+    if "destacado" in df_variantes.columns:
+        aggs["destacado"] = ("destacado", "max")
     return g.agg(**aggs).reset_index()
 
 

@@ -43,6 +43,36 @@ def invalidar_cliente(cliente_cod: int | None) -> None:
             _cli_cache.pop(int(cliente_cod), None)
 
 
+# Cache del doc `usuarios/{email}` (Firestore): TTL 60 s. El JWT dura 24 h, pero desactivar un usuario,
+# cambiarle el rol/cliente o resetearle la password tiene que pegar en ~1 min, no al día siguiente.
+_usr_cache: dict[str, tuple[dict | None, float]] = {}
+_USR_TTL = 60
+
+
+def get_usuario(email: str) -> dict | None:
+    email = (email or "").strip().lower()
+    with _cli_lock:
+        hit = _usr_cache.get(email)
+        if hit and time.time() - hit[1] < _USR_TTL:
+            return hit[0]
+    u = auth.get_usuario(email)
+    with _cli_lock:
+        _usr_cache[email] = (u, time.time())
+    return u
+
+
+def invalidar_usuario(email: str | None) -> None:
+    if email:
+        with _cli_lock:
+            _usr_cache.pop(email.strip().lower(), None)
+
+
+def invalidar_todo() -> None:
+    with _cli_lock:
+        _cli_cache.clear()
+        _usr_cache.clear()
+
+
 class Ctx:
     """Contexto de la request: claims del JWT + cliente efectivo."""
 
@@ -109,7 +139,18 @@ def ctx_opcional(request: Request) -> Ctx | None:
     claims = auth.verify_jwt(_token(request))
     if not claims:
         return None
-    return Ctx(claims, get_cliente(claims.get("cliente_cod")))
+    u = get_usuario(claims.get("sub"))
+    if not u or not u.get("activo", True):
+        return None                       # usuario borrado o desactivado por el admin
+    pwd_ts = u.get("password_updated_at")
+    if pwd_ts is not None and claims.get("iat") and hasattr(pwd_ts, "timestamp") \
+            and float(claims["iat"]) < pwd_ts.timestamp() - 1:
+        return None                       # la password cambió después de emitir este token
+    # rol / cliente_cod / nombre: siempre los del doc (los claims pueden tener 24 h de antigüedad)
+    vivo = {**claims, "rol": u.get("rol", "cliente"),
+            "cliente_cod": int(u["cliente_cod"]) if u.get("cliente_cod") is not None else None,
+            "nombre": u.get("nombre_display") or claims.get("nombre") or ""}
+    return Ctx(vivo, get_cliente(vivo["cliente_cod"]))
 
 
 def ctx_requerido(request: Request) -> Ctx:
@@ -134,10 +175,30 @@ def ctx_admin(c: Ctx = Depends(ctx_requerido)) -> Ctx:
 # ---------------------------------------------------------------------------
 # Catálogo con precios del cliente
 # ---------------------------------------------------------------------------
+_df_cache: dict[int, tuple[pd.DataFrame, float, object, object]] = {}   # lista → (df, ts catálogo, overrides, config)
+_df_lock = threading.Lock()
+
+
 def df_cliente(c: Ctx) -> pd.DataFrame:
     """Variantes publicadas con `precio`, `precio_lista`, `pct_desc` de la lista del cliente.
-    Admin sin cliente → lista 1 (igual que `cliente_efectivo` del Streamlit)."""
-    return catalog.con_precio(catalog.variantes_publicadas(), c.lista)
+    Admin sin cliente → lista 1 (igual que `cliente_efectivo` del Streamlit).
+    Memoizado por lista mientras no cambien el catálogo BQ, los overrides ni la config
+    (antes se recalculaba `aplicar_overrides` + `con_precio` —copias completas— en CADA request).
+    El DataFrame devuelto es compartido: los callers filtran/copian, nunca lo mutan."""
+    import overrides
+    lista = c.lista
+    ov = overrides.get_catalogo_overrides()
+    cfg = overrides.get_config()
+    with _df_lock:
+        hit = _df_cache.get(lista)
+        if hit and hit[1] == catalog._cache.ts and hit[2] is ov and hit[3] is cfg:
+            return hit[0]
+    base = catalog.variantes_publicadas()
+    ts = catalog._cache.ts
+    df = catalog.con_precio(base, lista)
+    with _df_lock:
+        _df_cache[lista] = (df, ts, ov, cfg)
+    return df
 
 
 # ---------------------------------------------------------------------------

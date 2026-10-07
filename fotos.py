@@ -188,7 +188,6 @@ def foto_variante_filename(producto_cod: str, color: str | None = None,
     return _portada_filename(prod, files)
 
 
-@lru_cache(maxsize=16384)
 def url_variante_publica(producto_cod: str, color: str | None = None,
                          solo_color: bool = False) -> str:
     """URL pública de la foto de la variante ('' si no hay; con `solo_color`,
@@ -290,6 +289,18 @@ def fotos_producto(producto_cod: str, colores_catalogo: list[str] | None = None)
         fotos.sort(key=lambda f: f["filename"] != ov)   # la elegida, primera
     for f in fotos:
         f["url"] = url_foto(producto_cod, f["filename"])
+    return fotos
+
+
+def fotos_producto_publicas(producto_cod: str, colores_catalogo: list[str] | None = None) -> list[dict]:
+    """Como `fotos_producto` pero con URL pública (sin una llamada signBlob por foto)."""
+    files = indice_fotos().get(producto_cod.strip().upper(), [])
+    fotos = parsear_fotos(producto_cod, files, colores_catalogo)
+    ov = _override_portada(producto_cod)
+    if ov and any(f["filename"] == ov for f in fotos):
+        fotos.sort(key=lambda f: f["filename"] != ov)
+    for f in fotos:
+        f["url"] = url_foto_publica(producto_cod, f["filename"])
     return fotos
 
 
