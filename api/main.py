@@ -39,10 +39,14 @@ for r in (auth.router, catalogo.router, carrito.router, pedidos.router, cuenta.r
     app.include_router(r)
 
 
+APP_VERSION = os.getenv("APP_VERSION", "dev")   # lo setea deploy_rediseno.sh desde `git describe --tags`
+
+
 @app.get("/health")
 def health():
     import catalog
-    return {"ok": True, "catalogo_hace_seg": catalog.catalogo_actualizado_hace()}
+    return {"ok": True, "version": APP_VERSION, "env": os.getenv("APP_ENV", "dev"),
+            "catalogo_hace_seg": catalog.catalogo_actualizado_hace()}
 
 
 @app.on_event("startup")

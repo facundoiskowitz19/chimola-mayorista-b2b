@@ -1,5 +1,6 @@
 export default function Footer() {
   const env = process.env.NEXT_PUBLIC_APP_ENV || "dev";
+  const version = process.env.NEXT_PUBLIC_APP_VERSION || "dev";
   return (
     <footer className="mt-16 bg-black text-white">
       <div className="container-lt py-14">
@@ -19,7 +20,7 @@ export default function Footer() {
           </div>
         </div>
         <div className="mt-12 border-t border-white/20 pt-6 font-sans text-[11px] text-white/80">
-          © {new Date().getFullYear()} Lautin Accesorios. Todos los derechos reservados.{env !== "prod" && <> · Ambiente {env.toUpperCase()}</>}
+          © {new Date().getFullYear()} Lautin Accesorios. Todos los derechos reservados.{env !== "prod" && <> · Ambiente {env.toUpperCase()}</>} · <span title="Versión desplegada (tag git)">{version}</span>
         </div>
       </div>
     </footer>

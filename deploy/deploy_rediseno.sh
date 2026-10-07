@@ -31,9 +31,16 @@ API_SERVICE="mayorista-api-$ENV"
 WEB_SERVICE="mayorista-web-$ENV"
 REPO="$REGION-docker.pkg.dev/$PROJECT/cloud-run-source-deploy"
 TAG="$(date +%Y%m%d-%H%M%S)"
+# Versión del lanzamiento = último tag git (vX.Y.Z[-rc.N]); con commits encima queda "v1.0.0-rc.1-3-gabc123".
+APP_VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo desconocida)"
+if [[ "$ENV" == "prod" && ! "$APP_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "PROD solo se deploya desde un tag de versión exacto (vX.Y.Z); HEAD es '$APP_VERSION'. Taggeá primero." >&2
+  exit 1
+fi
 
 cd "$(dirname "$0")/.."
 log() { printf '\n==> %s\n' "$*"; }
+log "Versión: $APP_VERSION  (env: $ENV)"
 
 gcloud artifacts repositories describe cloud-run-source-deploy --project="$PROJECT" --location="$REGION" >/dev/null 2>&1 \
   || gcloud artifacts repositories create cloud-run-source-deploy --project="$PROJECT" --location="$REGION" \
@@ -49,7 +56,7 @@ if [[ "$QUE" == "all" || "$QUE" == "api" ]]; then
     --service-account="$SA" --allow-unauthenticated \
     --memory=1Gi --cpu=1 --concurrency=40 --timeout=120 \
     --min-instances=0 --max-instances=3 \
-    --set-env-vars="APP_ENV=${ENV},GCP_PROJECT=${PROJECT},BQ_PROJECT=${PROJECT},FIRESTORE_PROJECT=${PROJECT},BUCKET_PEDIDOS=${BUCKET_PEDIDOS},SMTP_SECRET_PROJECT=chimola-490015,PEDIDOS_EMAIL_TO=${PEDIDOS_EMAIL_TO},EMAIL_OVERRIDE_TO=,CORS_ORIGINS=" \
+    --set-env-vars="APP_ENV=${ENV},APP_VERSION=${APP_VERSION},GCP_PROJECT=${PROJECT},BQ_PROJECT=${PROJECT},FIRESTORE_PROJECT=${PROJECT},BUCKET_PEDIDOS=${BUCKET_PEDIDOS},SMTP_SECRET_PROJECT=chimola-490015,PEDIDOS_EMAIL_TO=${PEDIDOS_EMAIL_TO},EMAIL_OVERRIDE_TO=,CORS_ORIGINS=" \
     --set-secrets="JWT_KEY=mayorista-jwt-key:latest"
 fi
 
@@ -60,14 +67,14 @@ if [[ "$QUE" == "all" || "$QUE" == "web" ]]; then
   IMG="$REPO/mayorista-web:$TAG"
   log "Build web → $IMG"
   gcloud builds submit --project="$PROJECT" --config=web/cloudbuild.yaml \
-    --substitutions="_IMAGE=$IMG,_APP_ENV=$ENV,_ADMIN_URL=$ADMIN_URL" web
+    --substitutions="_IMAGE=$IMG,_APP_ENV=$ENV,_ADMIN_URL=$ADMIN_URL,_APP_VERSION=$APP_VERSION" web
   log "Deploy $WEB_SERVICE"
   gcloud run deploy "$WEB_SERVICE" \
     --project="$PROJECT" --region="$REGION" --image="$IMG" \
     --service-account="$SA" --allow-unauthenticated \
     --memory=512Mi --cpu=1 --concurrency=80 --timeout=60 \
     --min-instances=0 --max-instances=3 \
-    --set-env-vars="API_URL=${API_URL},NEXT_PUBLIC_APP_ENV=${ENV}"
+    --set-env-vars="API_URL=${API_URL},NEXT_PUBLIC_APP_ENV=${ENV},NEXT_PUBLIC_APP_VERSION=${APP_VERSION}"
 fi
 
 WEB_URL=$(gcloud run services describe "$WEB_SERVICE" --project="$PROJECT" --region="$REGION" --format="value(status.url)" 2>/dev/null || true)
