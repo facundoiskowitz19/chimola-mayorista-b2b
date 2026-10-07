@@ -42,6 +42,7 @@ export interface Variante {
 export interface Producto {
   producto_cod: string; producto_nombre: string; marca: string; temporada: string; rubro: string; categoria: string;
   descripcion: string; ub: number | null; precio: number | null; precio_lista: number | null; pct_desc: number;
+  medidas: string | null; materiales: string | null; descripcion_corta: string;
   seccion: Seccion; colores: Swatch[]; talles: string[]; variantes: Variante[];
   fotos: { url: string; filename: string; color: string; principal: boolean }[];
   relacionados: Card[]; familia: string | null;

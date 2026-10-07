@@ -220,10 +220,14 @@ def producto(cod: str, c: deps.Ctx = Depends(deps.ctx_requerido)):
     rel = rel[rel["producto_cod"].map(fotos.tiene_fotos)].head(8)
 
     row = df[df["producto_cod"] == p["producto_cod"]].iloc[0]
+    ft = catalog.ficha_texto(p.get("descripcion"))
+    _j = deps.jsonable
     return {
         **{k: deps.jsonable(p[k]) for k in ("producto_cod", "producto_nombre", "marca", "temporada", "rubro",
                                               "categoria", "descripcion", "ub", "precio", "precio_lista", "pct_desc")},
         "seccion": _seccion_de(row),
+        **{"descripcion_corta": ft["corta"], "medidas": ft["medidas"], "materiales": ft["materiales"],
+           "medida_aleph": _j(row.get("medida_aleph")) or None},
         "colores": [{"color": col, "hex": colores.hex_de(col),
                      "foto": fotos.url_foto_publica(p["producto_cod"], por_color[fotos.norm(col)]) if por_color.get(fotos.norm(col)) else None}
                     for col in cols],

@@ -73,7 +73,7 @@ export default function InlinePanel({ cod, onClose, onGaleria }: { cod: string; 
               <h3 className="font-brand text-[22px] font-bold leading-tight">{p.producto_nombre}</h3>
               <p className="card-meta mt-[2px]"><b>{p.producto_cod}</b> · {p.marca} {p.categoria} · {p.temporada} · {p.rubro}</p>
             </div>
-            {(() => { const f = fichaDesdeDescripcion(p.descripcion); return (f.medidas || f.materiales) ? (
+            {(() => { const f0 = fichaDesdeDescripcion(p.descripcion); const f = { medidas: p.medidas || f0.medidas, materiales: p.materiales || f0.materiales }; return (f.medidas || f.materiales) ? (
               <div className="hidden max-w-[300px] font-sans text-[11px] leading-snug lg:block">
                 {f.medidas && <div><b>Medidas:</b> {f.medidas}</div>}
                 {f.materiales && <div><b>Materiales:</b> {f.materiales}</div>}

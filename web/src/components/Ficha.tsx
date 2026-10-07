@@ -87,7 +87,7 @@ export default function Ficha({ p, puedePedir }: { p: Producto; puedePedir: bool
               {p.pct_desc > 0 && <div className="font-brand text-[11px] font-bold text-red">{Math.round(p.pct_desc)}% OFF</div>}
             </div>
           </div>
-          {(() => { const f = fichaDesdeDescripcion(p.descripcion); return (
+          {(() => { const f0 = fichaDesdeDescripcion(p.descripcion); const f = { ...f0, corto: p.descripcion_corta || f0.corto, medidas: p.medidas || f0.medidas, materiales: p.materiales || f0.materiales }; return (
             <div className="mt-5">
               {f.corto && <p className="font-brand text-[16px] font-bold leading-snug">{f.corto}</p>}
               <dl className="mt-4 space-y-1 font-sans text-[12px]">

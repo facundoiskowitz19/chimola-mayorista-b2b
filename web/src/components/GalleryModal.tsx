@@ -44,6 +44,7 @@ export default function GalleryModal({ cod, onClose }: { cod: string; onClose: (
               <div className="font-brand text-[17px] font-bold leading-tight">{p.producto_nombre}</div>
               <div className="card-meta"><b>{p.producto_cod}</b> · {p.marca} · {p.rubro}</div>
             </div>
+            {p.medidas && <div className="hidden items-center gap-2 border-l border-line pl-6 font-sans text-[13px] md:flex"><b>Medidas:</b> {p.medidas}</div>}
             <div className="ml-auto flex items-center gap-3 border-l border-line pl-6 font-sans text-[13px]">
               <b>Variantes:</b> <Swatches colores={p.colores} sel={color} onSel={elegirColor} size={16} />
               <span className="text-muted">{color ? capital(color) : ""}</span>

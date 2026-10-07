@@ -65,7 +65,9 @@ SELECT
   v.*,
   {", ".join(f"CAST(a.{c} AS FLOAT64) AS {c}" for c in PRECIO_COLS)},
   CAST(a.descvta AS FLOAT64)            AS descvta,
-  TRIM(IFNULL(a.observa, ''))           AS descripcion
+  TRIM(IFNULL(a.observa, ''))           AS descripcion,
+  TRIM(IFNULL(CAST(a.medida AS STRING), '')) AS medida_aleph,
+  SAFE_CAST(a.peso AS FLOAT64)          AS peso_aleph
 FROM variantes v
 LEFT JOIN {config.T_ARTICULOSOL} a ON a.codigo = v.producto_cod
 WHERE v.stock > 0
@@ -365,3 +367,27 @@ def get_producto(df: pd.DataFrame, producto_cod: str) -> dict | None:
         "colores": sorted(sub["color"].unique()),
         "talles": list(dict.fromkeys(sub["talle"])),
     }
+
+
+# ---------------------------------------------------------------------------
+# Ficha: la descripción de Aleph es un párrafo libre ("… Medida: 18 cm alto × 12.5 cm ancho
+# Composición: 100% algodón …"). Se separa en frase corta + Medidas + Materiales.
+# `articulosol.medida` ("5x40x45") queda disponible en `medida_aleph` pero NO se muestra hasta
+# confirmar con el pipeline qué representa (producto vs bulto) y en qué orden/unidad.
+# ---------------------------------------------------------------------------
+_CORTE = r"(?=\s(?:Variantes?|Caracter[ií]sticas|Colores|Talles?|Materiales?|Composici[oó]n|Medidas?|¿Qu[eé])\b|\.\s|$)"
+
+
+def ficha_texto(descripcion: str | None) -> dict:
+    import re as _re
+    d = _re.sub(r"\s+", " ", str(descripcion or "")).strip()
+    if not d:
+        return {"corta": "", "medidas": None, "materiales": None}
+    med = _re.search(r"Medidas?:?\s*(.+?)" + _CORTE, d, _re.I)
+    if not med:
+        med = _re.search(r"((?:(?:Ancho|Alto|Profundidad|Largo|Di[aá]metro|Capacidad):?\s*\d[\d.,]*\s*(?:cm|mm|lts?|ml)\s*)+)", d, _re.I)
+    mat = _re.search(r"(?:Materiales?|Composici[oó]n):?\s*(.+?)" + _CORTE, d, _re.I)
+    corta = _re.split(r"(?<=[.!?])\s", d)[0]
+    corta = _re.sub(r"\s*(Medidas?|Caracter[ií]sticas|Ancho:|Alto:).*$", "", corta, flags=_re.I).strip()
+    limpio = lambda m: m.group(1).strip().rstrip(".,;") if m else None  # noqa: E731
+    return {"corta": corta, "medidas": limpio(med), "materiales": limpio(mat)}
