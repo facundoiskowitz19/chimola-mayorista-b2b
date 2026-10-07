@@ -129,8 +129,7 @@ function MegaMenu({ sec, data, onEnter }: { sec: Seccion; data: Menu[Seccion]; o
         <div>
           <h4 className="kicker mb-3"><Link href={`/c/${sec}?solo_desc=1`} className="hover:underline">Oportunidades</Link></h4>
           <ul className={col}>
-            <li><Link href={`/c/${sec}?solo_desc=1`} className="hover:underline">Ver ofertas</Link> <span className="text-muted">({data.oportunidades})</span></li>
-            <li><Link href={`/c/${sec}`} className="hover:underline">Ver todo {data.nombre}</Link> <span className="text-muted">({data.n})</span></li>
+            {(data.oportunidades_items || []).map((o) => <li key={o.link + o.nombre}><Link href={o.link} className="hover:underline">{o.nombre}</Link></li>)}
           </ul>
         </div>
       </div>

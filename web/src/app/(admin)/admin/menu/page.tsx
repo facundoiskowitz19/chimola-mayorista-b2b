@@ -14,12 +14,14 @@ const LISTAS: { key: Lista; titulo: string; ayuda: string }[] = [
 ];
 interface Item { valor: string; nombre: string; n: number; nuevo?: boolean; anterior?: boolean }
 interface Fila extends Item { mostrar: boolean }
-interface Res { seccion: Sec; auto: Record<Lista, { valor: string; n: number }[]>; config: Partial<Record<Lista, Item[]>> | null; efectivo: Record<Lista, Item[]> & { personalizado: Record<Lista, boolean>; n: number; oportunidades: number }; tope_auto: Record<Lista, number> }
+interface Op { nombre: string; link: string; oculto?: boolean }
+interface Res { seccion: Sec; auto: Record<Lista, { valor: string; n: number }[]>; config: (Partial<Record<Lista, Item[]>> & { oportunidades?: Op[] }) | null; efectivo: Record<Lista, Item[]> & { personalizado: Record<Lista | "oportunidades", boolean>; n: number; oportunidades: number; oportunidades_items: Op[] }; tope_auto: Record<Lista, number> }
 
 export default function MenuAdmin() {
   const [sec, setSec] = useState<Sec>("marro");
   const [r, setR] = useState<Res | null>(null);
   const [filas, setFilas] = useState<Record<Lista, Fila[]>>({ temporadas: [], tipos: [], tendencias: [] });
+  const [ops, setOps] = useState<Op[]>([]);
   const [busy, setBusy] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const { notify } = useToast();
@@ -38,6 +40,7 @@ export default function MenuAdmin() {
       out[L.key] = [...mostrados, ...resto];
     }
     setFilas(out);
+    setOps(d.config?.oportunidades?.length ? d.config.oportunidades : d.efectivo.oportunidades_items.map((o) => ({ ...o, oculto: false })));
   }, [sec]);
   useEffect(() => { setR(null); cargar(); }, [cargar]);
 
@@ -52,7 +55,7 @@ export default function MenuAdmin() {
     try {
       const body: Record<string, Item[]> = {};
       for (const L of LISTAS) body[L.key] = filas[L.key].filter((f) => f.mostrar).map(({ valor, nombre, nuevo, anterior }) => ({ valor, nombre: nombre || valor, n: 0, ...(L.key === "temporadas" ? { nuevo: !!nuevo, anterior: !!anterior } : {}) }));
-      await api(`/admin/menu/${sec}`, { method: "PUT", json: body });
+      await api(`/admin/menu/${sec}`, { method: "PUT", json: { ...body, oportunidades: ops.filter((o) => o.nombre.trim() && o.link.trim()) } });
       notify("Menú guardado — el sitio lo toma en menos de un minuto"); await cargar();
     } catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); }
     finally { setBusy(false); }
@@ -67,7 +70,7 @@ export default function MenuAdmin() {
       <div className="mt-4"><Pills value={sec} onChange={setSec} options={SECS} /></div>
       <Muted className="mt-2">{personalizado ? "Menú personalizado guardado para esta sección." : "Menú automático (nada guardado)."} · {r.efectivo.n} productos · {r.efectivo.oportunidades} con descuento</Muted>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.5fr_1.1fr_0.9fr]">
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.5fr_1.1fr_0.9fr_1fr]">
         {LISTAS.map((L) => (
           <Panel key={L.key}>
             <Kicker>{L.titulo}{r.efectivo.personalizado[L.key] && <span className="ml-2 text-[#006786]">personalizado</span>}</Kicker>
@@ -86,6 +89,22 @@ export default function MenuAdmin() {
             </table>
           </Panel>
         ))}
+        <Panel>
+          <Kicker>Oportunidades{r.efectivo.personalizado.oportunidades && <span className="ml-2 text-[#006786]">personalizado</span>}</Kicker>
+          <Muted className="mt-1">Links libres de la cuarta columna. Por defecto: «Ver ofertas», que son los productos con descuento ({r.efectivo.oportunidades} hoy: el descvta de Aleph o el descuento por producto del admin), y «Ver todo». Podés sumar links a una categoría, una colección o una URL externa.</Muted>
+          <table className="vt mt-3 text-[12px]">
+            <thead><tr><th>Mostrar</th><th>Texto</th><th>Link</th><th /></tr></thead>
+            <tbody>{ops.map((o, i) => (
+              <tr key={i} className={o.oculto ? "opacity-50" : ""}>
+                <td><Check checked={!o.oculto} onChange={(v) => setOps(ops.map((x, k) => k === i ? { ...x, oculto: !v } : x))} /></td>
+                <td><input className="input !py-1 !text-[12px]" value={o.nombre} onChange={(e) => setOps(ops.map((x, k) => k === i ? { ...x, nombre: e.target.value } : x))} /></td>
+                <td><input className="input !py-1 !text-[12px]" value={o.link} onChange={(e) => setOps(ops.map((x, k) => k === i ? { ...x, link: e.target.value } : x))} placeholder={`/c/${sec}?solo_desc=1`} /></td>
+                <td className="whitespace-nowrap"><button onClick={() => { if (i > 0) { const a = [...ops]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; setOps(a); } }} className="px-1 text-faint hover:text-ink">↑</button><button onClick={() => { if (i < ops.length - 1) { const a = [...ops]; [a[i + 1], a[i]] = [a[i], a[i + 1]]; setOps(a); } }} className="px-1 text-faint hover:text-ink">↓</button><button onClick={() => setOps(ops.filter((_, k) => k !== i))} className="px-1 text-faint hover:text-[#aa0b56]">×</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+          <button onClick={() => setOps([...ops, { nombre: "", link: `/c/${sec}?categoria=`, oculto: false }])} className="btn btn-light btn-sm mt-3">+ Agregar link</button>
+        </Panel>
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button onClick={guardar} disabled={busy} className="btn btn-primary">{busy ? "Guardando…" : "Guardar menú"}</button>

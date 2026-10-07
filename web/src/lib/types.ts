@@ -29,6 +29,7 @@ export interface Catalogo {
 
 export interface MenuSeccion {
   nombre: string; marca: string; temporadas: Faceta[]; tipos: Faceta[]; tendencias: Faceta[]; oportunidades: number; n: number;
+  oportunidades_items?: { nombre: string; link: string }[];
 }
 export type Menu = Record<Seccion, MenuSeccion>;
 

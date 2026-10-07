@@ -387,6 +387,12 @@ def set_menu(seccion: str, data: dict, por: str) -> None:
                 d["anterior"] = bool(it.get("anterior"))
             items.append(d)
         limpio[lista] = items
+    ops = []
+    for it in data.get("oportunidades") or []:
+        nombre = str(it.get("nombre") or "").strip(); link = str(it.get("link") or "").strip()
+        if nombre and link:
+            ops.append({"nombre": nombre, "link": link, "oculto": bool(it.get("oculto"))})
+    limpio["oportunidades"] = ops
     _ref().set({"menu": {seccion: limpio}, "updated_at": dt.datetime.now(dt.timezone.utc), "updated_by": por},
                merge=True)
     # merge=True fusiona listas por posición en mapas anidados: reemplazar explícito.
@@ -426,4 +432,15 @@ def menu_efectivo(df, seccion: str) -> dict:
                 it.setdefault("nuevo", False)
                 it.setdefault("anterior", False)
         out[lista] = items
+    # Cuarta columna: links libres. Default = ofertas (productos con descuento) + ver todo.
+    conf_ops = cfg.get("oportunidades") or []
+    if conf_ops:
+        out["oportunidades_items"] = [o for o in conf_ops if not o.get("oculto")]
+        out["personalizado"]["oportunidades"] = True
+    else:
+        out["oportunidades_items"] = [
+            {"nombre": f"Ver ofertas ({auto['oportunidades']})", "link": f"/c/{seccion}?solo_desc=1"},
+            {"nombre": f"Ver todo {SECCIONES[seccion]['nombre']} ({auto['n']})", "link": f"/c/{seccion}"},
+        ]
+        out["personalizado"]["oportunidades"] = False
     return out
