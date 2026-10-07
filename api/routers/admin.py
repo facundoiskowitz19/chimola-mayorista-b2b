@@ -236,6 +236,7 @@ class ProductoIn(BaseModel):
     categoria: str | None = None
     rubro: str | None = None
     relacionados: list[str] | None = None
+    categorias_extra: list[str] | None = None
 
 
 @router.put("/productos/{cod}")
@@ -256,6 +257,8 @@ def guardar_producto(cod: str, body: ProductoIn, c: deps.Ctx = Depends(deps.ctx_
     campos["rubro"] = body.rubro
     if body.relacionados is not None:
         campos["relacionados"] = body.relacionados
+    if body.categorias_extra is not None:
+        campos["categorias_extra"] = body.categorias_extra
     overrides.set_catalogo_override(cod.upper(), campos, c.email)
     return {"ok": True}
 
@@ -295,20 +298,80 @@ def categorias():
     rubro → tipo); «Otros» = sin categoría en Aleph."""
     df = catalog.variantes_admin()
     ov = overrides.get_catalogo_overrides()
-    g = df.groupby(["categoria", "rubro"]).agg(productos=("producto_cod", "nunique"), stock=("stock", "sum")).reset_index()
+    ex = df.explode("categorias").rename(columns={"categorias": "cat"}) if "categorias" in df.columns else df.assign(cat=df["categoria"])
+    ex = ex.dropna(subset=["cat"])
+    g = ex.groupby(["cat", "rubro"]).agg(productos=("producto_cod", "nunique"), stock=("stock", "sum")).reset_index().rename(columns={"cat": "categoria"})
     arbol: dict[str, dict] = {}
     for _, r in g.iterrows():
         cat = arbol.setdefault(r["categoria"], {"categoria": r["categoria"], "productos": 0, "stock": 0, "tipos": []})
         cat["tipos"].append({"rubro": r["rubro"], "productos": int(r["productos"]), "stock": int(r["stock"])})
         cat["stock"] += int(r["stock"])
     for cat in arbol.values():
-        cat["productos"] = int(df[df["categoria"] == cat["categoria"]]["producto_cod"].nunique())
+        cat["productos"] = int(ex[ex["cat"] == cat["categoria"]]["producto_cod"].nunique())
         cat["tipos"].sort(key=lambda t: -t["productos"])
-    reclas = [{"producto_cod": c, "categoria": o.get("categoria"), "rubro": o.get("rubro")}
-              for c, o in ov.items() if o.get("categoria") or o.get("rubro")]
+    # Categorías creadas por el admin que hoy no tienen productos con stock
+    for o in ov.values():
+        for c in (o.get("categorias_extra") or []) + ([o["categoria"]] if o.get("categoria") else []):
+            arbol.setdefault(c, {"categoria": c, "productos": 0, "stock": 0, "tipos": []})
+    reclas = [{"producto_cod": c, "categoria": o.get("categoria"), "rubro": o.get("rubro"),
+               "categorias_extra": o.get("categorias_extra") or []}
+              for c, o in ov.items() if o.get("categoria") or o.get("rubro") or o.get("categorias_extra")]
     por_sec = {k: int(sitio.filtrar_seccion(df, k)["producto_cod"].nunique()) for k in sitio.SECCIONES}
     return {"arbol": sorted(arbol.values(), key=lambda c: -c["productos"]), "reclasificados": reclas,
             "por_seccion": por_sec, "secciones": {k: v["nombre"] for k, v in sitio.SECCIONES.items()}}
+
+
+@router.get("/categorias/{nombre}")
+def categoria_detalle(nombre: str):
+    """Productos de una categoría (principal o adicional), con origen de la pertenencia."""
+    df = catalog.variantes_admin()
+    ov = overrides.get_catalogo_overrides()
+    sub = df[catalog.mask_categoria(df, [nombre])]
+    prods = sub.groupby("producto_cod", sort=True).agg(
+        nombre=("producto_nombre", "first"), categoria=("categoria", "first"), rubro=("rubro", "first"),
+        marca=("marca", "first"), stock=("stock", "sum"), publicado=("publicado", "first")).reset_index()
+    items = []
+    for _, r in prods.iterrows():
+        cod = r["producto_cod"]; o = ov.get(cod, {})
+        files = fotos.indice_fotos().get(cod.upper(), [])
+        fn = fotos._portada_filename(cod, files) if files else None
+        if r["categoria"] == nombre:
+            origen = "manual" if o.get("categoria") == nombre else "aleph"
+        else:
+            origen = "extra"
+        items.append({"producto_cod": cod, "nombre": r["nombre"], "rubro": r["rubro"], "marca": r["marca"],
+                      "stock": int(r["stock"]), "publicado": _pub(r["publicado"]), "origen": origen,
+                      "categoria_principal": r["categoria"], "foto": fotos.url_foto_publica(cod, fn) if fn else None})
+    return {"categoria": nombre, "items": items, "n": len(items)}
+
+
+class CatProdIn(BaseModel):
+    producto_cod: str
+
+
+@router.post("/categorias/{nombre}/productos")
+def categoria_agregar(nombre: str, body: CatProdIn, c: deps.Ctx = Depends(deps.ctx_admin)):
+    """Suma el producto a la categoría como categoría adicional (no toca la principal)."""
+    cod = body.producto_cod.strip().upper()
+    df = catalog.variantes_admin()
+    if df[df["producto_cod"] == cod].empty:
+        raise HTTPException(404, f"{cod} no está en el catálogo actual")
+    o = overrides.get_catalogo_overrides().get(cod, {})
+    extras = list(o.get("categorias_extra") or [])
+    if nombre.strip() and nombre.strip().lower() not in {e.lower() for e in extras}:
+        extras.append(nombre.strip())
+    overrides.set_catalogo_override(cod, {"categorias_extra": extras}, c.email)
+    return {"ok": True, "categorias_extra": extras}
+
+
+@router.delete("/categorias/{nombre}/productos/{cod}")
+def categoria_quitar(nombre: str, cod: str, c: deps.Ctx = Depends(deps.ctx_admin)):
+    """Quita una categoría ADICIONAL del producto. La principal (Aleph o manual) se cambia en la ficha."""
+    cod = cod.upper()
+    o = overrides.get_catalogo_overrides().get(cod, {})
+    extras = [e for e in (o.get("categorias_extra") or []) if e.lower() != nombre.strip().lower()]
+    overrides.set_catalogo_override(cod, {"categorias_extra": extras}, c.email)
+    return {"ok": True, "categorias_extra": extras}
 
 
 # ---------------------------------------------------------------------------

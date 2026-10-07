@@ -13,7 +13,7 @@ interface Data {
   producto_cod: string;
   efectivo: { nombre: string; descripcion: string; marca: string; temporada: string; rubro: string; categoria: string; precios: Record<string, number | null> };
   aleph: { nombre: string; descripcion: string; precios: Record<string, number>; descvta: number };
-  override: { publicado?: boolean | null; destacado?: boolean; nombre?: string; descripcion?: string; precios?: Record<string, number>; ub?: number; descuento_pct?: number | null; portada?: string; fotos_color?: Record<string, string>; variantes?: Record<string, Var["ov"]>; variantes_extra?: Record<string, Extra>; updated_by?: string; updated_at?: string | null; categoria?: string; rubro?: string; relacionados?: string[] };
+  override: { publicado?: boolean | null; destacado?: boolean; nombre?: string; descripcion?: string; precios?: Record<string, number>; ub?: number; descuento_pct?: number | null; portada?: string; fotos_color?: Record<string, string>; variantes?: Record<string, Var["ov"]>; variantes_extra?: Record<string, Extra>; updated_by?: string; updated_at?: string | null; categoria?: string; rubro?: string; relacionados?: string[]; categorias_extra?: string[] };
   variantes: Var[];
   fotos: { files: string[]; n: number; portada_auto: string | null; portada: string | null; principal: string | null; urls: Record<string, string>; por_color: { color: string; auto: string | null; manual: string | null; norm: string }[] };
   colores: { color: string; hex: string }[];
@@ -27,7 +27,7 @@ interface Form {
   precios: Record<string, string>; variantes: Record<string, { stock: string; oculta: boolean; precio1: string }>;
   extras: Record<string, { color: string; talle: string; stock: string; precio: string; ean: string; quitar: boolean }>;
   fotos_color: Record<string, string>; portada: string;
-  categoria: string; rubro: string; relacionados: RelInfo[];
+  categoria: string; rubro: string; relacionados: RelInfo[]; categorias_extra: string[]; nuevaCat: string;
 }
 
 const PUB = [
@@ -47,7 +47,7 @@ function formDe(d: Data): Form {
     extras: Object.fromEntries(Object.entries(o.variantes_extra || {}).map(([sku, x]) => [sku, { color: x.color, talle: x.talle, stock: String(x.stock), precio: String(x.precios?.["1"] || ""), ean: x.ean || "", quitar: false }])),
     fotos_color: Object.fromEntries(d.fotos.por_color.map((c) => [c.norm, c.manual || ""])),
     portada: d.fotos.portada || "",
-    categoria: o.categoria || "", rubro: o.rubro || "", relacionados: d.relacionados,
+    categoria: o.categoria || "", rubro: o.rubro || "", relacionados: d.relacionados, categorias_extra: o.categorias_extra || [], nuevaCat: "",
   };
 }
 
@@ -98,7 +98,7 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
         ub: f.ub ? parseInt(f.ub, 10) : null, descuento_pct: f.descuento_pct === "" ? null : parseFloat(f.descuento_pct),
         portada: f.portada, fotos_color: Object.fromEntries(Object.entries(f.fotos_color).filter(([, v]) => v)),
         variantes, variantes_extra: Object.keys(d.override.variantes_extra || {}).length || Object.keys(extras).length ? extras : null,
-        categoria: f.categoria || null, rubro: f.rubro || null, relacionados: f.relacionados.map((r) => r.producto_cod),
+        categoria: f.categoria || null, rubro: f.rubro || null, relacionados: f.relacionados.map((r) => r.producto_cod), categorias_extra: f.categorias_extra,
       } });
       notify(`${cod} guardado`); setEdit(false); await cargar();
     } catch (e) { notify(e instanceof ClientError ? e.message : "Error", "error"); }
@@ -191,7 +191,15 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
                     <datalist id="rubros">{d.clasificacion.opciones_rubro.map((x) => <option key={x} value={x} />)}</datalist>
                   </Field>
                 </div>
-                <Muted className="mt-2">Un producto con categoría Indumentaria o Pijamas aparece en la sección Indumentaria del header; el resto de Chimola en Marroquinería. Podés escribir un valor nuevo; aparece en los filtros y en el menú.</Muted>
+                <Muted className="mt-2">La categoría principal decide la sección del header: Indumentaria o Pijamas → Indumentaria; el resto de Chimola → Marroquinería. Podés escribir un valor nuevo.</Muted>
+                <Field label="Categorías adicionales (el producto aparece también en estas)" className="mt-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {f.categorias_extra.map((c, i) => <span key={c} className="chip">{c} <button type="button" onClick={() => setF({ ...f, categorias_extra: f.categorias_extra.filter((_, k) => k !== i) })} className="text-faint hover:text-[#aa0b56]">×</button></span>)}
+                    <input className="input !w-[240px] !py-1" list="cats" value={f.nuevaCat} onChange={(e) => setF({ ...f, nuevaCat: e.target.value })}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const v = f.nuevaCat.trim(); if (v && !f.categorias_extra.some((x) => x.toLowerCase() === v.toLowerCase())) setF({ ...f, categorias_extra: [...f.categorias_extra, v], nuevaCat: "" }); } }}
+                      placeholder="Escribí y Enter (ej: Día de la madre)" />
+                  </div>
+                </Field>
               </Panel>
               <Panel>
                 <Kicker>Productos relacionados</Kicker>
@@ -303,7 +311,7 @@ function Vista({ d, hex }: { d: Data; hex: (c: string) => string | undefined }) 
         {attr("Múltiplo (U.B.)", o.ub ? `${o.ub} unidades` : "Libre", !!o.ub)}
         {attr("Descuento", o.descuento_pct !== null && o.descuento_pct !== undefined ? `${o.descuento_pct}%` : d.aleph.descvta > 0 ? `${d.aleph.descvta}% (Aleph)` : "Sin descuento", o.descuento_pct !== null && o.descuento_pct !== undefined)}
         {attr("Fotos", d.fotos.n ? `${d.fotos.n} cargada(s)` : "Sin foto", false)}
-        {attr("Categoría", d.clasificacion.categoria, !!o.categoria)}
+        {attr("Categoría", <>{d.clasificacion.categoria}{(o.categorias_extra || []).length > 0 && <span className="text-muted"> + {o.categorias_extra!.join(", ")}</span>}</>, !!o.categoria || (o.categorias_extra || []).length > 0)}
         {attr("Tipo de producto", d.clasificacion.rubro, !!o.rubro)}
         {attr("Relacionados", d.relacionados.length ? d.relacionados.map((r) => r.producto_cod).join(", ") : "Automático", d.relacionados.length > 0)}
       </Panel>

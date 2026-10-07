@@ -282,11 +282,16 @@ def filtrar_seccion(df, seccion: str | None):
     if not seccion:
         return df
     s = SECCIONES[seccion]
+    import catalog
     sub = df[df["marca"] == s["marca"]]
-    if "excluir_cat" in s:
-        sub = sub[~sub["categoria"].isin(s["excluir_cat"])]
+    indu = SECCIONES["indu"]["solo_cat"]
+    if "excluir_cat" in s:   # marro: tiene alguna categoría que NO es de indumentaria (multicategoría)
+        if "categorias" in sub.columns:
+            sub = sub[sub["categorias"].map(lambda cs: any(c not in indu for c in (cs or [])) or not cs)]
+        else:
+            sub = sub[~sub["categoria"].isin(s["excluir_cat"])]
     if "solo_cat" in s:
-        sub = sub[sub["categoria"].isin(s["solo_cat"])]
+        sub = sub[catalog.mask_categoria(sub, s["solo_cat"])]
     return sub
 
 
@@ -306,7 +311,11 @@ MENU_AUTO_TOPE = {"temporadas": 9, "tipos": 12, "tendencias": 20}
 
 
 def _conteo(sub, col: str) -> list[dict]:
-    g = sub.groupby(col)["producto_cod"].nunique().sort_values(ascending=False)
+    if col == "categoria" and "categorias" in sub.columns:
+        ex = sub[["producto_cod", "categorias"]].explode("categorias").dropna()
+        g = ex.groupby("categorias")["producto_cod"].nunique().sort_values(ascending=False)
+    else:
+        g = sub.groupby(col)["producto_cod"].nunique().sort_values(ascending=False)
     return [{"valor": str(k), "n": int(v)} for k, v in g.items() if k and k != "Otros"]
 
 

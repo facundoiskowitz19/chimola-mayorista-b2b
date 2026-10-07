@@ -109,9 +109,9 @@ def listar(
         prods = prods.sort_values(["precio", "producto_cod"], ascending=[False, True])
     elif orden == "nombre":
         prods = prods.sort_values("producto_nombre")
-    else:   # destacados primero, después "lo nuevo": código descendente como proxy
-        prods = prods.assign(_d=prods.get("destacado", False).fillna(False).astype(int)) \
-                     .sort_values(["_d", "producto_cod"], ascending=[False, False]).drop(columns="_d")
+    elif not prods.empty:   # destacados primero, después "lo nuevo": código descendente como proxy
+        dest = prods["destacado"].fillna(False).astype(bool) if "destacado" in prods.columns else pd.Series(False, index=prods.index)
+        prods = prods.assign(_d=dest.astype(int)).sort_values(["_d", "producto_cod"], ascending=[False, False]).drop(columns="_d")
 
     total = len(prods)
     per_page = max(1, min(per_page, PER_PAGE_MAX))
@@ -132,7 +132,10 @@ def _facetas(df: pd.DataFrame, sel: dict) -> dict:
     for f in catalog.FILTROS:
         otros = {k: v for k, v in sel.items() if k != f and v}
         sub = catalog.filtrar_variantes(df, otros)
-        cnt = sub.groupby(f)["producto_cod"].nunique()
+        if f == "categoria" and "categorias" in sub.columns:
+            cnt = sub[["producto_cod", "categorias"]].explode("categorias").dropna().groupby("categorias")["producto_cod"].nunique()
+        else:
+            cnt = sub.groupby(f)["producto_cod"].nunique()
         opciones = [{"valor": k, "n": int(v)} for k, v in cnt.items() if k]
         if f == "talle":
             opciones.sort(key=lambda o: catalog.talle_key(o["valor"]))

@@ -237,6 +237,28 @@ def aplicar_descuento(monto: float, descuento_pct: float) -> float:
 FILTROS = ["categoria", "rubro", "marca", "temporada", "color", "talle"]
 
 
+def mask_categoria(df: pd.DataFrame, vals) -> pd.Series:
+    """Fila matchea si ALGUNA de sus categorías (principal + extras del admin) está en vals.
+    `categorias` (lista por fila) la agrega overrides.aplicar_overrides; sin ella, usa `categoria`."""
+    vals = set(vals)
+    if "categorias" in df.columns:
+        return df["categorias"].map(lambda cs: bool(vals.intersection(cs or [])))
+    return df["categoria"].isin(vals)
+
+
+def valores_categoria(df: pd.DataFrame) -> pd.Series:
+    """Serie 'explotada' de categorías (una fila por producto×categoría) para facetas y conteos."""
+    if "categorias" in df.columns:
+        return df[["producto_cod", "categorias"]].explode("categorias").rename(columns={"categorias": "categoria"})["categoria"]
+    return df["categoria"]
+
+
+def _aplicar_filtro(sub: pd.DataFrame, f: str, vals) -> pd.DataFrame:
+    if f == "categoria":
+        return sub[mask_categoria(sub, vals)]
+    return sub[sub[f].isin(vals)]
+
+
 def opciones_filtros(df: pd.DataFrame, seleccion: dict | None = None) -> dict[str, list[str]]:
     """Valores disponibles por filtro (facetado: respeta las otras selecciones)."""
     seleccion = seleccion or {}
@@ -248,8 +270,9 @@ def opciones_filtros(df: pd.DataFrame, seleccion: dict | None = None) -> dict[st
         sub = df
         for g, vals in seleccion.items():
             if g != f and vals and g in sub.columns:
-                sub = sub[sub[g].isin(vals)]
-        vals = [v for v in sub[f].dropna().unique() if str(v).strip()]
+                sub = _aplicar_filtro(sub, g, vals)
+        serie = valores_categoria(sub) if f == "categoria" else sub[f]
+        vals = [v for v in serie.dropna().unique() if str(v).strip()]
         out[f] = sorted(vals, key=talle_key) if f == "talle" else sorted(vals)
     return out
 
@@ -270,8 +293,8 @@ def _matches_busqueda(df: pd.DataFrame, texto: str) -> pd.Series:
 def filtrar_variantes(df: pd.DataFrame, seleccion: dict | None = None, busqueda: str = "") -> pd.DataFrame:
     sub = df
     for f, vals in (seleccion or {}).items():
-        if vals:
-            sub = sub[sub[f].isin(vals)]
+        if vals and f in sub.columns:
+            sub = _aplicar_filtro(sub, f, vals)
     return sub[_matches_busqueda(sub, busqueda)]
 
 
