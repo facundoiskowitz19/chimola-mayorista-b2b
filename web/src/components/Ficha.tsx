@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import type { Producto } from "@/lib/types";
 import { ClientError } from "@/lib/client";
-import { money } from "@/lib/format";
+import { fichaDesdeDescripcion, money } from "@/lib/format";
 import { Chevron } from "./Brand";
 import { useCart } from "./CartContext";
 import { useToast } from "./Toast";
@@ -87,12 +87,19 @@ export default function Ficha({ p, puedePedir }: { p: Producto; puedePedir: bool
               {p.pct_desc > 0 && <div className="font-brand text-[11px] font-bold text-red">{Math.round(p.pct_desc)}% OFF</div>}
             </div>
           </div>
-          {p.descripcion && <p className="mt-6 font-sans text-[14px] leading-relaxed text-ink-2"><span className="font-brand font-bold text-ink">{p.descripcion.split(/(?<=\.)\s/)[0]}</span>{p.descripcion.slice(p.descripcion.split(/(?<=\.)\s/)[0].length)}</p>}
-          <dl className="mt-4 space-y-1 font-sans text-[12px]">
-            <div><dt className="inline font-bold">Categoría: </dt><dd className="inline">{p.categoria}</dd></div>
-            <div><dt className="inline font-bold">Temporada: </dt><dd className="inline">{p.temporada}</dd></div>
-            {p.ub && p.ub > 1 && <div><dt className="inline font-bold">Unidad de bulto: </dt><dd className="inline">{p.ub} u.</dd></div>}
-          </dl>
+          {(() => { const f = fichaDesdeDescripcion(p.descripcion); return (
+            <div className="mt-5">
+              {f.corto && <p className="font-brand text-[16px] font-bold leading-snug">{f.corto}</p>}
+              <dl className="mt-4 space-y-1 font-sans text-[12px]">
+                {f.medidas && <div><dt className="inline font-bold">Medidas: </dt><dd className="inline">{f.medidas}</dd></div>}
+                {f.materiales && <div><dt className="inline font-bold">Materiales: </dt><dd className="inline">{f.materiales}</dd></div>}
+                {p.ub && p.ub > 1 && <div><dt className="inline font-bold">Unidad de bulto: </dt><dd className="inline">{p.ub} u.</dd></div>}
+              </dl>
+              {f.completa && f.completa.length > f.corto.length + 20 && (
+                <details className="mt-3"><summary className="cursor-pointer font-sans text-[12px] text-muted hover:text-ink">Ver descripción completa</summary><p className="mt-2 font-sans text-[13px] leading-relaxed text-ink-2">{f.completa}</p></details>
+              )}
+            </div>
+          ); })()}
           <div className="mt-8">
             {puedePedir ? (
               <VariantPicker p={p} cants={cants} setCants={setCants} onAgregar={onAgregar} busy={busy} />

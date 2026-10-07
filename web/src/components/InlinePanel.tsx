@@ -4,12 +4,19 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Producto } from "@/lib/types";
 import { api, ClientError } from "@/lib/client";
-import { money } from "@/lib/format";
+import { fichaDesdeDescripcion, money } from "@/lib/format";
 import { CameraIcon, Chevron, XIcon } from "./Brand";
 import Thumb from "./Thumb";
 import { useCart } from "./CartContext";
 import { useToast } from "./Toast";
 import VariantPicker, { esMatriz, type Cants } from "./VariantPicker";
+
+function tituloRelacionados(p: Producto): string {
+  const vis = p.relacionados.slice(0, 4);
+  const fam = p.familia;
+  const todosFamilia = !!fam && vis.length > 0 && vis.every((r) => new RegExp(`\\b${fam.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(r.nombre));
+  return todosFamilia ? `Completá la línea “${fam}”:` : "Otros productos que te pueden interesar:";
+}
 
 export default function InlinePanel({ cod, onClose, onGaleria }: { cod: string; onClose: () => void; onGaleria?: (cod: string) => void }) {
   const [p, setP] = useState<Producto | null>(null);
@@ -66,6 +73,12 @@ export default function InlinePanel({ cod, onClose, onGaleria }: { cod: string; 
               <h3 className="font-brand text-[22px] font-bold leading-tight">{p.producto_nombre}</h3>
               <p className="card-meta mt-[2px]"><b>{p.producto_cod}</b> · {p.marca} {p.categoria} · {p.temporada} · {p.rubro}</p>
             </div>
+            {(() => { const f = fichaDesdeDescripcion(p.descripcion); return (f.medidas || f.materiales) ? (
+              <div className="hidden max-w-[300px] font-sans text-[11px] leading-snug lg:block">
+                {f.medidas && <div><b>Medidas:</b> {f.medidas}</div>}
+                {f.materiales && <div><b>Materiales:</b> {f.materiales}</div>}
+              </div>
+            ) : null; })()}
             <div className="text-right">
               {p.pct_desc > 0 && p.precio_lista ? <div className="price-old">{money(p.precio_lista)}</div> : null}
               <div className="font-brand text-[18px] font-bold">{money(p.precio)}</div>
@@ -86,13 +99,12 @@ export default function InlinePanel({ cod, onClose, onGaleria }: { cod: string; 
                 )}
               </div>
               {fotos.length > 1 && <p className="mt-1 text-center font-sans text-[11px] text-muted">{idx + 1} de {fotos.length}</p>}
-              {p.descripcion && <p className="mt-3 font-sans text-[12px] leading-snug text-ink-2">{p.descripcion}</p>}
             </div>
             <div className="min-w-0"><VariantPicker p={p} cants={cants} setCants={setCants} onAgregar={onAgregar} busy={busy} /></div>
           </div>
           {p.relacionados.length > 0 && (
             <div className="mt-8 border-t border-line pt-6">
-              <h4 className="text-center font-brand text-[13px] font-bold">Otros productos {p.familia ? <>&ldquo;{p.familia}&rdquo;</> : "relacionados"} que te pueden interesar:</h4>
+              <h4 className="text-center font-brand text-[13px] font-bold">{tituloRelacionados(p)}</h4>
               <div className="mt-5 flex flex-wrap justify-center gap-6">
                 {p.relacionados.slice(0, 4).map((r) => (
                   <Link key={r.producto_cod} href={`/p/${r.producto_cod}`} className="w-[150px] text-center">

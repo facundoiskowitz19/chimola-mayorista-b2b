@@ -104,7 +104,7 @@ export default function VariantPicker({ p, cants, setCants, onAgregar, busy }: {
       <div className="mt-4 overflow-x-auto">
         <table className="vt">
           <thead>
-            <tr><th>Variante</th>{p.talles.map((t) => <th key={t} className="text-center whitespace-nowrap">Talle {t}</th>)}</tr>
+            <tr><th>Variante</th>{p.talles.map((t) => <th key={t} className="!px-1 text-center whitespace-nowrap">T. {t}</th>)}</tr>
           </thead>
           <tbody>
             {p.colores.map((c) => (
@@ -113,10 +113,10 @@ export default function VariantPicker({ p, cants, setCants, onAgregar, busy }: {
                 {p.talles.map((t) => {
                   const v = skuDe(c.color, t);
                   return (
-                    <td key={t} className="text-center">
+                    <td key={t} className="!px-1 text-center">
                       {v ? (
-                        <span className="inline-flex items-center gap-1">
-                          <QtyInput value={cants[v.sku] || 0} onChange={(n) => set(v.sku, n)} className="!min-w-[44px]" />
+                        <span className="inline-flex items-center gap-[3px]">
+                          <QtyInput value={cants[v.sku] || 0} onChange={(n) => set(v.sku, n)} className="!min-w-[38px] !w-[44px] !px-1" />
                           <span className="font-sans text-[10px] text-muted">u.</span>
                         </span>
                       ) : <span className="text-faint">—</span>}
