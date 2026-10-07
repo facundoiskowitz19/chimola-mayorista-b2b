@@ -14,3 +14,12 @@ tests/
 .DS_Store
 .streamlit/secrets.toml
 prompt_nuevo_agente.txt
+# Sitio nuevo: la web se buildea aparte (web/cloudbuild.yaml); capturas y diseño no van
+web/
+vistas_vale/
+design_handoff_admin_v2/
+design_handoff_mayorista_ux/
+presentacion_mayorista/
+docs/
+*.png
+*.zip

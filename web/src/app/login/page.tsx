@@ -1,0 +1,65 @@
+import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { apiServerOpcional } from "@/lib/api";
+import type { Me } from "@/lib/types";
+import Footer from "@/components/Footer";
+import LoginForm from "./LoginForm";
+import { Wordmark } from "@/components/Brand";
+
+export const metadata = { title: "Ingresá — Lautin Mayorista" };
+
+function Sticker() {
+  /* Sello circular como el del mock: texto en círculo + SS 27 al centro. */
+  return (
+    <svg viewBox="0 0 120 120" className="absolute right-[30%] top-[9%] hidden h-[112px] w-[112px] md:block" aria-hidden>
+      <defs><path id="circ" d="M60,60 m-44,0 a44,44 0 1,1 88,0 a44,44 0 1,1 -88,0" /></defs>
+      <circle cx="60" cy="60" r="58" fill="#e38ad8" />
+      <text fill="#fff" fontSize="10.5" fontWeight="700" fontFamily="Montserrat, sans-serif" letterSpacing="1.6">
+        <textPath href="#circ" startOffset="2%">NUEVO LANZAMIENTO · PRIMAVERA VERANO ·</textPath>
+      </text>
+      <text x="60" y="56" textAnchor="middle" fill="#fff" fontSize="26" fontWeight="800" fontFamily="Montserrat, sans-serif">SS</text>
+      <text x="60" y="80" textAnchor="middle" fill="#fff" fontSize="26" fontWeight="800" fontFamily="Montserrat, sans-serif">27</text>
+    </svg>
+  );
+}
+
+export default async function LoginPage() {
+  // Solo rebota si la cookie es válida; una vencida se queda acá (y /auth/expired ya la borró).
+  const me = await apiServerOpcional<Me>("/auth/me");
+  if (me) redirect("/h/marro");
+  return (
+    <div className="flex min-h-screen flex-col">
+      <main className="flex-1">
+        <div className="container-lt pt-10 pb-16">
+          <div className="mb-5 flex items-center gap-4">
+            <Wordmark />
+            <span className="pill">Venta exclusiva mayorista</span>
+            <span className="pill">Sólo clientes registrados</span>
+          </div>
+          <div className="relative">
+            <div className="relative aspect-[1125/475] w-full overflow-hidden bg-[#2a2320] lg:w-[calc(100%-60px)]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/banners/login.jpg" alt="" className="absolute inset-0 h-full w-full object-cover object-top" />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent" />
+              <div className="absolute left-[10%] top-[28%] text-white">
+                <h1 className="font-brand text-[44px] font-extrabold leading-[1.02]">Bienvenido<br />a Lautin<br />Accesorios</h1>
+                <p className="mt-3 font-sans text-[19px] font-light leading-tight">Ingresá y descubrí<br />nuestros productos.</p>
+                <div className="mt-10 flex items-center gap-8">
+                  <span className="font-brand text-[34px] font-bold lowercase leading-none">chimola<span className="align-top text-[16px]">®</span></span>
+                  <span className="font-serif text-[30px] leading-none tracking-wide">LIMA</span>
+                </div>
+              </div>
+              <Sticker />
+            </div>
+            <div className="mt-6 w-full rounded-2xl bg-white p-8 shadow-sm lg:absolute lg:right-0 lg:top-[-50px] lg:mt-0 lg:w-[370px]">
+              <h2 className="font-brand text-[26px] font-bold leading-tight">Ingresá a tu cuenta</h2>
+              <p className="mt-1 font-sans text-[14px] leading-snug text-ink-2">Completá tus datos e ingresá<br />a nuestro catálogo mayorista</p>
+              <Suspense fallback={null}><LoginForm /></Suspense>
+            </div>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+}

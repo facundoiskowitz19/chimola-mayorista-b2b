@@ -61,8 +61,16 @@ def _storage() -> storage.Client:
 
 _idx_lock = threading.Lock()
 _idx: dict[str, list[str]] = {}
+_carpetas: dict[str, str] = {}   # COD (UPPER) → nombre REAL de la carpeta en el bucket (hay 15 con espacios/minúsculas)
 _idx_ts = 0.0
 _IDX_TTL = 3600
+
+
+def carpeta(producto_cod: str) -> str:
+    """Nombre real de la carpeta del producto en el bucket (ej: 'TR215 ' con espacio final).
+    Sin esto la URL da 404 para esas carpetas."""
+    indice_fotos()
+    return _carpetas.get(producto_cod.strip().upper(), producto_cod.strip().upper())
 
 
 def indice_fotos(force: bool = False) -> dict[str, list[str]]:
@@ -74,6 +82,7 @@ def indice_fotos(force: bool = False) -> dict[str, list[str]]:
         t0 = time.time()
         prefix = config.FOTOS_PREFIX.rstrip("/") + "/"
         out: dict[str, list[str]] = {}
+        carpetas: dict[str, str] = {}
         for blob in _storage().list_blobs(config.BUCKET_FOTOS, prefix=prefix):
             rel = blob.name[len(prefix):]
             if "/" not in rel:
@@ -82,7 +91,9 @@ def indice_fotos(force: bool = False) -> dict[str, list[str]]:
             if not fn or "/" in fn or not IMG_EXT.search(fn):
                 continue
             out.setdefault(prod.strip().upper(), []).append(fn)
+            carpetas.setdefault(prod.strip().upper(), prod)
         _idx, _idx_ts = out, time.time()
+        _carpetas.clear(); _carpetas.update(carpetas)
         log.info("Índice de fotos: %d productos en %.1fs", len(out), time.time() - t0)
         return _idx
 
@@ -128,7 +139,7 @@ _url_lock = threading.Lock()
 
 def url_foto(producto_cod: str, filename: str) -> str:
     """URL (firmada, TTL 1h) de una foto. Cacheada 50 min."""
-    blob_name = f"{config.FOTOS_PREFIX.rstrip('/')}/{producto_cod}/{filename}"
+    blob_name = f"{config.FOTOS_PREFIX.rstrip('/')}/{carpeta(producto_cod)}/{filename}"
     with _url_lock:
         hit = _url_cache.get(blob_name)
         if hit and hit[1] > time.time():
@@ -155,7 +166,7 @@ def url_foto_publica(producto_cod: str, filename: str) -> str:
     """URL pública de una foto (no vence — para links en Excel y tablas largas).
     El bucket es público hoy (lo usa el Woo); si algún día se cierra, esto
     debe migrar a otro esquema."""
-    return _public_url(f"{config.FOTOS_PREFIX.rstrip('/')}/{producto_cod.strip().upper()}/{filename}")
+    return _public_url(f"{config.FOTOS_PREFIX.rstrip('/')}/{carpeta(producto_cod)}/{filename}")
 
 
 def foto_variante_filename(producto_cod: str, color: str | None = None,
@@ -177,7 +188,6 @@ def foto_variante_filename(producto_cod: str, color: str | None = None,
     return _portada_filename(prod, files)
 
 
-@lru_cache(maxsize=16384)
 def url_variante_publica(producto_cod: str, color: str | None = None,
                          solo_color: bool = False) -> str:
     """URL pública de la foto de la variante ('' si no hay; con `solo_color`,
@@ -193,7 +203,7 @@ def miniatura_jpeg(producto_cod: str, filename: str, px: int = 56) -> bytes | No
 
     from PIL import Image
     try:
-        blob_name = f"{config.FOTOS_PREFIX.rstrip('/')}/{producto_cod.strip().upper()}/{filename}"
+        blob_name = f"{config.FOTOS_PREFIX.rstrip('/')}/{carpeta(producto_cod)}/{filename}"
         data = _storage().bucket(config.BUCKET_FOTOS).blob(blob_name).download_as_bytes()
         im = Image.open(_io.BytesIO(data)).convert("RGB")
         im.thumbnail((px, px))
@@ -279,6 +289,18 @@ def fotos_producto(producto_cod: str, colores_catalogo: list[str] | None = None)
         fotos.sort(key=lambda f: f["filename"] != ov)   # la elegida, primera
     for f in fotos:
         f["url"] = url_foto(producto_cod, f["filename"])
+    return fotos
+
+
+def fotos_producto_publicas(producto_cod: str, colores_catalogo: list[str] | None = None) -> list[dict]:
+    """Como `fotos_producto` pero con URL pública (sin una llamada signBlob por foto)."""
+    files = indice_fotos().get(producto_cod.strip().upper(), [])
+    fotos = parsear_fotos(producto_cod, files, colores_catalogo)
+    ov = _override_portada(producto_cod)
+    if ov and any(f["filename"] == ov for f in fotos):
+        fotos.sort(key=lambda f: f["filename"] != ov)
+    for f in fotos:
+        f["url"] = url_foto_publica(producto_cod, f["filename"])
     return fotos
 
 

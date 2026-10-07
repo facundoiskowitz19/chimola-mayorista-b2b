@@ -273,9 +273,9 @@ def resumen_cambios(orig: list[dict], nuevos: list[dict]) -> str:
 def confirmar_pedido(usuario: dict, cliente: dict, items: list[dict], observaciones: str = "") -> tuple[dict, bytes]:
     """Valida stock en vivo → numera → Excel → backup GCS → Firestore → email.
     Devuelve (pedido, xlsx_bytes). Levanta StockInsuficiente si no alcanza."""
+    items = [dict(i) for i in items if int(i.get("cantidad", 0)) > 0]
     if not items:
         raise ValueError("El carrito está vacío")
-    items = [dict(i) for i in items if int(i.get("cantidad", 0)) > 0]
     import overrides
     minimo = overrides.get_config().get("minimo_pedido_unidades")
     unidades = sum(int(i["cantidad"]) for i in items)
@@ -352,10 +352,11 @@ class MinimoNoAlcanzado(Exception):
 def repetir_pedido(pedido: dict, df_publicadas) -> tuple[list[dict], list[str]]:
     """Items para el carrito a partir de un pedido viejo, con precio ACTUAL y
     recortado al stock disponible. → (items, avisos)."""
-    por_sku = {r["sku"]: r for _, r in df_publicadas.iterrows()}
+    import compra_rapida as cr
+    por_sku = df_publicadas.drop_duplicates("sku").set_index("sku", drop=False)
     items, avisos = [], []
     for it in pedido["items"]:
-        v = por_sku.get(it["sku"])
+        v = por_sku.loc[it["sku"]].to_dict() if it["sku"] in por_sku.index else None
         if v is None:
             avisos.append(f"{it['sku']} ({it['producto_nombre']} {it['color']} Talle {it['talle']}): "
                           "ya no está disponible")
@@ -371,10 +372,7 @@ def repetir_pedido(pedido: dict, df_publicadas) -> tuple[list[dict], list[str]]:
             # Nunca revelar el stock: solo que se superó la cantidad disponible.
             avisos.append(f"{it['sku']}: pediste {it['cantidad']} u. y supera la cantidad "
                           f"disponible — se cargó {cant}")
-        items.append({"sku": v["sku"], "ean": v["ean"], "producto_cod": v["producto_cod"],
-                      "producto_nombre": v["producto_nombre"], "color_cod": str(v["color_cod"]),
-                      "color": v["color"], "talle": v["talle"], "cantidad": cant,
-                      "precio_unit": float(v["precio"]), "stock": int(v["stock"])})
+        items.append(cr.item_desde_variante(v, cant))
     return items, avisos
 
 

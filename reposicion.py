@@ -106,7 +106,16 @@ def cruzar_con_catalogo(vista: pd.DataFrame, cat: pd.DataFrame) -> pd.DataFrame:
     return out.sort_values("cobertura_dias", na_position="last")
 
 
-def sugerencias(cliente_cod: int, df_catalogo: pd.DataFrame, dias_objetivo: int = 21) -> tuple:
+def invalidar() -> None:
+    """Olvida el mapa cliente→PV y las vistas de reposición cacheadas (Admin → «Actualizar catálogo»)."""
+    global _pvs, _pvs_ts
+    with _lock:
+        _pvs, _pvs_ts = None, 0.0
+        _repo_cache.clear()
+
+
+def sugerencias(cliente_cod: int, df_catalogo: pd.DataFrame, dias_objetivo: int = 21,
+                con_foto: bool = False) -> tuple:
     """(pv, DataFrame de sugerencias) para la página de Reposición.
     df_catalogo: variantes del sitio CON columna `precio` del cliente."""
     pv = pv_de_cliente(int(cliente_cod))
@@ -124,7 +133,8 @@ def sugerencias(cliente_cod: int, df_catalogo: pd.DataFrame, dias_objetivo: int 
                           int(r["stock"]))
         for _, r in cruce.iterrows()]
     cruce = cruce[cruce["sugerido"] > 0].copy()
-    cruce["foto"] = cruce.apply(
-        lambda r: fotos.miniatura(r["producto_cod"], r["color"]) if fotos.tiene_fotos(r["producto_cod"]) else "",
-        axis=1)
+    if con_foto:   # URL firmada por fila (cara: un signBlob cada una). La API usa la URL pública.
+        cruce["foto"] = cruce.apply(
+            lambda r: fotos.miniatura(r["producto_cod"], r["color"]) if fotos.tiene_fotos(r["producto_cod"]) else "",
+            axis=1)
     return pv, cruce

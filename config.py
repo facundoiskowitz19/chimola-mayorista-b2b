@@ -26,6 +26,7 @@ V_STOCK_CENTRAL = f"`{BQ_PROJECT}.{DS_MARTS}.v_stock_central_actual`"
 T_STOCK_RAW = f"`{BQ_PROJECT}.{DS_RAW}.stock`"
 T_ARTICULOSOL = f"`{BQ_PROJECT}.{DS_RAW}.articulosol`"
 T_DIM_CLIENTE = f"`{BQ_PROJECT}.{DS_DWH}.dim_cliente`"
+T_DIM_PRODUCTO = f"`{BQ_PROJECT}.{DS_DWH}.dim_producto`"   # medidas/peso (TN → pipeline, 2026-10-07)
 
 # Safeguard: tope de bytes por query (1 GB).
 MAX_BYTES_BILLED = int(os.getenv("MAX_BYTES_BILLED", str(1_000_000_000)))

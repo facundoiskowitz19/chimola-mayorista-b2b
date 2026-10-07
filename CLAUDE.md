@@ -200,6 +200,125 @@ Navegador ──cookie JWT (24h)──▶ Streamlit (Cloud Run, --session-affini
 
 ---
 
+## Rediseño Lautin — API + Next.js (rama `rediseno-lautin`, desde 2026-10-06)
+
+Rediseño completo del lado cliente a partir de las 18 vistas de Vale
+(`vistas_vale/*.pdf`, no versionadas: identidad Lautin negro/blanco, Montserrat +
+Roboto, mega-menú, home por sección, cards con swatches, panel inline, curva
+sugerida). Decisión: **Streamlit no alcanza para esa UI** → el cliente pasa a
+Next.js y la lógica Python se expone como API. **El admin también se migró a Next**
+(`/admin`, decisión del usuario 2026-10-06): el paquete `api/routers/admin/` replica 1:1 lo que hacía
+`admin_ui.py` sobre los mismos módulos (un archivo por pantalla: `inicio`, `catalogo`, `categorias`,
+`clientes`, `pedidos`, `configuracion`, `emails`, `home_menu`, helpers en `_common`); `adminlib.py`
+tiene la lógica pura. El Streamlit
+(`app.py` + `admin_ui.py`) queda vivo como referencia hasta validar paridad y después se
+apaga (`mayorista-b2b-dev`).
+
+```
+web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  ──▶ catalog.py, pedidos.py, stock.py,
+   cookie JWT `mayorista_session`                     sin lógica propia      fotos.py, overrides.py, auth.py…
+```
+
+- **`api/`**: `main.py` (app + warmup), `deps.py` (Ctx desde el JWT, cache de
+  `dim_cliente` 10 min, `df_cliente()` = publicadas + `con_precio`, `jsonable()`),
+  `colores.py` (nombre de color → hex para swatches), `routers/`: `auth`,
+  `catalogo` (grilla con facetas, `/catalogo/menu`, `/productos/{cod}` con
+  relacionados por "familia" = última palabra del nombre, `/productos/{cod}/curva`,
+  `/buscar`), `carrito`, `pedidos`, `cuenta`, `home`, `reposicion`, `admin/` (paquete). Corre con el root del repo en
+  `sys.path`. `deps.df_cliente()` está memoizado por lista de precios (se recalcula solo si cambian
+  el catálogo BQ, los overrides o la config): el DataFrame es compartido, filtrar/copiar, nunca mutar.
+  `deps.ctx_opcional` relee `usuarios/{email}` (cache 60 s): desactivar, cambiar rol/cliente o resetear
+  la password pegan en ≤1 min aunque el JWT dure 24 h (un token anterior a `password_updated_at` se rechaza). Local: `./venv/bin/uvicorn api.main:app --port 8000`. Docker:
+  `docker build -f api/Dockerfile .` (contexto = root).
+- **Secciones del header** (los 3 "homes"): `marro` = Chimola sin
+  Indumentaria/Pijamas · `indu` = Chimola Indumentaria + Pijamas · `lima` = Lima.
+  Definidas en `api/routers/catalogo.py::SECCIONES`.
+- **Curva sugerida** (indumentaria): `repartir_proporcional()` reparte el total
+  proporcional al stock por SKU (mayor resto), nunca más que el stock, y marca
+  `recortado` si no alcanza, sin revelar números (SPECS §12 sigue valiendo).
+- **Home administrable**: doc Firestore `config/home` con una clave por sección
+  (`hero[]`, `bloques[]`, `secciones[]` de tipo destacados/ofertas/manual/filtro,
+  `banner_grilla`, `banners_catalogo[]`, `menu.<sec>`); todo vive en el paquete `sitio/`
+  (`_store` doc + cache 60 s, `home` con `DEFAULTS`, `media` upload/lectura GCS, `secciones`,
+  `menu`; `sitio.X` se re-exporta desde `__init__`). Los PUT `/admin/home/{sec}` y `/admin/menu/{sec}`
+  usan modelos Pydantic con `extra="forbid"`: un payload con otra forma (p. ej. la respuesta del GET
+  reenviada) da 422 en vez de guardar una home vacía (pasó el 2026-10-07 y hubo que restaurarla a mano).
+- **`web/`**: `src/app/(shop)/…` páginas (`/h/[seccion]` home, `/c/[seccion]`
+  catálogo —`todo` = sin sección—, `/p/[cod]` ficha, `/carrito`, `/pedidos`,
+  `/mis-datos`, `/reposicion` placeholder), `src/app/api/[...path]/route.ts` proxy
+  same-origin a `API_URL`, `src/proxy.ts` guard de cookie (Next 16 renombró
+  middleware → proxy), `src/lib/api.ts` (server, reenvía cookie) y
+  `src/lib/client.ts` (browser, vía `/api`). Componentes clave: `Header`
+  (mega-menú hover), `SearchBox`, `ProductCard`, `CardsWithPanel` / `ProductRow`
+  (panel inline debajo de la fila), `InlinePanel` + `VariantPicker` (lista por
+  color si 1 talle; matriz color×talle con curva si varios), `GalleryModal`,
+  `FilterRail`, `CatalogGrid` (scroll infinito), `Ficha`, `CarritoClient`,
+  `PedidosClient`. Tokens en `globals.css`. Local: `npm run dev` con
+  `.env.local` (`API_URL=http://localhost:8000`).
+- **Next 16**: leer `web/node_modules/next/dist/docs/` antes de tocar
+  convenciones (params/searchParams/cookies son async; `proxy.ts`; Turbopack).
+  Lint de React 19 prohíbe `setState` directo dentro de `useEffect`: resetear
+  estado con `key=` en el padre.
+- **Admin Next** (`web/src/app/(admin)/admin/*`, guard `es_admin` en el layout): Inicio,
+  Catálogo (lote/masivo/fotomap), Producto (vista ↔ edición de overrides, variantes
+  manuales, fotos por color, portada), Clientes + ficha (cuenta, comercial, reset password,
+  activo, import Aleph, reposición), Pedidos + detalle (`PedidoAdmin`: estado, reenviar,
+  modificar), Config, Emails (preview/prueba/reset), Home del sitio (upload a
+  `/admin/home/upload`), Menú. Piezas en `components/admin/ui.tsx`.
+- **Menú autoadministrable**: `config/home.menu.<sec>` con `temporadas/tipos/tendencias`
+  [{valor, nombre, nuevo, anterior}]; vacío = automático por cantidad de productos
+  (`sitio.menu_auto/menu_efectivo`). Solo se muestran valores que hoy tienen productos (los
+  configurados sin stock se conservan en la config y el admin los ve en gris).
+- **Versiones y ramas (desde 2026-10-07)**: versionado semántico con tags git. `v0.9.0` = último
+  Streamlit (lo que corre en `mayorista-b2b-dev`). `v1.0.0-rc.N` = rediseño Next+FastAPI en DEV, un
+  rc por cada deploy que Chimola prueba; `v1.0.0` cuando salga a PROD; después `v1.0.x` arreglos y
+  `v1.x.0` funcionalidad. `main` es la rama de lanzamientos (el rediseño se mergeó por PR #1); se
+  trabaja en ramas cortas desde `main` y se mergea por PR con merge commit (no squash).
+  `deploy_rediseno.sh` toma la versión de `git describe --tags`, la pasa a la API (`APP_VERSION`,
+  visible en `/health`) y a la web (`NEXT_PUBLIC_APP_VERSION`, pie de página) y **se niega a deployar
+  PROD si HEAD no es un tag exacto `vX.Y.Z`**. Para taggear: `git tag -a v1.0.0-rc.2 -m "..." && git push --tags`.
+- **QA 2026-10-07** (revisión completa + corrección; ver commits `74cb6ce`…`621ce26`). Gotchas que quedaron:
+  - **CSS**: las clases de componente de `globals.css` (`.btn`, `.pill`, `.input`, `.qty`, `.kicker`…)
+    van dentro de `@layer components`; si quedan sin capa le ganan a TODA utility de Tailwind
+    (`hidden`, `w-full`, `justify-between`…) y los `md:`/`sm:` no funcionan sobre ellas.
+  - **Sesión vencida**: `proxy.ts` solo chequea que exista la cookie; si la API devuelve 401 el layout
+    del shop (y `lib/client.ts`) mandan a `/auth/expired`, que borra la cookie y vuelve a `/login?expired=1`.
+    Sin eso, `/login` ↔ `/h/marro` se rebotaban en loop al día siguiente. `lib/nav.ts::destinoSeguro`
+    valida `next` (nada de `//evil.com`).
+  - **Medidas**: `dim_producto.alto_cm/ancho_cm/profundidad_cm/peso_kg` (Tienda Nube vía pipeline)
+    se muestran como «ancho × alto × profundidad cm» SOLO para no-ropa (`catalog.CATEGORIAS_ROPA`):
+    en indumentaria TN carga medidas del paquete. Fallback: `catalog.ficha_texto()` parsea `observa`.
+  - **Catálogo**: `catalog.load_variantes` es stale-while-revalidate (vencido el TTL sirve lo viejo y
+    refresca en un hilo); las cards/ficha respetan `fotos_color` del admin; la ficha usa URLs públicas
+    (sin un `signBlob` por foto); `url_variante_publica` ya no tiene `lru_cache`.
+  - **Carrito**: `PUT /carrito/items/{sku}` acota contra el stock ACTUAL; el input de cantidad lleva
+    borrador + debounce 500 ms + contador de secuencia (una respuesta vieja no pisa una nueva);
+    `VariantPicker` no ofrece input a variantes con `disponible=false`; «agregadas: 0» no es éxito.
+  - **Móvil (400 px)**: header con `flex-wrap` y buscador a ancho completo, rail de filtros en un
+    `<details>`, tablas en `overflow-x-auto` con `min-w-0` en la columna de la grilla, `CardsWithPanel`
+    y `ProductRow` calculan las filas con `useMediaQuery` para que el panel inline caiga bajo la card.
+  - **Admin**: los params dinámicos llegan YA decodificados (no hacer `decodeURIComponent`); el proxy
+    `route.ts` re-encodea cada segmento; `/admin/pedidos?desde=` inválido da 422; crear usuario valida rol.
+  - Tests: `tests/test_qa_rediseno.py` (medidas, ficha_texto, curva, HomeIn/MenuIn). `pyflakes` quedó en
+    el venv: `./venv/bin/python -m pyflakes api sitio` antes de commitear cambios de backend.
+- Lint React 19 `set-state-in-effect` apagado en `eslint.config.mjs`: el patrón
+  `useEffect(() => { cargar(); })` con await+setState lo disparaba en todo el admin.
+- **Stock nunca sale al cliente**: la API devuelve `disponible` y acota al
+  agregar al carrito con avisos; `stock` solo si `es_admin`.
+- **DEV vivo (2026-10-06)**: web https://mayorista-web-dev-vhnuyigzqa-uc.a.run.app ·
+  API https://mayorista-api-dev-vhnuyigzqa-uc.a.run.app (`chimola-deteccion`, misma SA
+  `sa-mayorista-dev@`). Deploy: `./deploy/deploy_rediseno.sh dev [api|web]` (Cloud Build
+  con `api/cloudbuild.yaml` contexto root y `web/cloudbuild.yaml`; Next standalone).
+  El Streamlit `mayorista-b2b-dev` sigue vivo: ahí está el admin (pestaña «Home del
+  sitio» edita `config/home`, imágenes a `gs://chimola-mayorista-pedidos-dev/sitio/`
+  servidas por la API en `/media/…`). PROD pendiente.
+- **Reposición** (franquicias): API `/reposicion?dias=` sobre `reposicion.sugerencias`;
+  página `/reposicion` con cantidades precargadas → carrito.
+- Gotcha build Next: todo client component que use `useSearchParams` va dentro de
+  `<Suspense>` o el prerender de la página estática falla (pasó con `/login`).
+
+---
+
 ## Reglas de negocio críticas
 
 Las mismas del ecosistema — copiadas de `sql-to-bq-franquicias/CLAUDE.md`:

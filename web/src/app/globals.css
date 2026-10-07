@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+/* Tokens del rediseño Lautin (vistas de Vale, 2026-10) */
+:root {
+  --bg: #ececec;
+  --card: #ffffff;
+  --ink: #111111;
+  --ink-2: #333333;
+  --muted: #6f6f6f;
+  --faint: #9a9a9a;
+  --line: #dcdcdc;
+  --line-2: #c4c4c4;
+  --pink: #e6007e;
+  --red: #e3342f;
+  --yellow: #ffd60a;
+  --green: #1d9e5a;
+  --footer: #000000;
+  --radius-pill: 999px;
+  --container: 1180px;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-pink: var(--pink);
+  --color-red: var(--red);
+  --color-yellow: var(--yellow);
+  --color-green: var(--green);
+  --font-sans: var(--font-roboto), system-ui, sans-serif;
+  --font-brand: var(--font-montserrat), system-ui, sans-serif;
+  --font-serif: "Baskerville", "Libre Baskerville", Georgia, serif;
+  --font-condensed: var(--font-condensed), Impact, "Arial Narrow", sans-serif;
+}
+
+html { color-scheme: light; }
+button:not(:disabled), [role="button"], select, summary, label:has(input[type="file"]) { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container-lt { width: 100%; max-width: var(--container); margin-inline: auto; padding-inline: 16px; }
+
+/* Clases de componente. Van en @layer components para que las utilities de Tailwind (hidden, w-full, !py-…) les ganen. */
+@layer components {
+  /* Botones */
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full font-brand font-semibold text-[13px] leading-none transition-colors select-none whitespace-nowrap; padding: 11px 18px; }
+  .btn-primary { background: var(--ink); color: #fff; }
+  .btn-primary:hover { background: #2a2a2a; }
+  .btn-primary:disabled { background: #8d8d8d; cursor: not-allowed; }
+  .btn-light { background: #fff; color: var(--ink); border: 1px solid var(--line-2); }
+  .btn-light:hover { border-color: var(--ink); }
+  .btn-ghost { background: transparent; color: var(--ink); }
+  .btn-sm { padding: 8px 14px; font-size: 12px; }
+  .btn .chev { font-size: 15px; line-height: 0; margin-left: 2px; }
+
+  /* Pills / chips */
+  .pill { @apply inline-flex items-center gap-1 rounded-full border bg-white font-sans text-[12px]; border-color: var(--line-2); padding: 5px 12px; }
+  .chip { @apply inline-flex items-center gap-1.5 rounded-sm font-sans text-[12px]; background: #e2e2e2; padding: 4px 8px; }
+
+  /* Inputs */
+  .input { @apply w-full rounded-md bg-white font-sans text-[14px] outline-none; border: 1px solid var(--line-2); padding: 10px 12px; }
+  .input:focus { border-color: var(--ink); }
+  .qty { @apply inline-flex h-[26px] min-w-[46px] items-center justify-center rounded-full bg-[#e9e9e9] text-center font-sans text-[13px] font-medium outline-none; border: 1px solid transparent; }
+  .qty:focus { border-color: var(--ink); background: #fff; }
+  .qty-pink { border-color: var(--pink); background: #fff; }
+
+  /* Tipografía auxiliar */
+  .kicker { @apply font-brand text-[12px] font-bold uppercase tracking-wide; }
+  .card-title { @apply font-brand text-[14px] font-bold leading-tight; }
+  .card-meta { @apply font-sans text-[11px]; color: var(--muted); }
+  .card-meta b { color: var(--ink); font-weight: 700; }
+  .price { @apply font-brand text-[15px] font-bold; }
+  .price-old { @apply font-sans text-[12px] line-through; color: var(--faint); }
+
+  /* Ribbon de descuento */
+  .ribbon { @apply absolute right-3 top-0 z-10 font-brand text-[10px] font-extrabold uppercase leading-[1.05] text-white text-center; width: 36px; padding: 6px 0 9px; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%); }
+  .ribbon-red { background: var(--red); }
+  .ribbon-yellow { background: var(--yellow); color: var(--ink); }
+}
+
+/* Scrollbar discreto en carruseles */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Hero: títulos "summer _stories" */
+.hero-title { @apply font-sans font-light leading-[0.95]; font-size: clamp(36px, 5vw, 64px); color: #4a4a4a; letter-spacing: -0.01em; }
+.bloque-title { @apply font-condensed uppercase text-white leading-none; font-size: clamp(28px, 3.4vw, 40px); letter-spacing: 0.01em; text-shadow: 0 1px 8px rgba(0,0,0,.35); }
+
+/* Links de nav */
+.nav-link { @apply font-sans text-[13px]; color: var(--ink-2); }
+.nav-link:hover { color: var(--ink); }
+
+/* Tabla de variantes */
+.vt { width: 100%; border-collapse: collapse; }
+.vt th { @apply font-sans text-[11px] font-medium uppercase text-left; color: var(--ink-2); padding: 6px 4px; border-bottom: 2px solid var(--ink); }
+.vt td { padding: 7px 4px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.vt tr.sel td { background: #f4f4f4; }
+
+/* Checkbox cuadrado del diseño */
+.cb { @apply inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[3px] border bg-white; border-color: var(--line-2); }
+.cb[data-on="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.cb-lg { height: 24px; width: 24px; }
+
+.swatch { @apply inline-block h-[13px] w-[13px] rounded-full; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+.swatch[data-sel="true"] { box-shadow: 0 0 0 1.5px #fff, 0 0 0 2.5px var(--ink); }
+
+.fade-in { animation: fadeIn .18s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px);} to { opacity: 1; transform: none;} }
