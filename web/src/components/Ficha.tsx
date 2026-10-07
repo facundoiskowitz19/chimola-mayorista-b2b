@@ -93,6 +93,7 @@ export default function Ficha({ p, puedePedir }: { p: Producto; puedePedir: bool
               <dl className="mt-4 space-y-1 font-sans text-[12px]">
                 {f.medidas && <div><dt className="inline font-bold">Medidas: </dt><dd className="inline">{f.medidas}</dd></div>}
                 {f.materiales && <div><dt className="inline font-bold">Materiales: </dt><dd className="inline">{f.materiales}</dd></div>}
+                {p.peso_kg && <div><dt className="inline font-bold">Peso: </dt><dd className="inline">{p.peso_kg.toLocaleString("es-AR", { maximumFractionDigits: 2 })} kg</dd></div>}
                 {p.ub && p.ub > 1 && <div><dt className="inline font-bold">Unidad de bulto: </dt><dd className="inline">{p.ub} u.</dd></div>}
               </dl>
               {f.completa && f.completa.length > f.corto.length + 20 && (

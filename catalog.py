@@ -67,9 +67,11 @@ SELECT
   CAST(a.descvta AS FLOAT64)            AS descvta,
   TRIM(IFNULL(a.observa, ''))           AS descripcion,
   TRIM(IFNULL(CAST(a.medida AS STRING), '')) AS medida_aleph,
-  SAFE_CAST(a.peso AS FLOAT64)          AS peso_aleph
+  SAFE_CAST(a.peso AS FLOAT64)          AS peso_aleph,
+  dp.alto_cm, dp.ancho_cm, dp.profundidad_cm, dp.peso_kg
 FROM variantes v
 LEFT JOIN {config.T_ARTICULOSOL} a ON a.codigo = v.producto_cod
+LEFT JOIN {config.T_DIM_PRODUCTO} dp ON dp.producto_cod = v.producto_cod
 WHERE v.stock > 0
 ORDER BY v.producto_cod, v.color, v.talle
 """
@@ -376,6 +378,16 @@ def get_producto(df: pd.DataFrame, producto_cod: str) -> dict | None:
 # confirmar con el pipeline qué representa (producto vs bulto) y en qué orden/unidad.
 # ---------------------------------------------------------------------------
 _CORTE = r"(?=\s(?:Variantes?|Caracter[ií]sticas|Colores|Talles?|Materiales?|Composici[oó]n|Medidas?|¿Qu[eé])\b|\.\s|$)"
+
+
+def medidas_formato(alto, ancho, prof) -> str | None:
+    """'25 × 29 × 3 cm' (ancho × alto × profundidad) si están las tres; None si falta alguna."""
+    import math as _m
+    vals = [ancho, alto, prof]
+    if any(v is None or (isinstance(v, float) and _m.isnan(v)) or float(v) <= 0 for v in vals):
+        return None
+    fmt = lambda v: f"{float(v):g}".replace(".", ",")  # noqa: E731
+    return f"{fmt(ancho)} × {fmt(alto)} × {fmt(prof)} cm"
 
 
 def ficha_texto(descripcion: str | None) -> dict:
