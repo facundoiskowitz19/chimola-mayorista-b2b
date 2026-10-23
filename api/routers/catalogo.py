@@ -58,11 +58,16 @@ def card(row, df_var: pd.DataFrame | None = None, es_admin: bool = False) -> dic
         swatches.append({"color": c, "hex": colores.hex_de(c),
                          "foto": fotos.url_foto_publica(cod, fn) if fn else None})
     pct = float(row.get("pct_desc") or 0)
+    alias = sitio.get_alias()
     return {
         "producto_cod": cod,
         "nombre": row["producto_nombre"],
         "marca": row["marca"], "temporada": row["temporada"], "rubro": row["rubro"],
         "categoria": row["categoria"], "seccion": _seccion_de(row),
+        # Nombres visibles (alias del admin; si no hay, el valor de Aleph)
+        "rubro_nombre": alias["rubro"].get(row["rubro"], row["rubro"]),
+        "temporada_nombre": alias["temporada"].get(row["temporada"], row["temporada"]),
+        "categoria_nombre": alias["categoria"].get(row["categoria"], row["categoria"]),
         "precio": deps.jsonable(row["precio"]),
         "precio_lista": deps.jsonable(row.get("precio_lista")),
         "pct_desc": pct,
@@ -125,6 +130,7 @@ def listar(
         "items": [card(r, es_admin=c.es_admin) for _, r in pag.iterrows()],
         "facetas": _facetas(_base_facetas(df, q, solo_desc, solo_foto), sel),
         "precio_rango": rango,
+        "alias": sitio.get_alias(),   # título, chips y migajas muestran el alias; filtros y URLs usan el valor de Aleph
     }
 
 
@@ -144,6 +150,7 @@ def _base_facetas(df: pd.DataFrame, q: str, solo_desc: bool, solo_foto: bool) ->
 def _facetas(df: pd.DataFrame, sel: dict) -> dict:
     """Opciones con conteo de productos, facetado dependiente (cada filtro respeta los demás)."""
     out = {}
+    alias = sitio.get_alias()
     for f in catalog.FILTROS:
         otros = {k: v for k, v in sel.items() if k != f and v}
         sub = catalog.filtrar_variantes(df, otros)
@@ -159,6 +166,9 @@ def _facetas(df: pd.DataFrame, sel: dict) -> dict:
         if f == "color":
             for o in opciones:
                 o["hex"] = colores.hex_de(o["valor"])
+        if f in alias:
+            for o in opciones:
+                o["nombre"] = alias[f].get(o["valor"], o["valor"])
         out[f] = opciones
     return out
 
@@ -243,6 +253,9 @@ def producto(cod: str, c: deps.Ctx = Depends(deps.ctx_requerido)):
         **{k: deps.jsonable(p[k]) for k in ("producto_cod", "producto_nombre", "marca", "temporada", "rubro",
                                               "categoria", "descripcion", "ub", "precio", "precio_lista", "pct_desc")},
         "seccion": _seccion_de(row),
+        "rubro_nombre": sitio.nombre_de("rubro", p["rubro"]) or p["rubro"],
+        "categoria_nombre": sitio.nombre_de("categoria", p["categoria"]) or p["categoria"],
+        "temporada_nombre": sitio.nombre_de("temporada", p["temporada"]) or p["temporada"],
         **{"descripcion_corta": ft["corta"], "medidas": med_struct or ft["medidas"], "materiales": ft["materiales"],
            "medidas_origen": "tiendanube" if med_struct else ("descripcion" if ft["medidas"] else None),
            "peso_kg": _j(peso) if peso is not None and _j(peso) and _j(peso) > 0 else None},
@@ -260,32 +273,48 @@ def producto(cod: str, c: deps.Ctx = Depends(deps.ctx_requerido)):
 # ---------------------------------------------------------------------------
 # Curva sugerida (indumentaria): reparte un total proporcional al stock
 # ---------------------------------------------------------------------------
-def repartir_proporcional(stocks: dict[str, int], total: int) -> dict[str, int]:
-    """Método del mayor resto: suma exacta `total`, nunca más que el stock de cada sku.
-    Función pura (testeable)."""
-    disp = {k: int(v) for k, v in stocks.items() if int(v) > 0}
-    cap = sum(disp.values())
-    total = max(0, min(int(total), cap))
-    if total == 0 or not disp:
+def repartir_proporcional(stocks: dict[str, int], total: int, pesos: dict[str, float] | None = None) -> dict[str, int]:
+    """Reparte `total` entre las variantes en proporción a `pesos` (por defecto, al stock), sin superar el
+    stock de cada una. Si una variante se llena, lo que le faltaba se vuelve a repartir entre las demás en
+    la misma proporción. Suma exacta `total` (o todo lo que hay si no alcanza). Función pura (testeable)."""
+    cap = {k: int(v) for k, v in stocks.items() if int(v) > 0}
+    total = max(0, min(int(total), sum(cap.values())))
+    if total == 0 or not cap:
         return {k: 0 for k in stocks}
-    cuotas = {k: total * v / cap for k, v in disp.items()}
-    asig = {k: min(int(math.floor(q)), disp[k]) for k, q in cuotas.items()}
-    falta = total - sum(asig.values())
-    orden = sorted(disp, key=lambda k: (-(cuotas[k] - math.floor(cuotas[k])), -disp[k], k))
-    i = 0
-    while falta > 0 and i < 10_000:
-        k = orden[i % len(orden)]
-        if asig[k] < disp[k]:
-            asig[k] += 1
-            falta -= 1
-        i += 1
+    w = {k: float((pesos or {}).get(k) or 0) for k in cap}
+    if sum(w.values()) <= 0:
+        w = {k: float(cap[k]) for k in cap}
+    for k in cap:                      # variante con stock pero sin peso: pesa lo que tiene
+        if w[k] <= 0:
+            w[k] = float(cap[k])
+    asig = {k: 0 for k in cap}
+    resto = total
+    activos = set(cap)
+    while resto > 0 and activos:
+        sw = sum(w[k] for k in activos)
+        cuotas = {k: resto * w[k] / sw for k in activos}
+        base = {k: min(int(math.floor(cuotas[k])), cap[k] - asig[k]) for k in activos}
+        if sum(base.values()) > 0:
+            for k, b in base.items():
+                asig[k] += b
+                resto -= b
+        else:                           # solo quedan fracciones: mayor resto, una unidad a cada una
+            for k in sorted(activos, key=lambda k: (-(cuotas[k] - math.floor(cuotas[k])), -w[k], k)):
+                if resto <= 0:
+                    break
+                if asig[k] < cap[k]:
+                    asig[k] += 1
+                    resto -= 1
+        activos = {k for k in activos if asig[k] < cap[k]}
     return {k: asig.get(k, 0) for k in stocks}
 
 
 @router.get("/productos/{cod}/curva")
 def curva(cod: str, total: int = Query(..., ge=1, le=2_000), c: deps.Ctx = Depends(deps.ctx_requerido)):
-    """Curva sugerida proporcional al stock. `total` acotado: con un total enorme la respuesta
-    sería el stock exacto de cada variante (SPECS §12: nunca revelar números de stock)."""
+    """Curva sugerida en la proporción en que Chimola COMPRÓ el producto (`compras_total` por variante:
+    recibidas + OC pendientes, de `venta_temporada_extended`), acotada a lo disponible hoy menos lo que ya
+    está en el carrito. Sin datos de compras, proporcional al stock. `total` acotado: con un total enorme
+    la respuesta sería el stock exacto de cada variante (SPECS §12: nunca revelar números de stock)."""
     df = deps.df_cliente(c)
     p = catalog.get_producto(df, cod.upper())
     if not p:
@@ -297,13 +326,16 @@ def curva(cod: str, total: int = Query(..., ge=1, le=2_000), c: deps.Ctx = Depen
         en_carrito = {i["sku"]: int(i["cantidad"]) for i in pedidos.cargar_carrito(c.email)}
     stocks = {v["sku"]: max(0, int(v["stock"]) - en_carrito.get(v["sku"], 0))
               for v in p["variantes"] if pd.notna(v.get("precio"))}
-    asig = repartir_proporcional(stocks, total)
+    compras = {v["sku"]: int(v.get("compras_total") or 0) for v in p["variantes"] if v["sku"] in stocks}
+    base = "compras" if sum(compras.values()) > 0 else "stock"
+    asig = repartir_proporcional(stocks, total, compras if base == "compras" else None)
     asignado = sum(asig.values())
     por_sku = {v["sku"]: v for v in p["variantes"]}
     return {
         "total_pedido": total, "total_asignado": asignado,
         "recortado": asignado < total,   # no hay disponibilidad para todo el total (sin revelar cuánto)
         "considera_carrito": any(en_carrito.get(s) for s in stocks),
+        "base": base,   # "compras" = proporción de la curva comprada; "stock" = sin datos de compras
         "items": [{"sku": s, "color": por_sku[s]["color"], "talle": por_sku[s]["talle"], "cantidad": n}
                   for s, n in asig.items() if n > 0],
     }

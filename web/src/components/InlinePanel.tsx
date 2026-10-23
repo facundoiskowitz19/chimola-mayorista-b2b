@@ -86,7 +86,7 @@ export default function InlinePanel({ cod, onClose, onGaleria }: { cod: string; 
             <button type="button" onClick={() => onGaleria?.(cod)} className="mt-1 text-faint hover:text-ink" aria-label="Ver fotos"><CameraIcon /></button>
             <div className="min-w-0 flex-1">
               <h3 className="font-brand text-[22px] font-bold leading-tight">{p.producto_nombre}</h3>
-              <p className="card-meta mt-[2px]"><b>{p.producto_cod}</b> · {p.marca} {p.categoria} · {p.temporada} · {p.rubro}</p>
+              <p className="card-meta mt-[2px]"><b>{p.producto_cod}</b> · {p.marca} {p.categoria_nombre || p.categoria} · {p.temporada_nombre || p.temporada} · {p.rubro_nombre || p.rubro}</p>
             </div>
             {(() => { const f0 = fichaDesdeDescripcion(p.descripcion); const f = { medidas: p.medidas || f0.medidas, materiales: p.materiales || f0.materiales }; return (f.medidas || f.materiales) ? (
               <div className="hidden max-w-[300px] font-sans text-[11px] leading-snug lg:block">

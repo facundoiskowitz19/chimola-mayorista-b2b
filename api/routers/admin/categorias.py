@@ -49,7 +49,34 @@ def categorias():
               for c, o in ov.items() if o.get("categoria") or o.get("rubro") or o.get("categorias_extra")]
     por_sec = {k: int(sitio.filtrar_seccion(df, k)["producto_cod"].nunique()) for k in sitio.SECCIONES}
     return {"arbol": sorted(arbol.values(), key=lambda c: -c["productos"]), "reclasificados": reclas,
-            "por_seccion": por_sec, "secciones": {k: v["nombre"] for k, v in sitio.SECCIONES.items()}}
+            "por_seccion": por_sec, "secciones": {k: v["nombre"] for k, v in sitio.SECCIONES.items()},
+            "alias": sitio.get_alias()}
+
+
+# ---------------------------------------------------------------------------
+# Alias: nombre que ve el cliente para cada categoría / tipo / temporada de Aleph
+# ---------------------------------------------------------------------------
+class AliasIn(BaseModel):
+    tipo: str
+    valor: str
+    nombre: str = ""      # vacío = volver al nombre de Aleph
+
+
+@router.get("/alias")
+def alias():
+    return {"alias": sitio.get_alias(), "tipos": list(sitio.TIPOS_ALIAS)}
+
+
+@router.put("/alias")
+def set_alias(body: AliasIn, c: deps.Ctx = Depends(deps.ctx_admin)):
+    if body.tipo not in sitio.TIPOS_ALIAS:
+        raise HTTPException(422, "tipo inválido (categoria / rubro / temporada)")
+    try:
+        sitio.set_alias(body.tipo, body.valor, body.nombre, c.email)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    deps.invalidar_df()
+    return {"ok": True, "alias": sitio.get_alias()}
 
 
 @router.get("/categorias/{nombre}")
@@ -75,7 +102,7 @@ def categoria_detalle(nombre: str):
                       "stock": int(r["stock"]), "publicado": _pub(r["publicado"]), "origen": origen,
                       "destacado": bool(r["destacado"]),
                       "categoria_principal": r["categoria"], "foto": fotos.url_foto_publica(cod, fn) if fn else None})
-    return {"categoria": nombre, "items": items, "n": len(items),
+    return {"categoria": nombre, "items": items, "n": len(items), "alias": sitio.nombre_de("categoria", nombre),
             "opciones_categoria": sorted(df["categoria"].dropna().unique().tolist()),
             "opciones_rubro": sorted(df["rubro"].dropna().unique().tolist())}
 
@@ -123,7 +150,7 @@ def tipo_detalle(rubro: str, categoria: str | None = None):
                       "stock": int(r["stock"]), "publicado": _pub(r["publicado"]), "destacado": bool(r["destacado"]),
                       "origen": "manual" if o.get("rubro") == rubro else "aleph", "rubro_aleph": rubro_aleph.get(cod),
                       "foto": fotos.url_foto_publica(cod, fn) if fn else None})
-    return {"rubro": rubro, "categoria": categoria, "items": items, "n": len(items),
+    return {"rubro": rubro, "categoria": categoria, "items": items, "n": len(items), "alias": sitio.nombre_de("rubro", rubro),
             "opciones_rubro": sorted(df["rubro"].dropna().unique().tolist())}
 
 
@@ -184,7 +211,8 @@ def temporadas():
                     "ocultos": int(pub.map(lambda v: v is False).sum()),
                     "categorias": sorted(sub["categoria"].dropna().unique().tolist())})
     out.sort(key=lambda t: -t["productos"])
-    return {"items": out, "secciones": {k: v["nombre"] for k, v in sitio.SECCIONES.items()}}
+    return {"items": out, "secciones": {k: v["nombre"] for k, v in sitio.SECCIONES.items()},
+            "alias": sitio.get_alias()["temporada"]}
 
 
 @router.get("/temporadas/{valor}")
@@ -205,7 +233,7 @@ def temporada_detalle(valor: str):
                       "marca": r["marca"], "stock": int(r["stock"]), "publicado": _pub(r["publicado"]),
                       "destacado": bool(r["destacado"]), "editado": cod in ov, "sin_foto": not files,
                       "foto": fotos.url_foto_publica(cod, fn) if fn else None})
-    return {"temporada": valor, "items": items, "n": len(items),
+    return {"temporada": valor, "items": items, "n": len(items), "alias": sitio.nombre_de("temporada", valor),
             "opciones_categoria": sorted(df["categoria"].dropna().unique().tolist()),
             "opciones_rubro": sorted(df["rubro"].dropna().unique().tolist())}
 

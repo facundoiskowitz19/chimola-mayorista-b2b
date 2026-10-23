@@ -179,6 +179,11 @@ _df_cache: dict[int, tuple[pd.DataFrame, float, object, object]] = {}   # lista 
 _df_lock = threading.Lock()
 
 
+def invalidar_df() -> None:
+    with _df_lock:
+        _df_cache.clear()
+
+
 def df_cliente(c: Ctx) -> pd.DataFrame:
     """Variantes publicadas con `precio`, `precio_lista`, `pct_desc` de la lista del cliente.
     Admin sin cliente → lista 1 (igual que `cliente_efectivo` del Streamlit).

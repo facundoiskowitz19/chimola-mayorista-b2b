@@ -9,9 +9,10 @@ import Thumb from "@/components/Thumb";
 import { Check, H1, Kicker, Muted, Panel, Pills, Spinner } from "./ui";
 import BloqueForm from "./BloqueForm";
 import LoteBar from "./LoteBar";
+import AliasField from "./AliasField";
 
 interface Item { producto_cod: string; nombre: string; categoria: string; marca: string; stock: number; publicado: boolean | null; destacado: boolean; origen: "aleph" | "manual"; rubro_aleph: string | null; foto: string | null }
-interface Res { rubro: string; categoria: string | null; items: Item[]; n: number; opciones_rubro: string[] }
+interface Res { rubro: string; categoria: string | null; items: Item[]; n: number; alias: string | null; opciones_rubro: string[] }
 interface Banners { banners: Record<string, HomeBloque | null>; secciones: Record<string, string> }
 
 export default function TipoAdmin({ rubro, categoria }: { rubro: string; categoria: string | null }) {
@@ -59,8 +60,10 @@ export default function TipoAdmin({ rubro, categoria }: { rubro: string; categor
   return (
     <>
       <Link href={categoria ? `/admin/categorias/${encodeURIComponent(categoria)}` : "/admin/categorias"} className="font-sans text-[12px] text-muted hover:text-ink">← {categoria || "Categorías"}</Link>
-      <H1 right={<Link href={`/c/${sec}?rubro=${encodeURIComponent(rubro)}${categoria ? `&categoria=${encodeURIComponent(categoria)}` : ""}`} target="_blank" className="btn btn-light btn-sm">Ver en el sitio ›</Link>}>{rubro}{categoria && <span className="ml-2 font-sans text-[14px] font-normal text-muted">en {categoria}</span>}</H1>
+      <H1 right={<Link href={`/c/${sec}?rubro=${encodeURIComponent(rubro)}${categoria ? `&categoria=${encodeURIComponent(categoria)}` : ""}`} target="_blank" className="btn btn-light btn-sm">Ver en el sitio ›</Link>}>{d.alias || rubro}<span className="ml-2 font-sans text-[14px] font-normal text-muted">{d.alias && <>Aleph: {rubro}{categoria && " · "}</>}{categoria && <>en {categoria}</>}</span></H1>
       <Muted className="-mt-3">{d.n} productos. El tipo de producto viene de Aleph; cada producto tiene uno solo. Desde acá podés <b>mover</b> un producto a otro tipo o <b>traer</b> uno que esté mal clasificado. Volver a Aleph deshace el cambio.</Muted>
+
+      <AliasField key={d.alias || ""} tipo="rubro" valor={rubro} actual={d.alias} onSaved={cargar} />
 
       <Panel className="mt-5">
         <Kicker>Banner del tipo (arriba del catálogo)</Kicker>

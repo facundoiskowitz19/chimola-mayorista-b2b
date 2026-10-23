@@ -9,9 +9,10 @@ import Thumb from "@/components/Thumb";
 import { Check, H1, Kicker, Muted, Panel, Pills, Spinner } from "./ui";
 import BloqueForm from "./BloqueForm";
 import LoteBar from "./LoteBar";
+import AliasField from "./AliasField";
 
 interface Item { producto_cod: string; nombre: string; categoria: string; rubro: string; marca: string; stock: number; publicado: boolean | null; destacado: boolean; editado: boolean; sin_foto: boolean; foto: string | null }
-interface Res { temporada: string; items: Item[]; n: number; opciones_categoria: string[]; opciones_rubro: string[] }
+interface Res { temporada: string; items: Item[]; n: number; alias: string | null; opciones_categoria: string[]; opciones_rubro: string[] }
 interface Banners { banners: Record<string, HomeBloque | null>; secciones: Record<string, string> }
 
 export default function TemporadaAdmin({ valor }: { valor: string }) {
@@ -49,8 +50,10 @@ export default function TemporadaAdmin({ valor }: { valor: string }) {
   return (
     <>
       <Link href="/admin/categorias" className="font-sans text-[12px] text-muted hover:text-ink">← Categorías</Link>
-      <H1 right={<Link href={`/c/${sec}?temporada=${encodeURIComponent(valor)}`} target="_blank" className="btn btn-light btn-sm">Ver en el sitio ›</Link>}>{valor}<span className="ml-2 font-sans text-[14px] font-normal text-muted">temporada</span></H1>
+      <H1 right={<Link href={`/c/${sec}?temporada=${encodeURIComponent(valor)}`} target="_blank" className="btn btn-light btn-sm">Ver en el sitio ›</Link>}>{d.alias || valor}<span className="ml-2 font-sans text-[14px] font-normal text-muted">temporada{d.alias && <> · Aleph: {valor}</>}</span></H1>
       <Muted className="-mt-3">{d.n} productos{sinFoto > 0 && <>, <b className="text-[#aa0b56]">{sinFoto} sin foto</b> (no se muestran en la grilla del cliente)</>}. La temporada viene de Aleph y no se edita; desde acá podés ocultar, destacar o reclasificar sus productos en lote y ponerle un banner. El nombre que ve el cliente en el menú se cambia en <Link href="/admin/menu" className="underline">Menú</Link>.</Muted>
+
+      <AliasField key={d.alias || ""} tipo="temporada" valor={valor} actual={d.alias} onSaved={cargar} />
 
       <Panel className="mt-5">
         <Kicker>Banner de la temporada (arriba del catálogo)</Kicker>

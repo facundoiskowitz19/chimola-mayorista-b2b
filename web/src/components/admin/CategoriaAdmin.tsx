@@ -8,10 +8,11 @@ import Thumb from "@/components/Thumb";
 import { Check, H1, Kicker, Muted, Panel, Pills, Spinner } from "./ui";
 import BloqueForm from "./BloqueForm";
 import LoteBar from "./LoteBar";
+import AliasField from "./AliasField";
 import type { HomeBloque } from "@/lib/types";
 
 interface Item { producto_cod: string; nombre: string; rubro: string; marca: string; stock: number; publicado: boolean | null; destacado: boolean; origen: "aleph" | "manual" | "extra"; categoria_principal: string; foto: string | null }
-interface Res { categoria: string; items: Item[]; n: number; opciones_categoria: string[]; opciones_rubro: string[] }
+interface Res { categoria: string; items: Item[]; n: number; alias: string | null; opciones_categoria: string[]; opciones_rubro: string[] }
 
 const ORIGEN = { aleph: { l: "Aleph", cls: "text-muted" }, manual: { l: "principal (manual)", cls: "text-[#006786]" }, extra: { l: "adicional", cls: "text-[#006786]" } };
 
@@ -70,8 +71,10 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
   return (
     <>
       <Link href="/admin/categorias" className="font-sans text-[12px] text-muted hover:text-ink">← Categorías</Link>
-      <H1 right={<Link href={`/c/todo?categoria=${encodeURIComponent(nombre)}`} target="_blank" className="btn btn-light btn-sm">Ver en el sitio ›</Link>}>{nombre}</H1>
+      <H1 right={<Link href={`/c/todo?categoria=${encodeURIComponent(nombre)}`} target="_blank" className="btn btn-light btn-sm">Ver en el sitio ›</Link>}>{d.alias || nombre}{d.alias && <span className="ml-2 font-sans text-[14px] font-normal text-muted">Aleph: {nombre}</span>}</H1>
       <Muted className="-mt-3">{d.n} productos. Un producto puede estar en varias categorías: la <b>principal</b> viene de Aleph (o la cambiás en su ficha) y las <b>adicionales</b> las sumás acá. Quitar desde acá solo saca las adicionales.</Muted>
+
+      <AliasField key={d.alias || ""} tipo="categoria" valor={nombre} actual={d.alias} onSaved={cargar} />
 
       <Panel className="mt-5">
         <div className="relative">

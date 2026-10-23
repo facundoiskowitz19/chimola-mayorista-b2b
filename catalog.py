@@ -68,10 +68,15 @@ SELECT
   TRIM(IFNULL(a.observa, ''))           AS descripcion,
   TRIM(IFNULL(CAST(a.medida AS STRING), '')) AS medida_aleph,
   SAFE_CAST(a.peso AS FLOAT64)          AS peso_aleph,
-  dp.alto_cm, dp.ancho_cm, dp.profundidad_cm, dp.peso_kg
+  dp.alto_cm, dp.ancho_cm, dp.profundidad_cm, dp.peso_kg,
+  CAST(vt.compras_total AS INT64)       AS compras_total
 FROM variantes v
 LEFT JOIN {config.T_ARTICULOSOL} a ON a.codigo = v.producto_cod
 LEFT JOIN {config.T_DIM_PRODUCTO} dp ON dp.producto_cod = v.producto_cod
+-- Compras totales (recibidas + OC pendientes) por EAN: la curva sugerida reparte en esa proporción.
+LEFT JOIN (
+  SELECT sku, MAX(compras_total) AS compras_total FROM {config.T_VENTA_TEMPORADA} WHERE sku IS NOT NULL GROUP BY sku
+) vt ON vt.sku = v.ean
 WHERE v.stock > 0
 ORDER BY v.producto_cod, v.color, v.talle
 """
@@ -132,6 +137,7 @@ def _cargar_bq() -> pd.DataFrame:
     for c in PRECIO_COLS + ["descvta"]:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
     df["stock"] = df["stock"].astype(int)
+    df["compras_total"] = pd.to_numeric(df.get("compras_total"), errors="coerce").fillna(0).astype(int)
     df["color_cod"] = df["color_cod"].astype(str)
     # Variantes sin color (artefactos de Aleph) no se publican: sin color no hay swatch, foto ni variante
     # que el cliente pueda elegir. Talle vacío = talle único ("U"); el SKU no cambia (ya viaja en carritos).
@@ -395,7 +401,8 @@ def get_producto(df: pd.DataFrame, producto_cod: str) -> dict | None:
         "pct_desc": float(first["pct_desc"]) if "pct_desc" in sub.columns and pd.notna(first["pct_desc"]) else 0.0,
         # producto_cod/nombre/es_manual viajan en cada variante: item_desde_variante los necesita
         "variantes": sub[[c for c in ["sku", "ean", "producto_cod", "producto_nombre", "color_cod",
-                                      "color", "talle", "stock", "precio", "precio_lista", "pct_desc", "es_manual"]
+                                      "color", "talle", "stock", "precio", "precio_lista", "pct_desc", "es_manual",
+                                      "compras_total"]
                           if c in sub.columns]].to_dict("records"),
         "colores": sorted(sub["color"].unique()),
         "talles": list(dict.fromkeys(sub["talle"])),
