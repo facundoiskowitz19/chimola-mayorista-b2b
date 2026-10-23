@@ -61,6 +61,8 @@ export default function PedidoAdmin({ numero, onChange, linkPropio = false }: { 
             {SIGUIENTES[p.estado]?.map((n) => <button key={n} disabled={busy} onClick={() => accion(async () => { await api(`/admin/pedidos/${p.numero}/estado`, { method: "POST", json: { nuevo: n } }); return `Pedido ${p.numero} → ${n}`; })} className={`btn ${n === "procesado" ? "btn-primary" : "btn-light"}`}>Marcar {n}</button>)}
             <button disabled={busy} onClick={() => accion(async () => { const r = await api<{ enviado: boolean; destinatarios: string[]; error: string }>(`/admin/pedidos/${p.numero}/reenviar`, { method: "POST" }); if (!r.enviado) throw new ClientError(500, r.error); return `Reenviado a ${r.destinatarios.join(", ")}`; })} className="btn btn-light">Reenviar email</button>
             <a href={`/api/pedidos/${p.numero}/excel`} className="btn btn-light">Descargar Excel</a>
+            {p.odoo && <a href={`/api/pedidos/${p.numero}/odoo`} className="btn btn-light">Excel para Odoo</a>}
+            {p.odoo && <Muted>Formato de importación masiva de Odoo (hojas «Sin talle» e «Indu»). El nombre del cliente en Odoo se configura en su ficha.</Muted>}
           </div>
         </div>
       </div>
