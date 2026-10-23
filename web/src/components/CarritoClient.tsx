@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { Carrito, Me, Pedido } from "@/lib/types";
+import type { Carrito, CartItem, Me, Pedido, Seccion } from "@/lib/types";
 import { api, ClientError } from "@/lib/client";
 import { money } from "@/lib/format";
 import { Chevron, XIcon } from "./Brand";
@@ -12,6 +12,20 @@ import QtyInput from "./QtyInput";
 import { capital } from "./ProductCard";
 
 const DEBOUNCE_MS = 500;
+const SECCIONES: { key: Seccion; nombre: string }[] = [{ key: "marro", nombre: "Marroquinería" }, { key: "indu", nombre: "Indumentaria" }, { key: "lima", nombre: "LIMA" }];
+
+/** Agrupa las líneas por sección del header y, adentro, por producto (una fila desplegable por producto con varias variantes). */
+function agrupar(items: CartItem[]) {
+  const porSec = new Map<Seccion, Map<string, CartItem[]>>();
+  for (const it of items) {
+    const sec = it.seccion || "marro";
+    if (!porSec.has(sec)) porSec.set(sec, new Map());
+    const m = porSec.get(sec)!;
+    if (!m.has(it.producto_cod)) m.set(it.producto_cod, []);
+    m.get(it.producto_cod)!.push(it);
+  }
+  return SECCIONES.filter((s) => porSec.has(s.key)).map((s) => ({ ...s, productos: Array.from(porSec.get(s.key)!.values()) }));
+}
 
 export default function CarritoClient({ me }: { me: Me }) {
   const [c, setC] = useState<Carrito | null>(null);
@@ -30,6 +44,9 @@ export default function CarritoClient({ me }: { me: Me }) {
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   // Cada request de carrito lleva un número; solo se aplica la respuesta del último (las anteriores pueden llegar después).
   const seq = useRef(0);
+  // Productos con varias variantes desplegados (por defecto, colapsados).
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
+  const toggle = (cod: string) => setAbiertos((a) => { const n = new Set(a); if (n.has(cod)) n.delete(cod); else n.add(cod); return n; });
 
   useEffect(() => {
     const ts = timers.current;
@@ -70,6 +87,15 @@ export default function CarritoClient({ me }: { me: Me }) {
     const actual = c?.items.find((i) => i.sku === sku)?.cantidad;
     if (n > 0 && n !== actual) fijar(sku, n);
     else sinBorrador(sku);
+  }
+
+  async function quitarProducto(skus: string[]) {
+    skus.forEach(cancelarTimer);
+    const mio = ++seq.current;
+    try {
+      const d = await api<Carrito>("/carrito/quitar", { method: "POST", json: { skus } });
+      aplicar(d, mio);
+    } catch (e) { notify(e instanceof ClientError ? e.message : "No se pudo quitar el producto.", "error"); }
   }
 
   async function vaciar() {
@@ -149,23 +175,63 @@ export default function CarritoClient({ me }: { me: Me }) {
                 </tr>
               </thead>
               <tbody>
-                {c.items.map((it) => (
-                  <tr key={it.sku} className="border-b border-line font-sans text-[13px]">
-                    <td className="w-[72px] py-3 pl-4">
-                      <Thumb src={it.foto} className="h-[60px] w-[60px] bg-white object-contain" />
-                    </td>
-                    <td className="py-3 pr-2"><Link href={`/p/${it.producto_cod}`} className="font-brand text-[13px] font-bold hover:underline">{it.producto_nombre}</Link>
-                      <div className="card-meta"><b>{it.producto_cod}</b>{it.manual && <span className="ml-2 text-[#aa0b56]">variante manual</span>}</div></td>
-                    <td className="px-2 py-3">{capital(it.color)}{it.talle !== "U" && <span className="text-muted"> · Talle {it.talle}</span>}</td>
-                    <td className="px-2 py-3 text-center">
-                      <QtyInput value={borrador[it.sku] ?? it.cantidad} onChange={(n) => tipear(it.sku, n)}
-                        onCommit={() => confirmarCantidad(it.sku, borrador[it.sku] ?? it.cantidad)} />
-                    </td>
-                    <td className="px-2 py-3 text-right">{it.pct_desc > 0 && it.precio_lista ? <div className="price-old">{money(it.precio_lista)}</div> : null}{money(it.precio_unit)}</td>
-                    <td className="px-2 py-3 text-right font-bold">{money(it.subtotal)}</td>
-                    <td className="py-3 pr-3 text-right"><button onClick={() => { cancelarTimer(it.sku); fijar(it.sku, 0); }} className="text-faint hover:text-ink" aria-label="Quitar"><XIcon size={16} /></button></td>
-                  </tr>
-                ))}
+                {(() => {
+                  const grupos = agrupar(c.items);
+                  const conSecciones = grupos.length > 1;
+                  const fila = (it: CartItem, anidada = false) => (
+                    <tr key={it.sku} className={`border-b border-line font-sans text-[13px] ${anidada ? "bg-[#fafafa]" : ""}`}>
+                      <td className="w-[72px] py-3 pl-4">
+                        {anidada ? <Thumb src={it.foto} className="ml-auto h-[40px] w-[40px] bg-white object-contain" /> : <Thumb src={it.foto} className="h-[60px] w-[60px] bg-white object-contain" />}
+                      </td>
+                      <td className="py-3 pr-2">
+                        {anidada ? <span className="font-sans text-[12px] text-muted">{it.producto_cod}</span> : <><Link href={`/p/${it.producto_cod}`} className="font-brand text-[13px] font-bold hover:underline">{it.producto_nombre}</Link>
+                          <div className="card-meta"><b>{it.producto_cod}</b>{it.manual && <span className="ml-2 text-[#aa0b56]">variante manual</span>}</div></>}
+                      </td>
+                      <td className="px-2 py-3">{capital(it.color)}{it.talle !== "U" && <span className="text-muted"> · Talle {it.talle}</span>}{anidada && it.manual && <span className="ml-2 text-[11px] text-[#aa0b56]">manual</span>}</td>
+                      <td className="px-2 py-3 text-center">
+                        <QtyInput value={borrador[it.sku] ?? it.cantidad} onChange={(n) => tipear(it.sku, n)}
+                          onCommit={() => confirmarCantidad(it.sku, borrador[it.sku] ?? it.cantidad)} />
+                      </td>
+                      <td className="px-2 py-3 text-right">{it.pct_desc > 0 && it.precio_lista ? <div className="price-old">{money(it.precio_lista)}</div> : null}{money(it.precio_unit)}</td>
+                      <td className="px-2 py-3 text-right font-bold">{money(it.subtotal)}</td>
+                      <td className="py-3 pr-3 text-right"><button onClick={() => { cancelarTimer(it.sku); fijar(it.sku, 0); }} className="text-faint hover:text-ink" aria-label="Quitar"><XIcon size={16} /></button></td>
+                    </tr>
+                  );
+                  return grupos.flatMap((g) => [
+                    conSecciones ? (
+                      <tr key={`sec-${g.key}`} className="bg-[#f3f3f3]">
+                        <td colSpan={7} className="px-4 py-2 font-brand text-[12px] font-bold uppercase tracking-wide">
+                          {g.nombre} <span className="ml-2 font-sans text-[11px] font-normal normal-case tracking-normal text-muted">{g.productos.length} producto{g.productos.length !== 1 && "s"} · {g.productos.flat().reduce((a, i) => a + i.cantidad, 0)} u.</span>
+                        </td>
+                      </tr>
+                    ) : null,
+                    ...g.productos.flatMap((lineas) => {
+                      if (lineas.length === 1) return [fila(lineas[0])];
+                      const p0 = lineas[0];
+                      const abierto = abiertos.has(p0.producto_cod);
+                      const unidades = lineas.reduce((a, i) => a + i.cantidad, 0);
+                      const subtotal = lineas.reduce((a, i) => a + i.subtotal, 0);
+                      const precios = Array.from(new Set(lineas.map((i) => i.precio_unit)));
+                      return [
+                        <tr key={p0.producto_cod} className="cursor-pointer border-b border-line font-sans text-[13px] hover:bg-[#fafafa]" onClick={() => toggle(p0.producto_cod)}>
+                          <td className="w-[72px] py-3 pl-4"><Thumb src={p0.foto} className="h-[60px] w-[60px] bg-white object-contain" /></td>
+                          <td className="py-3 pr-2"><Link href={`/p/${p0.producto_cod}`} onClick={(e) => e.stopPropagation()} className="font-brand text-[13px] font-bold hover:underline">{p0.producto_nombre}</Link>
+                            <div className="card-meta"><b>{p0.producto_cod}</b></div></td>
+                          <td className="px-2 py-3">
+                            <button type="button" className="inline-flex items-center gap-1 font-sans text-[12.5px] hover:underline" aria-expanded={abierto}>
+                              {lineas.length} variantes <Chevron size={13} dir={abierto ? "up" : "down"} />
+                            </button>
+                          </td>
+                          <td className="px-2 py-3 text-center font-bold">{unidades} u.</td>
+                          <td className="px-2 py-3 text-right">{precios.length === 1 ? money(precios[0]) : <span className="text-muted">desde {money(Math.min(...precios))}</span>}</td>
+                          <td className="px-2 py-3 text-right font-bold">{money(subtotal)}</td>
+                          <td className="py-3 pr-3 text-right"><button onClick={(e) => { e.stopPropagation(); quitarProducto(lineas.map((i) => i.sku)); }} className="text-faint hover:text-ink" aria-label="Quitar producto"><XIcon size={16} /></button></td>
+                        </tr>,
+                        ...(abierto ? lineas.map((it) => fila(it, true)) : []),
+                      ];
+                    }),
+                  ].filter(Boolean));
+                })()}
               </tbody>
             </table>
             </div>

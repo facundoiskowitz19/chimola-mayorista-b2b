@@ -7,7 +7,7 @@ import { fichaDesdeDescripcion, money } from "@/lib/format";
 import { Chevron } from "./Brand";
 import { useCart } from "./CartContext";
 import { useToast } from "./Toast";
-import VariantPicker, { type Cants } from "./VariantPicker";
+import VariantPicker, { procesarAgregado, type Cants, type Maximos } from "./VariantPicker";
 import { Ribbon } from "./ProductCard";
 import GalleryModal from "./GalleryModal";
 import ProductRow from "./ProductRow";
@@ -16,6 +16,7 @@ export default function Ficha({ p, puedePedir }: { p: Producto; puedePedir: bool
   const [idx, setIdx] = useState(0);
   const [desdeThumb, setDesdeThumb] = useState(0);
   const [cants, setCants] = useState<Cants>({});
+  const [maximos, setMaximos] = useState<Maximos>({});
   const [busy, setBusy] = useState(false);
   const [gal, setGal] = useState(false);
   const { agregar } = useCart();
@@ -29,8 +30,10 @@ export default function Ficha({ p, puedePedir }: { p: Producto; puedePedir: bool
     if (!items.length) return;
     setBusy(true);
     try {
-      const c = await agregar(items);
-      c.avisos.forEach((a) => notify(a, "aviso"));
+      const c = await agregar(items, { recortar: false });
+      const max = procesarAgregado(c, cants, setCants, notify);
+      setMaximos(max);
+      if (Object.keys(max).length) return;
       const n = c.agregadas ?? 0;
       if (n > 0) { notify(`Agregaste ${n} unidades al carrito.`); setCants({}); }
       else if (!c.avisos.length) notify("No se pudo agregar: sin disponibilidad para lo elegido.", "aviso");
@@ -106,7 +109,7 @@ export default function Ficha({ p, puedePedir }: { p: Producto; puedePedir: bool
           ); })()}
           <div className="mt-8">
             {puedePedir ? (
-              <VariantPicker p={p} cants={cants} setCants={setCants} onAgregar={onAgregar} busy={busy} />
+              <VariantPicker p={p} cants={cants} setCants={(c) => { setCants(c); if (Object.keys(maximos).length) setMaximos({}); }} onAgregar={onAgregar} busy={busy} maximos={maximos} />
             ) : (
               <table className="vt"><thead><tr><th>Variante</th><th>Talles</th></tr></thead>
                 <tbody>{p.colores.map((c) => <tr key={c.color}><td><span className="inline-flex items-center gap-2"><span className="swatch" style={{ background: c.hex }} />{c.color}</span></td><td>{p.variantes.filter((v) => v.color === c.color).map((v) => v.talle).join(" · ")}</td></tr>)}</tbody></table>

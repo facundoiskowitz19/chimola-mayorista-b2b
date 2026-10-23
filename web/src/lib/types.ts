@@ -50,17 +50,20 @@ export interface Producto {
   relacionados: Card[]; familia: string | null;
 }
 
-export interface Curva { total_pedido: number; total_asignado: number; recortado: boolean; items: { sku: string; color: string; talle: string; cantidad: number }[] }
+export interface Curva { total_pedido: number; total_asignado: number; recortado: boolean; considera_carrito?: boolean; items: { sku: string; color: string; talle: string; cantidad: number }[] }
 
 export interface CartItem {
   sku: string; ean: string | null; producto_cod: string; producto_nombre: string; color_cod: string; color: string; talle: string;
   cantidad: number; precio_unit: number; precio_lista: number | null; pct_desc: number; manual: boolean; subtotal: number; foto: string | null;
+  seccion: Seccion;
 }
+/** Lo que superaba lo disponible al agregar con `recortar: false`: nada se agregó, `maximo` es lo que todavía se puede sumar. */
+export interface Ajuste { sku: string; producto_nombre: string; color: string; talle: string; pedido: number; maximo: number; en_carrito: number }
 export interface Totales {
   unidades: number; subtotal: number; descuento_pct: number; descuento_monto: number; ahorro_descvta: number; total: number;
   iva_pct: number; iva_monto: number; total_con_iva: number;
 }
-export interface Carrito { items: CartItem[]; totales: Totales; avisos: string[]; minimo_unidades: number | null; minimo_monto: number | null; agregadas?: number }
+export interface Carrito { items: CartItem[]; totales: Totales; avisos: string[]; minimo_unidades: number | null; minimo_monto: number | null; agregadas?: number; ajustes?: Ajuste[] }
 
 export interface PedidoResumen {
   numero: number; fecha_str: string; confirmed_at: string; estado: string; unidades: number; total: number; total_con_iva: number;

@@ -60,9 +60,11 @@ for ds_id in ["franquicias_marts", "franquicias_dwh", "franquicias_raw", "centra
     print(f"   {ds_id}: READER otorgado")
 EOF
 
-log "Fotos: objectViewer en gs://$BUCKET_FOTOS"
+log "Fotos: objectViewer + objectUser (subir/borrar fotos desde el admin) en gs://$BUCKET_FOTOS"
 gcloud storage buckets add-iam-policy-binding "gs://$BUCKET_FOTOS" --member="serviceAccount:$SA" \
   --role=roles/storage.objectViewer >/dev/null
+gcloud storage buckets add-iam-policy-binding "gs://$BUCKET_FOTOS" --member="serviceAccount:$SA" \
+  --role=roles/storage.objectUser >/dev/null
 
 log "Bucket de pedidos gs://$BUCKET_PEDIDOS"
 gcloud storage buckets describe "gs://$BUCKET_PEDIDOS" >/dev/null 2>&1 \

@@ -5,12 +5,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ClientError } from "@/lib/client";
 import { useToast } from "@/components/Toast";
 import Thumb from "@/components/Thumb";
-import { H1, Kicker, Muted, Panel, Pills, Spinner } from "./ui";
+import { Check, H1, Kicker, Muted, Panel, Pills, Spinner } from "./ui";
 import BloqueForm from "./BloqueForm";
+import LoteBar from "./LoteBar";
 import type { HomeBloque } from "@/lib/types";
 
-interface Item { producto_cod: string; nombre: string; rubro: string; marca: string; stock: number; publicado: boolean | null; origen: "aleph" | "manual" | "extra"; categoria_principal: string; foto: string | null }
-interface Res { categoria: string; items: Item[]; n: number }
+interface Item { producto_cod: string; nombre: string; rubro: string; marca: string; stock: number; publicado: boolean | null; destacado: boolean; origen: "aleph" | "manual" | "extra"; categoria_principal: string; foto: string | null }
+interface Res { categoria: string; items: Item[]; n: number; opciones_categoria: string[]; opciones_rubro: string[] }
 
 const ORIGEN = { aleph: { l: "Aleph", cls: "text-muted" }, manual: { l: "principal (manual)", cls: "text-[#006786]" }, extra: { l: "adicional", cls: "text-[#006786]" } };
 
@@ -23,6 +24,7 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
   const [sec, setSec] = useState<string>("marro");
   const secRef = useRef<string | null>(null);   // sección elegida; null = todavía no se cargó (se elige la inicial una sola vez)
   const [ban, setBan] = useState<HomeBloque | null>(null);
+  const [sel, setSel] = useState<Set<string>>(new Set());
   const { notify } = useToast();
   const elegirSec = (k: string, b: Record<string, HomeBloque | null>) => { secRef.current = k; setSec(k); setBan(b[k]); };
 
@@ -64,6 +66,7 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
 
   if (!d) return <><Link href="/admin/categorias" className="font-sans text-[12px] text-muted hover:text-ink">← Categorías</Link><H1>{nombre}</H1><Spinner /></>;
   const ya = new Set(d.items.map((i) => i.producto_cod));
+  const todosSel = d.items.length > 0 && d.items.every((i) => sel.has(i.producto_cod));
   return (
     <>
       <Link href="/admin/categorias" className="font-sans text-[12px] text-muted hover:text-ink">← Categorías</Link>
@@ -94,7 +97,7 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
           <div className="mt-3">
             {ban ? (
               <>
-                <BloqueForm b={ban} onChange={setBan} conKicker previewAspect="1125/300" />
+                <BloqueForm b={ban} onChange={setBan} conKicker previewAspect="1125/300" sugerido="1600 × 420 px" />
                 <div className="mt-3 flex gap-2">
                   <button disabled={busy} onClick={() => guardarBanner(ban)} className="btn btn-primary btn-sm">{busy ? "Guardando…" : "Guardar banner"}</button>
                   <button disabled={busy} onClick={() => guardarBanner(null)} className="btn btn-ghost btn-sm text-[#aa0b56]">Quitar banner</button>
@@ -108,14 +111,19 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
         </Panel>
       )}
 
+      <LoteBar sel={sel} todos={d.items.map((i) => i.producto_cod)} onDone={async () => { setSel(new Set()); await cargar(); }} onClear={() => setSel(new Set())}
+        opcionesCategoria={d.opciones_categoria} opcionesRubro={d.opciones_rubro}
+        extraAcciones={[{ label: `Quitar de «${nombre}» (adicional)`, desc: `quitar la categoría adicional «${nombre}» a`, campos: { categoria_extra_quitar: nombre } }]} />
+
       <Panel className="mt-4 !p-0">
         <table className="w-full font-sans text-[13px]">
-          <thead><tr className="border-b-2 border-ink text-left text-[11px] uppercase text-ink-2"><th className="px-4 py-3" colSpan={2}>Producto</th><th className="py-3">Tipo</th><th className="py-3">Pertenencia</th><th className="py-3 pr-6 text-right">Stock</th><th className="py-3">Publicación</th><th className="w-20" /></tr></thead>
+          <thead><tr className="border-b-2 border-ink text-left text-[11px] uppercase text-ink-2"><th className="px-3 py-3"><Check checked={todosSel} onChange={(v) => setSel(v ? new Set(d.items.map((i) => i.producto_cod)) : new Set())} /></th><th className="py-3" colSpan={2}>Producto</th><th className="py-3">Tipo</th><th className="py-3">Pertenencia</th><th className="py-3 pr-6 text-right">Stock</th><th className="py-3">Publicación</th><th className="w-20" /></tr></thead>
           <tbody>
             {d.items.map((i) => (
-              <tr key={i.producto_cod} className="border-b border-line hover:bg-[#fafafa]">
-                <td className="w-[56px] px-4 py-2"><Thumb src={i.foto} className="h-[44px] w-[44px] object-contain" /></td>
-                <td className="py-2"><Link href={`/admin/catalogo/${i.producto_cod}`} className="font-bold hover:underline">{i.nombre}</Link><div className="card-meta"><b>{i.producto_cod}</b> · {i.marca}</div></td>
+              <tr key={i.producto_cod} className={`border-b border-line hover:bg-[#fafafa] ${sel.has(i.producto_cod) ? "bg-[#f3fbff]" : ""}`}>
+                <td className="px-3 py-2"><Check checked={sel.has(i.producto_cod)} onChange={(v) => { const n = new Set(sel); if (v) n.add(i.producto_cod); else n.delete(i.producto_cod); setSel(n); }} /></td>
+                <td className="w-[56px] py-2"><Thumb src={i.foto} className="h-[44px] w-[44px] object-contain" /></td>
+                <td className="py-2"><Link href={`/admin/catalogo/${i.producto_cod}`} className="font-bold hover:underline">{i.nombre}</Link><div className="card-meta"><b>{i.producto_cod}</b> · {i.marca}{i.destacado && <span className="ml-2 text-ink">★ destacado</span>}</div></td>
                 <td className="py-2"><Link href={`/admin/tipos/${encodeURIComponent(i.rubro)}?categoria=${encodeURIComponent(nombre)}`} className="hover:underline">{i.rubro}</Link></td>
                 <td className={`py-2 ${ORIGEN[i.origen].cls}`}>{ORIGEN[i.origen].l}{i.origen === "extra" && <span className="text-muted"> · principal: {i.categoria_principal}</span>}</td>
                 <td className="py-2 pr-6 text-right">{i.stock}</td>
@@ -123,7 +131,7 @@ export default function CategoriaAdmin({ nombre }: { nombre: string }) {
                 <td className="py-2 pr-4 text-right">{i.origen === "extra" && <button disabled={busy} onClick={() => quitar(i.producto_cod)} className="font-sans text-[12px] text-[#aa0b56] hover:underline">Quitar</button>}</td>
               </tr>
             ))}
-            {d.items.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-muted">Esta categoría todavía no tiene productos. Agregá con el buscador de arriba.</td></tr>}
+            {d.items.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-muted">Esta categoría todavía no tiene productos. Agregá con el buscador de arriba.</td></tr>}
           </tbody>
         </table>
       </Panel>

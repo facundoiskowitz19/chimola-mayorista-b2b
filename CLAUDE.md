@@ -302,10 +302,33 @@ web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  �
     `route.ts` re-encodea cada segmento; `/admin/pedidos?desde=` inválido da 422; crear usuario valida rol.
   - Tests: `tests/test_qa_rediseno.py` (medidas, ficha_texto, curva, HomeIn/MenuIn). `pyflakes` quedó en
     el venv: `./venv/bin/python -m pyflakes api sitio` antes de commitear cambios de backend.
+- **Feedback Vale 2026-10-23** (rama `feedback-vale-1`, `v2.0.0-rc.2`):
+  - **Agregar al carrito sin recortar**: `POST /carrito/items` con `recortar:false` (lo mandan `InlinePanel`/`Ficha`
+    vía `useCart().agregar(items, {recortar:false})`): si ALGO supera lo disponible no se agrega nada y vuelve
+    `ajustes[{sku, maximo, en_carrito…}]`; `VariantPicker.procesarAgregado` pone el máximo en el input (borde rosa,
+    «máx. N») y el cliente vuelve a tocar «Agregar». Reposición sigue con `recortar:true` (histórico). Esto SÍ muestra
+    el número de stock que queda (pedido explícito de Chimola; antes se recortaba en silencio).
+  - `GET /productos/{cod}/curva` descuenta lo que ya está en el carrito (`considera_carrito`). El picker no muestra
+    colores ni talles sin ninguna variante disponible; una celda puntual sin stock queda gris. Variantes sin color se
+    filtran en `catalog._cargar_bq`; talle vacío → «U».
+  - **Carrito agrupado**: cada ítem lleva `seccion` (marro/indu/lima, calculado en `carrito._vista`); la tabla separa
+    por sección (solo si hay más de una) y un producto con varias variantes es UNA fila desplegable (colapsada por
+    defecto) con `POST /carrito/quitar {skus}` para sacar el producto entero.
+  - **Admin**: `/admin/temporadas` (lista en Categorías) y `/admin/temporadas/{valor}` (productos, lote, banner por
+    sección vía `set_banner_filtro("temporada")`). `LoteBar` (Categorías/Tipos/Temporadas) pega en
+    `POST /admin/catalogo/lote`, que ahora acepta `categoria`/`rubro` (batch; vacío = Aleph) y
+    `categoria_extra_add`/`categoria_extra_quitar` (por producto). `BloqueForm` muestra `sugerido` (tamaño de imagen)
+    junto a «Subir». La ficha admin trae `relacionados_auto` (lo que el sitio arma solo; `catalogo.relacionados_de`
+    es la función compartida) y permite **subir/borrar fotos** (`POST /admin/productos/{cod}/fotos` multipart
+    `files[]`+`color`, `DELETE …/fotos/{filename}`): van al bucket `ecommerce-b2b-imagenes` con el nombre
+    `"COD COLOR (n).jpg"` (JPEG ≤1600 px) y se suman al índice en memoria al instante. La SA necesita
+    `roles/storage.objectUser` sobre ese bucket (está en `setup_infra.sh`; dado a mano a `sa-mayorista-dev` el
+    2026-10-23; la de PROD todavía no lo tiene).
 - Lint React 19 `set-state-in-effect` apagado en `eslint.config.mjs`: el patrón
   `useEffect(() => { cargar(); })` con await+setState lo disparaba en todo el admin.
-- **Stock nunca sale al cliente**: la API devuelve `disponible` y acota al
-  agregar al carrito con avisos; `stock` solo si `es_admin`.
+- **Stock nunca sale al cliente** (con una excepción): la API devuelve `disponible` y `stock` solo si
+  `es_admin`. La única cifra que ve el cliente es el `maximo` de `ajustes` cuando pide más de lo disponible
+  (decisión de Chimola 2026-10-23); la curva sugerida sigue acotada a 2.000 u. por pedido.
 - **DEV vivo (2026-10-06)**: web https://mayorista-web-dev-vhnuyigzqa-uc.a.run.app ·
   API https://mayorista-api-dev-vhnuyigzqa-uc.a.run.app (`chimola-deteccion`, misma SA
   `sa-mayorista-dev@`). Deploy: `./deploy/deploy_rediseno.sh dev [api|web]` (Cloud Build

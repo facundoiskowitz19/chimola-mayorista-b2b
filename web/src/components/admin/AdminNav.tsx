@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 const ITEMS: { href: string; label: string; exact?: boolean; tambien?: string[] }[] = [
   { href: "/admin", label: "Inicio", exact: true },
   { href: "/admin/catalogo", label: "Catálogo" },
-  { href: "/admin/categorias", label: "Categorías", tambien: ["/admin/tipos"] },
+  { href: "/admin/categorias", label: "Categorías", tambien: ["/admin/tipos", "/admin/temporadas"] },
   { href: "/admin/clientes", label: "Clientes" },
   { href: "/admin/pedidos", label: "Pedidos" },
   { href: "/admin/home", label: "Home del sitio" },

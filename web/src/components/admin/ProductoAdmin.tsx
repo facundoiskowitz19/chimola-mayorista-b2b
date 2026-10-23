@@ -22,6 +22,7 @@ interface Data {
   clasificacion: { categoria: string; rubro: string; categoria_aleph: string; rubro_aleph: string; opciones_categoria: string[]; opciones_rubro: string[] };
   relacionados: RelInfo[];
   relacionados_inversos: RelInfo[];
+  relacionados_auto: RelInfo[];
 }
 interface RelInfo { producto_cod: string; nombre: string; foto: string | null; en_catalogo: boolean }
 interface Form {
@@ -62,6 +63,9 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
   const [confirmQuitar, setConfirmQuitar] = useState(false);
   const [nuevaExtra, setNuevaExtra] = useState({ color: "", talle: "U", stock: "", precio: "", ean: "" });
   const [fcAbierto, setFcAbierto] = useState<string | null>(null);
+  const [fotoColor, setFotoColor] = useState("");
+  const [subiendo, setSubiendo] = useState(false);
+  const [borrarFoto, setBorrarFoto] = useState<string | null>(null);
   const [relQ, setRelQ] = useState("");
   const [relRes, setRelRes] = useState<{ producto_cod: string; nombre: string; foto: string | null }[]>([]);
   useEffect(() => {
@@ -116,6 +120,34 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
   async function quitarTodo() {
     setBusy(true);
     try { await api(`/admin/productos/${cod}/overrides`, { method: "DELETE" }); notify(`${cod} volvió 100% a Aleph`); setEdit(false); setConfirmQuitar(false); await cargar(); }
+    finally { setBusy(false); }
+  }
+
+  async function subirFotos(files: FileList | null) {
+    if (!files || !files.length) return;
+    setSubiendo(true);
+    try {
+      const fd = new FormData();
+      Array.from(files).forEach((f) => fd.append("files", f));
+      fd.append("color", fotoColor);
+      const res = await fetch(`/api/admin/productos/${cod}/fotos`, { method: "POST", body: fd });
+      if (!res.ok) throw new ClientError(res.status, (await res.json()).detail);
+      const r = await res.json() as { subidas: string[] };
+      notify(`${r.subidas.length} foto(s) subida(s): ${r.subidas.join(", ")}`);
+      // Recargar fotos sin perder lo que el admin esté editando.
+      const x = await api<Data>(`/admin/productos/${cod}`); setD(x);
+    } catch (e) { notify(e instanceof ClientError ? e.message : "No se pudo subir", "error"); }
+    finally { setSubiendo(false); }
+  }
+  async function confirmarBorrarFoto() {
+    if (!borrarFoto) return;
+    setBusy(true);
+    try {
+      await api(`/admin/productos/${cod}/fotos/${encodeURIComponent(borrarFoto)}`, { method: "DELETE" });
+      notify(`Foto ${borrarFoto} borrada`); setBorrarFoto(null);
+      const x = await api<Data>(`/admin/productos/${cod}`); setD(x);
+      setF((prev) => prev ? { ...prev, portada: prev.portada === borrarFoto ? "" : prev.portada, fotos_color: Object.fromEntries(Object.entries(prev.fotos_color).filter(([, v]) => v !== borrarFoto)) } : prev);
+    } catch (e) { notify(e instanceof ClientError ? e.message : "No se pudo borrar", "error"); }
     finally { setBusy(false); }
   }
 
@@ -227,6 +259,24 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
                   ))}
                   {f.relacionados.length === 0 && <Muted>Sin relacionados manuales (automático).</Muted>}
                 </div>
+                {d.relacionados_auto.length > 0 && (
+                  <div className="mt-3 rounded border border-dashed border-line bg-[#fafafa] p-3">
+                    <Muted><b className="text-ink">Por defecto</b> (lo que arma el sitio solo, en este orden): click en uno para fijarlo como manual.</Muted>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {d.relacionados_auto.map((r) => {
+                        const fijado = f.relacionados.some((x) => x.producto_cod === r.producto_cod);
+                        return (
+                          <button key={r.producto_cod} type="button" disabled={fijado} onClick={() => setF({ ...f, relacionados: [...f.relacionados, r] })}
+                            className={`inline-flex items-center gap-2 rounded-sm border border-line bg-white px-2 py-1 font-sans text-[12px] ${fijado ? "opacity-40" : "hover:border-ink"}`}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            {r.foto && <img src={r.foto} alt="" className="h-[28px] w-[28px] object-contain" />}
+                            <b>{r.producto_cod}</b> {r.nombre}{fijado && <span className="text-muted">· fijado</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div className="relative mt-3">
                   <input className="input" value={relQ} onChange={(e) => setRelQ(e.target.value)} placeholder="Buscar producto por código o nombre para agregar…" />
                   {relQ.trim().length >= 2 && relRes.length > 0 && (
@@ -268,6 +318,34 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
                   <input className="input" placeholder="EAN (opcional)" value={nuevaExtra.ean} onChange={(e) => setNuevaExtra({ ...nuevaExtra, ean: e.target.value })} />
                   <button onClick={agregarExtra} className="btn btn-light">Agregar</button>
                 </div>
+              </Panel>
+              <Panel>
+                <Kicker>Subir fotos</Kicker>
+                <Muted className="mt-1">Van al mismo lugar que las del pipeline y se ven al instante. Si elegís un color, la foto queda atada a ese color (miniatura de la variante y swatch); sin color, es una foto genérica del producto. Se convierten a JPG de hasta 1600 px. {d.fotos.n === 0 && <b className="text-[#aa0b56]">Este producto no tiene fotos: no aparece en la grilla del cliente hasta que subas una.</b>}</Muted>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <select className="input !w-[220px]" value={fotoColor} onChange={(e) => setFotoColor(e.target.value)}>
+                    <option value="">Sin color (genérica)</option>
+                    {d.colores.map((c) => <option key={c.color} value={c.color}>{c.color}</option>)}
+                  </select>
+                  <label className={`btn btn-primary btn-sm cursor-pointer ${subiendo ? "opacity-50" : ""}`}>{subiendo ? "Subiendo…" : "Elegir fotos y subir"}
+                    <input type="file" accept="image/*" multiple className="hidden" disabled={subiendo} onChange={(e) => { subirFotos(e.target.files); e.target.value = ""; }} /></label>
+                </div>
+                {d.fotos.n > 0 && (
+                  <>
+                    <Kicker className="mt-5">Fotos cargadas ({d.fotos.n})</Kicker>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {d.fotos.files.map((fn) => (
+                        <div key={fn} className="w-[96px]">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={d.fotos.urls[fn]} alt={fn} className="h-[84px] w-[96px] rounded-sm border border-line bg-white object-contain" />
+                          <div className="mt-[2px] truncate font-sans text-[10px] text-muted" title={fn}>{fn}</div>
+                          <button type="button" onClick={() => setBorrarFoto(fn)} className="font-sans text-[11px] text-[#aa0b56] hover:underline">borrar</button>
+                        </div>
+                      ))}
+                    </div>
+                    {borrarFoto && <div className="mt-3"><Confirm busy={busy} texto={<>Vas a borrar <b>{borrarFoto}</b> del bucket de fotos. No se puede deshacer. ¿Seguro?</>} onYes={confirmarBorrarFoto} onNo={() => setBorrarFoto(null)} /></div>}
+                  </>
+                )}
               </Panel>
               {d.fotos.n > 0 && (
                 <Panel>
@@ -331,7 +409,7 @@ function Vista({ d, hex }: { d: Data; hex: (c: string) => string | undefined }) 
         {attr("Fotos", d.fotos.n ? `${d.fotos.n} cargada(s)` : "Sin foto", false)}
         {attr("Categoría", <>{d.clasificacion.categoria}{(o.categorias_extra || []).length > 0 && <span className="text-muted"> + {o.categorias_extra!.join(", ")}</span>}</>, !!o.categoria || (o.categorias_extra || []).length > 0)}
         {attr("Tipo de producto", d.clasificacion.rubro, !!o.rubro)}
-        {attr("Relacionados", d.relacionados.length ? d.relacionados.map((r) => r.producto_cod).join(", ") : "Automático", d.relacionados.length > 0)}
+        {attr("Relacionados", d.relacionados.length ? d.relacionados.map((r) => r.producto_cod).join(", ") : <>Automático{d.relacionados_auto.length > 0 && <span className="text-muted"> — hoy: {d.relacionados_auto.map((r) => r.producto_cod).join(", ")}</span>}</>, d.relacionados.length > 0)}
       </Panel>
       <div className="space-y-5">
         <Panel>

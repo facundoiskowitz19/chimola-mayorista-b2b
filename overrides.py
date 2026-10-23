@@ -374,11 +374,14 @@ def reset_email_template(evento: str, por: str) -> None:
 
 
 def set_masivo(cods: list[str], campos: dict, por: str) -> int:
-    """Aplica el MISMO override simple (publicado/destacado) a muchos productos
-    con batched writes de Firestore (fase 8, T5). Solo campos escalares del
-    lote — nunca precios/variantes (esos van por set_catalogo_override)."""
-    permitidos = {"publicado", "destacado"}
+    """Aplica el MISMO override escalar (publicado/destacado/categoria/rubro) a muchos
+    productos con batched writes de Firestore (fase 8, T5). Nunca precios/variantes
+    (esos van por set_catalogo_override)."""
+    permitidos = {"publicado", "destacado", "categoria", "rubro"}
     campos = {k: v for k, v in campos.items() if k in permitidos}
+    for k in ("categoria", "rubro"):   # reclasificación masiva: vacío/None = vuelve a Aleph
+        if k in campos:
+            campos[k] = (str(campos[k]).strip() or None) if campos[k] is not None else None
     if not campos or not cods:
         return 0
     cli = db.client()

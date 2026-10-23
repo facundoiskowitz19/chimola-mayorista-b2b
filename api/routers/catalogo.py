@@ -182,6 +182,34 @@ def _familia(nombre: str) -> str | None:
     return fam if len(fam) >= 3 and not fam.isdigit() else None
 
 
+def relacionados_manuales(cod: str) -> list[str]:
+    """Los elegidos a mano en el admin para `cod` más los productos que lo eligieron a él."""
+    import overrides
+    ov = overrides.get_catalogo_overrides()
+    manuales = list((ov.get(cod) or {}).get("relacionados") or [])
+    manuales += [c for c, o in ov.items() if cod in (o.get("relacionados") or []) and c not in manuales]
+    return manuales
+
+
+def relacionados_de(df: pd.DataFrame, cod: str, nombre: str, rubro: str, marca: str,
+                    manuales: list[str] | None = None, n: int = 8) -> pd.DataFrame:
+    """Productos relacionados: 1º los manuales del admin (None = leerlos de los overrides; [] = solo
+    automáticos, lo que el admin ve como «por defecto»), 2º misma "familia" por nombre (última palabra),
+    3º mismo tipo de producto + marca si quedaron menos de 4. Siempre con foto, máx `n`."""
+    if manuales is None:
+        manuales = relacionados_manuales(cod)
+    prods = catalog.productos(df[df["producto_cod"] != cod])
+    fam = _familia(nombre)
+    rel_man = prods[prods["producto_cod"].isin(manuales)]
+    rel_man = rel_man.assign(_o=rel_man["producto_cod"].map({c: i for i, c in enumerate(manuales)})).sort_values("_o").drop(columns="_o")
+    rel_fam = prods[prods["producto_nombre"].str.contains(rf"\b{re.escape(fam)}\b", case=False, regex=True)] if fam else prods.iloc[0:0]
+    rel = pd.concat([rel_man, rel_fam[~rel_fam["producto_cod"].isin(rel_man["producto_cod"])]])
+    if len(rel) < 4:
+        mismo = prods[(prods["rubro"] == rubro) & (prods["marca"] == marca) & (~prods["producto_cod"].isin(rel["producto_cod"]))]
+        rel = pd.concat([rel, mismo.head(n - len(rel))])
+    return rel[rel["producto_cod"].map(fotos.tiene_fotos)].head(n)
+
+
 @router.get("/productos/{cod}")
 def producto(cod: str, c: deps.Ctx = Depends(deps.ctx_requerido)):
     df = deps.df_cliente(c)
@@ -201,23 +229,8 @@ def producto(cod: str, c: deps.Ctx = Depends(deps.ctx_requerido)):
     talles = sorted({v["talle"] for v in p["variantes"]}, key=catalog.talle_key)
     cols = sorted({v["color"] for v in p["variantes"]})
 
-    # Relacionados: 1º los elegidos a mano en el admin (y los productos que lo eligieron a él),
-    # 2º misma "familia" por nombre, 3º mismo rubro+marca. Siempre con foto, máx 8.
-    import overrides
-    ov = overrides.get_catalogo_overrides()
-    manuales = list((ov.get(p["producto_cod"]) or {}).get("relacionados") or [])
-    manuales += [c for c, o in ov.items() if p["producto_cod"] in (o.get("relacionados") or []) and c not in manuales]
-    prods = catalog.productos(df[df["producto_cod"] != p["producto_cod"]])
+    rel = relacionados_de(df, p["producto_cod"], p["producto_nombre"], p["rubro"], p["marca"])
     fam = _familia(p["producto_nombre"])
-    rel_man = prods[prods["producto_cod"].isin(manuales)]
-    rel_man = rel_man.assign(_o=rel_man["producto_cod"].map({c: i for i, c in enumerate(manuales)})).sort_values("_o").drop(columns="_o")
-    rel_fam = prods[prods["producto_nombre"].str.contains(rf"\b{re.escape(fam)}\b", case=False, regex=True)] if fam else prods.iloc[0:0]
-    rel = pd.concat([rel_man, rel_fam[~rel_fam["producto_cod"].isin(rel_man["producto_cod"])]])
-    if len(rel) < 4:
-        mismo = prods[(prods["rubro"] == p["rubro"]) & (prods["marca"] == p["marca"]) &
-                      (~prods["producto_cod"].isin(rel["producto_cod"]))]
-        rel = pd.concat([rel, mismo.head(8 - len(rel))])
-    rel = rel[rel["producto_cod"].map(fotos.tiene_fotos)].head(8)
 
     row = df[df["producto_cod"] == p["producto_cod"]].iloc[0]
     ft = catalog.ficha_texto(p.get("descripcion"))
@@ -277,13 +290,20 @@ def curva(cod: str, total: int = Query(..., ge=1, le=2_000), c: deps.Ctx = Depen
     p = catalog.get_producto(df, cod.upper())
     if not p:
         raise HTTPException(404, "Producto no encontrado")
-    stocks = {v["sku"]: int(v["stock"]) for v in p["variantes"] if pd.notna(v.get("precio"))}
+    # Lo que ya está en el carrito se descuenta: la curva reparte lo que QUEDA por pedir de cada variante.
+    en_carrito: dict[str, int] = {}
+    if c.puede_pedir:
+        import pedidos
+        en_carrito = {i["sku"]: int(i["cantidad"]) for i in pedidos.cargar_carrito(c.email)}
+    stocks = {v["sku"]: max(0, int(v["stock"]) - en_carrito.get(v["sku"], 0))
+              for v in p["variantes"] if pd.notna(v.get("precio"))}
     asig = repartir_proporcional(stocks, total)
     asignado = sum(asig.values())
     por_sku = {v["sku"]: v for v in p["variantes"]}
     return {
         "total_pedido": total, "total_asignado": asignado,
         "recortado": asignado < total,   # no hay disponibilidad para todo el total (sin revelar cuánto)
+        "considera_carrito": any(en_carrito.get(s) for s in stocks),
         "items": [{"sku": s, "color": por_sku[s]["color"], "talle": por_sku[s]["talle"], "cantidad": n}
                   for s, n in asig.items() if n > 0],
     }

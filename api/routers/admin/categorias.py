@@ -60,7 +60,8 @@ def categoria_detalle(nombre: str):
     sub = df[catalog.mask_categoria(df, [nombre])]
     prods = sub.groupby("producto_cod", sort=True).agg(
         nombre=("producto_nombre", "first"), categoria=("categoria", "first"), rubro=("rubro", "first"),
-        marca=("marca", "first"), stock=("stock", "sum"), publicado=("publicado", "first")).reset_index()
+        marca=("marca", "first"), stock=("stock", "sum"), publicado=("publicado", "first"),
+        destacado=("destacado", "first")).reset_index()
     items = []
     for _, r in prods.iterrows():
         cod = r["producto_cod"]; o = ov.get(cod, {})
@@ -72,8 +73,11 @@ def categoria_detalle(nombre: str):
             origen = "extra"
         items.append({"producto_cod": cod, "nombre": r["nombre"], "rubro": r["rubro"], "marca": r["marca"],
                       "stock": int(r["stock"]), "publicado": _pub(r["publicado"]), "origen": origen,
+                      "destacado": bool(r["destacado"]),
                       "categoria_principal": r["categoria"], "foto": fotos.url_foto_publica(cod, fn) if fn else None})
-    return {"categoria": nombre, "items": items, "n": len(items)}
+    return {"categoria": nombre, "items": items, "n": len(items),
+            "opciones_categoria": sorted(df["categoria"].dropna().unique().tolist()),
+            "opciones_rubro": sorted(df["rubro"].dropna().unique().tolist())}
 
 
 @router.get("/categorias/{nombre}/banner")
@@ -107,7 +111,7 @@ def tipo_detalle(rubro: str, categoria: str | None = None):
         sub = sub[catalog.mask_categoria(sub, [categoria])]
     prods = sub.groupby("producto_cod", sort=True).agg(
         nombre=("producto_nombre", "first"), categoria=("categoria", "first"), marca=("marca", "first"),
-        stock=("stock", "sum"), publicado=("publicado", "first")).reset_index()
+        stock=("stock", "sum"), publicado=("publicado", "first"), destacado=("destacado", "first")).reset_index()
     raw = catalog.load_variantes()
     rubro_aleph = raw.groupby("producto_cod")["rubro"].first().to_dict()
     items = []
@@ -116,7 +120,7 @@ def tipo_detalle(rubro: str, categoria: str | None = None):
         files = fotos.indice_fotos().get(cod.upper(), [])
         fn = fotos._portada_filename(cod, files) if files else None
         items.append({"producto_cod": cod, "nombre": r["nombre"], "categoria": r["categoria"], "marca": r["marca"],
-                      "stock": int(r["stock"]), "publicado": _pub(r["publicado"]),
+                      "stock": int(r["stock"]), "publicado": _pub(r["publicado"]), "destacado": bool(r["destacado"]),
                       "origen": "manual" if o.get("rubro") == rubro else "aleph", "rubro_aleph": rubro_aleph.get(cod),
                       "foto": fotos.url_foto_publica(cod, fn) if fn else None})
     return {"rubro": rubro, "categoria": categoria, "items": items, "n": len(items),
@@ -161,6 +165,62 @@ def set_tipo_banner(rubro: str, body: TipoBannerIn, c: deps.Ctx = Depends(deps.c
     sitio.set_banner_filtro(body.seccion, "rubro", rubro, body.banner, c.email)
     return {"ok": True}
 
+
+
+# ---------------------------------------------------------------------------
+# Temporadas (colecciones de Aleph): vista como una categoría más, con banner por sección
+# ---------------------------------------------------------------------------
+@router.get("/temporadas")
+def temporadas():
+    """Temporadas del catálogo actual con conteo de productos, stock, marcas y cuántos tienen foto."""
+    df = catalog.variantes_admin()
+    out = []
+    for temp, sub in df.groupby("temporada", sort=False):
+        cods = sub["producto_cod"].unique().tolist()
+        con_foto = sum(1 for c in cods if fotos.tiene_fotos(c))
+        pub = sub.drop_duplicates("producto_cod")["publicado"]
+        out.append({"temporada": temp, "productos": len(cods), "con_foto": con_foto, "sin_foto": len(cods) - con_foto,
+                    "stock": int(sub["stock"].sum()), "marcas": sorted(sub["marca"].dropna().unique().tolist()),
+                    "ocultos": int(pub.map(lambda v: v is False).sum()),
+                    "categorias": sorted(sub["categoria"].dropna().unique().tolist())})
+    out.sort(key=lambda t: -t["productos"])
+    return {"items": out, "secciones": {k: v["nombre"] for k, v in sitio.SECCIONES.items()}}
+
+
+@router.get("/temporadas/{valor}")
+def temporada_detalle(valor: str):
+    df = catalog.variantes_admin()
+    ov = overrides.get_catalogo_overrides()
+    sub = df[df["temporada"] == valor]
+    prods = sub.groupby("producto_cod", sort=True).agg(
+        nombre=("producto_nombre", "first"), categoria=("categoria", "first"), rubro=("rubro", "first"),
+        marca=("marca", "first"), stock=("stock", "sum"), publicado=("publicado", "first"),
+        destacado=("destacado", "first")).reset_index()
+    items = []
+    for _, r in prods.iterrows():
+        cod = r["producto_cod"]
+        files = fotos.indice_fotos().get(cod.upper(), [])
+        fn = fotos._portada_filename(cod, files) if files else None
+        items.append({"producto_cod": cod, "nombre": r["nombre"], "categoria": r["categoria"], "rubro": r["rubro"],
+                      "marca": r["marca"], "stock": int(r["stock"]), "publicado": _pub(r["publicado"]),
+                      "destacado": bool(r["destacado"]), "editado": cod in ov, "sin_foto": not files,
+                      "foto": fotos.url_foto_publica(cod, fn) if fn else None})
+    return {"temporada": valor, "items": items, "n": len(items),
+            "opciones_categoria": sorted(df["categoria"].dropna().unique().tolist()),
+            "opciones_rubro": sorted(df["rubro"].dropna().unique().tolist())}
+
+
+@router.get("/temporadas/{valor}/banner")
+def temporada_banner(valor: str):
+    return {"banners": sitio.banners_de_filtro("temporada", valor), "secciones": {k: v["nombre"] for k, v in sitio.SECCIONES.items()}}
+
+
+@router.put("/temporadas/{valor}/banner")
+def set_temporada_banner(valor: str, body: TipoBannerIn, c: deps.Ctx = Depends(deps.ctx_admin)):
+    if body.seccion not in sitio.SECCIONES:
+        raise HTTPException(404, "Sección desconocida")
+    sitio.set_banner_filtro(body.seccion, "temporada", valor, body.banner, c.email)
+    return {"ok": True}
 
 
 @router.post("/categorias/{nombre}/productos")
