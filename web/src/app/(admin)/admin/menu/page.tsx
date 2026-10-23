@@ -17,7 +17,7 @@ interface Item { valor: string; nombre: string; n: number; nuevo?: boolean; ante
 interface Fila extends Item { mostrar: boolean; sinStock?: boolean }   // sinStock: está en la config pero hoy no tiene productos (se conserva igual)
 interface Op { nombre: string; link: string; oculto?: boolean }
 interface Grupo { titulo: string; categoria: string; oculto?: boolean }
-interface Res { seccion: Sec; auto: Record<Lista, { valor: string; n: number }[]>; config: (Partial<Record<Lista, Item[]>> & { oportunidades?: Op[]; grupos?: Grupo[] }) | null; efectivo: Record<Lista, Item[]> & { personalizado: Record<Lista | "oportunidades" | "grupos", boolean>; n: number; oportunidades: number; oportunidades_items: Op[] }; tope_auto: Record<Lista, number> }
+interface Res { seccion: Sec; auto: Record<Lista, { valor: string; nombre?: string; n: number }[]>; config: (Partial<Record<Lista, Item[]>> & { oportunidades?: Op[]; grupos?: Grupo[] }) | null; efectivo: Record<Lista, Item[]> & { personalizado: Record<Lista | "oportunidades" | "grupos", boolean>; n: number; oportunidades: number; oportunidades_items: Op[] }; tope_auto: Record<Lista, number> }
 
 export default function MenuAdmin() {
   const [sec, setSec] = useState<Sec>("marro");
@@ -42,7 +42,7 @@ export default function MenuAdmin() {
       const mostrados: Fila[] = (conf.length ? conf.map((c) => ({ ...c, n: nAuto.get(c.valor) ?? 0, sinStock: !nAuto.has(c.valor), mostrar: true }))
         : d.efectivo[L.key].map((e) => ({ ...e, mostrar: true })));
       const vistos = new Set(mostrados.map((m) => m.valor));
-      const resto: Fila[] = auto.filter((a) => !vistos.has(a.valor)).map((a) => ({ valor: a.valor, nombre: a.valor, n: a.n, nuevo: false, anterior: false, mostrar: false }));
+      const resto: Fila[] = auto.filter((a) => !vistos.has(a.valor)).map((a) => ({ valor: a.valor, nombre: a.nombre || a.valor, n: a.n, nuevo: false, anterior: false, mostrar: false }));
       out[L.key] = [...mostrados, ...resto];
     }
     setFilas(out);

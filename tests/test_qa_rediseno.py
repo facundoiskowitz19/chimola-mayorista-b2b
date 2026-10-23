@@ -54,6 +54,19 @@ def test_repartir_proporcional_suma_exacta_y_tope():
     assert repartir_proporcional({}, 5) == {}
 
 
+def test_repartir_proporcional_por_compras():
+    """La curva sigue la proporción COMPRADA (pesos), no el stock que queda; el stock solo acota."""
+    from api.routers.catalogo import repartir_proporcional
+    stocks = {"t4": 50, "t6": 50, "t8": 50}
+    compras = {"t4": 10, "t6": 30, "t8": 10}
+    assert repartir_proporcional(stocks, 10, compras) == {"t4": 2, "t6": 6, "t8": 2}
+    # Si una variante se llena, lo que falta se reparte entre las otras en su proporción.
+    asig = repartir_proporcional({"t4": 1, "t6": 50, "t8": 50}, 10, compras)
+    assert asig["t4"] == 1 and sum(asig.values()) == 10 and asig["t6"] > asig["t8"]
+    # Sin pesos útiles → proporcional al stock (comportamiento anterior).
+    assert repartir_proporcional({"a": 50, "b": 30, "c": 20}, 10, {"a": 0, "b": 0, "c": 0}) == repartir_proporcional({"a": 50, "b": 30, "c": 20}, 10)
+
+
 def test_home_in_rechaza_formas_ajenas():
     from pydantic import ValidationError
     from api.routers.admin import HomeIn, MenuIn

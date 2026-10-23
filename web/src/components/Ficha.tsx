@@ -44,7 +44,7 @@ export default function Ficha({ p, puedePedir }: { p: Producto; puedePedir: bool
   return (
     <div className="container-lt pb-10 pt-8">
       <nav className="font-sans text-[12px] text-muted">
-        <Link href={`/h/${p.seccion}`} className="hover:text-ink">{p.marca === "Lima" ? "LIMA" : p.categoria}</Link> › <Link href={`/c/${p.seccion}?rubro=${encodeURIComponent(p.rubro)}`} className="hover:text-ink">{p.rubro}</Link> › <span className="text-ink">{p.producto_nombre}</span>
+        <Link href={`/h/${p.seccion}`} className="hover:text-ink">{p.marca === "Lima" ? "LIMA" : (p.categoria_nombre || p.categoria)}</Link> › <Link href={`/c/${p.seccion}?rubro=${encodeURIComponent(p.rubro)}`} className="hover:text-ink">{p.rubro_nombre || p.rubro}</Link> › <span className="text-ink">{p.producto_nombre}</span>
       </nav>
       <div className="mt-6 grid gap-10 lg:grid-cols-[460px_minmax(0,1fr)]">
         <div>
@@ -85,7 +85,7 @@ export default function Ficha({ p, puedePedir }: { p: Producto; puedePedir: bool
           <div className="flex items-start justify-between gap-6">
             <div>
               <h1 className="font-brand text-[32px] font-extrabold leading-tight">{p.producto_nombre}</h1>
-              <p className="card-meta mt-1 text-[12px]"><b>{p.producto_cod}</b> · {p.marca} · {p.temporada} · {p.rubro}</p>
+              <p className="card-meta mt-1 text-[12px]"><b>{p.producto_cod}</b> · {p.marca} · {p.temporada_nombre || p.temporada} · {p.rubro_nombre || p.rubro}</p>
             </div>
             <div className="text-right">
               {p.pct_desc > 0 && p.precio_lista ? <div className="price-old">{money(p.precio_lista)}</div> : null}

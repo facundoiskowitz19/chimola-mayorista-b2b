@@ -4,7 +4,10 @@ from __future__ import annotations
 import datetime as dt
 
 from sitio._store import _ref, get_home_raw, invalidar
+from sitio.alias import get_alias
 from sitio.secciones import SECCIONES, filtrar_seccion
+
+_COL_ALIAS = {"temporadas": "temporada", "tipos": "rubro", "tendencias": "categoria"}
 
 # ---------------------------------------------------------------------------
 # Mega-menú: automático desde BQ, pisado por `config/home.menu.<seccion>` si existe
@@ -31,8 +34,13 @@ def menu_auto(df, seccion: str) -> dict:
     if "precio" in sub.columns:
         sub = sub[sub["precio"].notna()]
     tend = [t for t in _conteo(sub, "categoria") if t["valor"] not in ("Marroquineria", "Indumentaria")]
+    alias = get_alias()
+    listas = {"temporadas": _conteo(sub, "temporada"), "tipos": _conteo(sub, "rubro"), "tendencias": tend}
+    for lista, items in listas.items():   # nombre por defecto = alias global (si hay)
+        for it in items:
+            it["nombre"] = alias[_COL_ALIAS[lista]].get(it["valor"], it["valor"])
     return {
-        "temporadas": _conteo(sub, "temporada"), "tipos": _conteo(sub, "rubro"), "tendencias": tend,
+        **listas,
         "oportunidades": int(sub[sub["pct_desc"] > 0]["producto_cod"].nunique()) if "pct_desc" in sub.columns else 0,
         "n": int(sub["producto_cod"].nunique()),
     }
@@ -99,7 +107,7 @@ def menu_efectivo(df, seccion: str) -> dict:
             items = [{**it, "n": disponibles[it["valor"]]} for it in conf if it["valor"] in disponibles]
             out["personalizado"][lista] = True
         else:
-            items = [{"valor": a["valor"], "nombre": a["valor"], "n": a["n"]} for a in auto[lista][:MENU_AUTO_TOPE[lista]]]
+            items = [{"valor": a["valor"], "nombre": a.get("nombre") or a["valor"], "n": a["n"]} for a in auto[lista][:MENU_AUTO_TOPE[lista]]]
             if lista == "temporadas":
                 for i, it in enumerate(items):
                     it["nuevo"] = i == 0
@@ -115,7 +123,7 @@ def menu_efectivo(df, seccion: str) -> dict:
     sub = filtrar_seccion(df, seccion)
     if "precio" in sub.columns:
         sub = sub[sub["precio"].notna()]
-    renombres = {t["valor"]: t["nombre"] for t in out["tipos"]}
+    renombres = {**get_alias()["rubro"], **{t["valor"]: t["nombre"] for t in out["tipos"]}}
     orden_tipos = {t["valor"]: i for i, t in enumerate(out["tipos"])}
     grupos_out = []
     for g in cfg.get("grupos") or []:

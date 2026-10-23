@@ -18,13 +18,19 @@ export interface Card {
   producto_cod: string; nombre: string; marca: string; temporada: string; rubro: string; categoria: string;
   seccion: Seccion; precio: number | null; precio_lista: number | null; pct_desc: number;
   foto: string | null; tiene_foto: boolean; colores: Swatch[]; destacado: boolean; n_variantes: number; stock?: number;
+  /** Nombres visibles (alias del admin; si no hay alias, el valor de Aleph). */
+  rubro_nombre?: string; temporada_nombre?: string; categoria_nombre?: string;
 }
+/** Alias de nombres por tipo: {categoria: {valor: nombre}, rubro: {...}, temporada: {...}}. */
+export type Alias = Record<"categoria" | "rubro" | "temporada", Record<string, string>>;
+export const aliasDe = (a: Alias | undefined, tipo: keyof Alias, valor: string) => a?.[tipo]?.[valor] || valor;
 
 export interface Faceta { valor: string; n: number; hex?: string; nombre?: string; nuevo?: boolean; anterior?: boolean }
 
 export interface Catalogo {
   seccion: Seccion | null; total: number; page: number; per_page: number; pages: number;
   items: Card[]; facetas: Record<string, Faceta[]>; precio_rango: { min: number | null; max: number | null };
+  alias?: Alias;
 }
 
 export interface MenuSeccion {
@@ -46,11 +52,12 @@ export interface Producto {
   descripcion: string; ub: number | null; precio: number | null; precio_lista: number | null; pct_desc: number;
   medidas: string | null; materiales: string | null; descripcion_corta: string; peso_kg: number | null; medidas_origen: string | null;
   seccion: Seccion; colores: Swatch[]; talles: string[]; variantes: Variante[];
+  rubro_nombre?: string; temporada_nombre?: string; categoria_nombre?: string;
   fotos: { url: string; filename: string; color: string; principal: boolean }[];
   relacionados: Card[]; familia: string | null;
 }
 
-export interface Curva { total_pedido: number; total_asignado: number; recortado: boolean; considera_carrito?: boolean; items: { sku: string; color: string; talle: string; cantidad: number }[] }
+export interface Curva { total_pedido: number; total_asignado: number; recortado: boolean; considera_carrito?: boolean; base?: "compras" | "stock"; items: { sku: string; color: string; talle: string; cantidad: number }[] }
 
 export interface CartItem {
   sku: string; ean: string | null; producto_cod: string; producto_nombre: string; color_cod: string; color: string; talle: string;

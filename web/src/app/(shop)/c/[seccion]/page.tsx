@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { apiServer } from "@/lib/api";
 import type { Catalogo, HomeBloque, Me } from "@/lib/types";
+import { aliasDe } from "@/lib/types";
 import { SECCIONES } from "@/lib/format";
 import FilterRail from "@/components/FilterRail";
 import CatalogGrid from "@/components/CatalogGrid";
@@ -58,9 +59,9 @@ export default async function CatalogoPage({ params, searchParams }: { params: P
 
   let titulo = seccion === "todo" ? "Todo el catálogo" : SECCIONES[seccion].nombre;
   if (sel.q) titulo = `Resultados para “${sel.q}”`;
-  else if (sel.temporada.length === 1) titulo = sel.temporada[0];
-  else if (sel.rubro.length === 1) titulo = sel.rubro[0];
-  else if (sel.categoria.length === 1) titulo = sel.categoria[0];
+  else if (sel.temporada.length === 1) titulo = aliasDe(cat.alias, "temporada", sel.temporada[0]);
+  else if (sel.rubro.length === 1) titulo = aliasDe(cat.alias, "rubro", sel.rubro[0]);
+  else if (sel.categoria.length === 1) titulo = aliasDe(cat.alias, "categoria", sel.categoria[0]);
   else if (sel.solo_desc) titulo = `Oportunidades · ${titulo}`;
 
   return (
@@ -78,9 +79,9 @@ export default async function CatalogoPage({ params, searchParams }: { params: P
         <div>
           <details className="group lg:hidden">
             <summary className="btn btn-light w-full justify-between">Filtros <span className="transition-transform group-open:rotate-180">⌄</span></summary>
-            <div className="mt-4"><FilterRail key={queryDe(sel, seccion)} seccion={seccion} sel={sel} facetas={cat.facetas} rango={cat.precio_rango} /></div>
+            <div className="mt-4"><FilterRail key={queryDe(sel, seccion)} seccion={seccion} sel={sel} facetas={cat.facetas} rango={cat.precio_rango} alias={cat.alias} /></div>
           </details>
-          <div className="hidden lg:block"><FilterRail key={queryDe(sel, seccion)} seccion={seccion} sel={sel} facetas={cat.facetas} rango={cat.precio_rango} /></div>
+          <div className="hidden lg:block"><FilterRail key={queryDe(sel, seccion)} seccion={seccion} sel={sel} facetas={cat.facetas} rango={cat.precio_rango} alias={cat.alias} /></div>
         </div>
         <CatalogGrid key={queryDe(sel, seccion)} inicial={cat} query={queryDe(sel, seccion)} puedePedir={me.puede_pedir} banner={ban?.banner_grilla ?? null} />
       </div>

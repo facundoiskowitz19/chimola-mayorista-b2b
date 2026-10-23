@@ -324,6 +324,18 @@ web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  �
     `"COD COLOR (n).jpg"` (JPEG ≤1600 px) y se suman al índice en memoria al instante. La SA necesita
     `roles/storage.objectUser` sobre ese bucket (está en `setup_infra.sh`; dado a mano a `sa-mayorista-dev` el
     2026-10-23; la de PROD todavía no lo tiene).
+- **Alias de nombres + curva por compras** (`v2.0.0-rc.5`, 2026-10-23):
+  - `config/home.alias = {categoria|rubro|temporada: {valor_aleph: nombre}}` (`sitio/alias.py`, admin `PUT /admin/alias`,
+    campo «Nombre que ve el cliente» en la página de cada categoría/tipo/temporada). Se aplica en TODO el sitio: menú
+    (nombre por defecto aunque la lista esté en automático), facetas del rail (`nombre`), título del catálogo (`alias` en la
+    respuesta de `/catalogo`), migaja y meta de card/ficha (`rubro_nombre`, `categoria_nombre`, `temporada_nombre`).
+    Filtros, URLs y Firestore siguen con el valor de Aleph: cambiar el alias no rompe nada. Al escribir se reemplaza el
+    mapa entero (las claves tienen espacios/puntos: no sirve `alias.tipo.valor` como field path).
+  - La curva sugerida reparte en la proporción en que Chimola COMPRÓ cada variante: `compras_total` (recibidas + OC
+    pendientes) de `franquicias_marts.venta_temporada_extended`, joineado por EAN en `SQL_CATALOGO`
+    (`config.T_VENTA_TEMPORADA`). El stock disponible (menos el carrito) solo acota; si una variante se llena, lo que falta
+    se redistribuye entre las otras en su proporción (`repartir_proporcional(stocks, total, pesos)`). Sin datos de compras
+    → proporcional al stock (`base` en la respuesta).
 - **Admin → Pedidos** (`v2.0.0-rc.3`): el detalle vive en `/admin/pedidos/{numero}` (antes se abría debajo de la
   tabla y con 50+ filas quedaba fuera de pantalla: "no puedo entrar al pedido"). En el admin, todo detalle que se
   abra desde una lista larga va en página propia, no inline.

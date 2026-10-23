@@ -1,7 +1,7 @@
 "use client";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import type { Faceta } from "@/lib/types";
+import { aliasDe, type Alias, type Faceta } from "@/lib/types";
 import type { Sel } from "@/app/(shop)/c/[seccion]/page";
 import { Chevron, XIcon } from "./Brand";
 import { capital } from "./ProductCard";
@@ -16,8 +16,8 @@ const GRUPOS: { key: FK; titulo: string; abierto: boolean }[] = [
   { key: "marca", titulo: "Marca", abierto: false },
 ];
 
-export default function FilterRail({ seccion, sel, facetas, rango }: {
-  seccion: string; sel: Sel; facetas: Record<string, Faceta[]>; rango: { min: number | null; max: number | null };
+export default function FilterRail({ seccion, sel, facetas, rango, alias }: {
+  seccion: string; sel: Sel; facetas: Record<string, Faceta[]>; rango: { min: number | null; max: number | null }; alias?: Alias;
 }) {
   const router = useRouter(); const path = usePathname(); const sp = useSearchParams();
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>(Object.fromEntries(GRUPOS.map((g) => [g.key, g.abierto || sel[g.key].length > 0])));
@@ -34,7 +34,7 @@ export default function FilterRail({ seccion, sel, facetas, rango }: {
 
   const chips: { key: string; label: string; quitar: (u: URLSearchParams) => void }[] = [];
   (["categoria", "rubro", "marca", "temporada", "color", "talle"] as const).forEach((k) => sel[k].forEach((v) =>
-    chips.push({ key: `${k}:${v}`, label: k === "talle" ? `Talle ${v}` : k === "color" ? capital(v) : v, quitar: (u) => { const vals = u.getAll(k).filter((x) => x !== v); u.delete(k); vals.forEach((x) => u.append(k, x)); } })));
+    chips.push({ key: `${k}:${v}`, label: k === "talle" ? `Talle ${v}` : k === "color" ? capital(v) : k === "marca" ? v : aliasDe(alias, k, v), quitar: (u) => { const vals = u.getAll(k).filter((x) => x !== v); u.delete(k); vals.forEach((x) => u.append(k, x)); } })));
   if (sel.q) chips.push({ key: "q", label: `“${sel.q}”`, quitar: (u) => u.delete("q") });
   if (sel.solo_foto) chips.push({ key: "solo_foto", label: "Sólo con foto", quitar: (u) => u.set("solo_foto", "0") });
   if (sel.solo_desc) chips.push({ key: "solo_desc", label: "Sólo ofertas", quitar: (u) => u.delete("solo_desc") });
@@ -76,7 +76,7 @@ export default function FilterRail({ seccion, sel, facetas, rango }: {
                       {g.key === "color"
                         ? <span className="swatch !h-[11px] !w-[11px]" data-sel={on} style={{ background: f.hex }} />
                         : <span className="cb !h-[15px] !w-[15px] text-[10px]" data-on={on}>{on && "✓"}</span>}
-                      <span className={on ? "font-medium" : "text-ink-2"}>{g.key === "color" ? capital(f.valor) : g.key === "talle" ? `Talle ${f.valor}` : f.valor}</span>
+                      <span className={on ? "font-medium" : "text-ink-2"}>{g.key === "color" ? capital(f.valor) : g.key === "talle" ? `Talle ${f.valor}` : f.nombre || f.valor}</span>
                     </button>
                   </li>
                 );

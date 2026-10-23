@@ -47,7 +47,7 @@ export default function ProductCard({ p, abierta, onCargar, onGaleria, puedePedi
         <span className="truncate font-sans text-[10.5px] text-muted">{colorSel ? capital(colorSel) : ""}</span>
       </div>
       <h3 className="mt-2 card-title"><Link href={`/p/${p.producto_cod}`}>{p.nombre}</Link></h3>
-      <p className="card-meta mt-[3px]"><b>{p.producto_cod}</b> · {p.marca} · {p.rubro}</p>
+      <p className="card-meta mt-[3px]"><b>{p.producto_cod}</b> · {p.marca} · {p.rubro_nombre || p.rubro}</p>
       <div className="mt-3 flex items-baseline gap-2">
         {p.pct_desc > 0 && p.precio_lista ? <span className="price-old">{money(p.precio_lista)}</span> : null}
         <span className="price">{money(p.precio)}</span>

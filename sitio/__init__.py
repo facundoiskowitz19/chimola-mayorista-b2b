@@ -17,6 +17,7 @@ Paquete (2026-10-07, antes un solo `sitio.py`): `_store` (doc Firestore + cache)
 from __future__ import annotations
 
 from sitio._store import get_home_raw, invalidar  # noqa: F401
+from sitio.alias import TIPOS_ALIAS, get_alias, nombre_de, set_alias  # noqa: F401
 from sitio.home import (  # noqa: F401
     DEFAULTS, FILTROS_BANNER, SECCIONES_HOME, TIPOS_SECCION, banner_catalogo, banners_de_categoria,
     banners_de_filtro, es_personalizada, get_home, home_visible, reset_home, set_banner_categoria,
