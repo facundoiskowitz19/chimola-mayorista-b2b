@@ -78,14 +78,14 @@ export default function HomeAdmin() {
       <Panel className="mt-5">
         <Kicker>Carrusel principal</Kicker><Muted className="mt-1">Hasta 3 imágenes. Con una sola, no rota. En el título, | corta en dos líneas.</Muted>
         <div className="mt-3 space-y-3">
-          {hero.map((h) => <BloqueForm key={h._k} b={h} onChange={(nb) => setHero(hero.map((x) => x._k === h._k ? { ...nb, _k: h._k } : x))} onQuitar={() => setHero(hero.filter((x) => x._k !== h._k))} conTag previewAspect="1125/340" />)}
+          {hero.map((h) => <BloqueForm key={h._k} b={h} onChange={(nb) => setHero(hero.map((x) => x._k === h._k ? { ...nb, _k: h._k } : x))} onQuitar={() => setHero(hero.filter((x) => x._k !== h._k))} conTag previewAspect="1125/340" sugerido="1600 × 480 px" />)}
           {hero.length < 3 && <button onClick={() => setHero([...hero, { ...vacio(), _k: nk() }])} className="btn btn-light btn-sm">+ Agregar imagen</button>}
         </div>
       </Panel>
       <Panel className="mt-5">
         <Kicker>Bloques destacados</Kicker><Muted className="mt-1">Hasta 3: uno «doble» (grande, a la izquierda) y dos «simples» apilados a la derecha. Con dos, lado a lado.</Muted>
         <div className="mt-3 space-y-3">
-          {bloques.map((b) => <BloqueForm key={b._k} b={b} onChange={(nb) => setBloques(bloques.map((x) => x._k === b._k ? { ...nb, _k: b._k } : x))} onQuitar={() => setBloques(bloques.filter((x) => x._k !== b._k))} conSubtitulo conAncho />)}
+          {bloques.map((b) => <BloqueForm key={b._k} b={b} onChange={(nb) => setBloques(bloques.map((x) => x._k === b._k ? { ...nb, _k: b._k } : x))} onQuitar={() => setBloques(bloques.filter((x) => x._k !== b._k))} conSubtitulo conAncho sugerido={b.ancho === "doble" ? "1600 × 600 px" : "800 × 600 px"} />)}
           {bloques.length < 3 && <button onClick={() => setBloques([...bloques, { ...vacio(), _k: nk() }])} className="btn btn-light btn-sm">+ Agregar bloque</button>}
         </div>
       </Panel>
@@ -115,7 +115,7 @@ export default function HomeAdmin() {
       </Panel>
       <Panel className="mt-5">
         <Kicker>Banner dentro de la grilla del catálogo</Kicker><Muted className="mt-1">Franja angosta después de la segunda fila de productos del catálogo de esta sección. Vacío = no se muestra.</Muted>
-        <div className="mt-3">{banner ? <BloqueForm b={banner} onChange={setBanner} onQuitar={() => setBanner(null)} conSubtitulo previewAspect="1200/160" /> : <button onClick={() => setBanner(vacio())} className="btn btn-light btn-sm">+ Agregar banner</button>}</div>
+        <div className="mt-3">{banner ? <BloqueForm b={banner} onChange={setBanner} onQuitar={() => setBanner(null)} conSubtitulo previewAspect="1200/160" sugerido="1200 × 160 px" /> : <button onClick={() => setBanner(vacio())} className="btn btn-light btn-sm">+ Agregar banner</button>}</div>
       </Panel>
       <Panel className="mt-5">
         <Kicker>Banners por colección / temporada (arriba del catálogo)</Kicker>
@@ -132,7 +132,7 @@ export default function HomeAdmin() {
                   <Field label="Valor"><select className="input" value={b[b.tipo] || ""} onChange={(e) => set({ [b.tipo]: e.target.value })}><option value="">—</option>{valores.map((v) => <option key={v.valor} value={v.valor}>{v.valor}</option>)}</select></Field>
                 </div>
                 {!b[b.tipo] && <Muted className="mb-2 text-[#aa0b56]">Sin valor elegido, este banner no se muestra nunca.</Muted>}
-                <BloqueForm b={b} onChange={(nb) => set(nb)} onQuitar={() => setCats(cats.filter((x) => x._k !== b._k))} conKicker previewAspect="1125/300" />
+                <BloqueForm b={b} onChange={(nb) => set(nb)} onQuitar={() => setCats(cats.filter((x) => x._k !== b._k))} conKicker previewAspect="1125/300" sugerido="1600 × 420 px" />
               </div>
             );
           })}

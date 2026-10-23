@@ -9,7 +9,7 @@ import { CameraIcon, Chevron, XIcon } from "./Brand";
 import Thumb from "./Thumb";
 import { useCart } from "./CartContext";
 import { useToast } from "./Toast";
-import VariantPicker, { esMatriz, type Cants } from "./VariantPicker";
+import VariantPicker, { esMatriz, procesarAgregado, type Cants, type Maximos } from "./VariantPicker";
 
 function tituloRelacionados(p: Producto): string {
   const vis = p.relacionados.slice(0, 4);
@@ -22,6 +22,7 @@ export default function InlinePanel({ cod, onClose, onGaleria }: { cod: string; 
   const [p, setP] = useState<Producto | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [cants, setCants] = useState<Cants>({});
+  const [maximos, setMaximos] = useState<Maximos>({});
   const [idx, setIdx] = useState(0);
   const [busy, setBusy] = useState(false);
   const { agregar } = useCart();
@@ -54,8 +55,10 @@ export default function InlinePanel({ cod, onClose, onGaleria }: { cod: string; 
     if (!items.length) return;
     setBusy(true);
     try {
-      const c = await agregar(items);
-      c.avisos.forEach((a) => notify(a, "aviso"));
+      const c = await agregar(items, { recortar: false });
+      const max = procesarAgregado(c, cants, setCants, notify);
+      setMaximos(max);
+      if (Object.keys(max).length) return;
       const n = c.agregadas ?? 0;
       if (n > 0) {
         notify(`Agregaste ${n} unidades de ${p.producto_nombre} al carrito.`);
@@ -112,7 +115,7 @@ export default function InlinePanel({ cod, onClose, onGaleria }: { cod: string; 
               </div>
               {fotos.length > 1 && <p className="mt-1 text-center font-sans text-[11px] text-muted">{idx + 1} de {fotos.length}</p>}
             </div>
-            <div className="min-w-0"><VariantPicker p={p} cants={cants} setCants={setCants} onAgregar={onAgregar} busy={busy} /></div>
+            <div className="min-w-0"><VariantPicker p={p} cants={cants} setCants={(c) => { setCants(c); if (Object.keys(maximos).length) setMaximos({}); }} onAgregar={onAgregar} busy={busy} maximos={maximos} /></div>
           </div>
           {p.relacionados.length > 0 && (
             <div className="mt-8 border-t border-line pt-6">

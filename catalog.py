@@ -133,6 +133,10 @@ def _cargar_bq() -> pd.DataFrame:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
     df["stock"] = df["stock"].astype(int)
     df["color_cod"] = df["color_cod"].astype(str)
+    # Variantes sin color (artefactos de Aleph) no se publican: sin color no hay swatch, foto ni variante
+    # que el cliente pueda elegir. Talle vacío = talle único ("U"); el SKU no cambia (ya viaja en carritos).
+    df = df[df["color"].fillna("").str.strip() != ""].copy()
+    df["talle"] = df["talle"].fillna("").str.strip().replace("", "U")
     # Taxonomía (fase 8): en Aleph `rubro` = tipo de producto (Billeteras,
     # Mochilas...) y `tipo_producto` = categoría (Marroquineria, Textil...).
     df["categoria"] = normalizar_taxonomia(df["tipo_producto"])

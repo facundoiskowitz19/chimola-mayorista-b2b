@@ -6,10 +6,11 @@ import { api, ClientError } from "@/lib/client";
 import type { HomeBloque } from "@/lib/types";
 import { useToast } from "@/components/Toast";
 import Thumb from "@/components/Thumb";
-import { H1, Kicker, Muted, Panel, Pills, Spinner } from "./ui";
+import { Check, H1, Kicker, Muted, Panel, Pills, Spinner } from "./ui";
 import BloqueForm from "./BloqueForm";
+import LoteBar from "./LoteBar";
 
-interface Item { producto_cod: string; nombre: string; categoria: string; marca: string; stock: number; publicado: boolean | null; origen: "aleph" | "manual"; rubro_aleph: string | null; foto: string | null }
+interface Item { producto_cod: string; nombre: string; categoria: string; marca: string; stock: number; publicado: boolean | null; destacado: boolean; origen: "aleph" | "manual"; rubro_aleph: string | null; foto: string | null }
 interface Res { rubro: string; categoria: string | null; items: Item[]; n: number; opciones_rubro: string[] }
 interface Banners { banners: Record<string, HomeBloque | null>; secciones: Record<string, string> }
 
@@ -23,6 +24,7 @@ export default function TipoAdmin({ rubro, categoria }: { rubro: string; categor
   const [q, setQ] = useState("");
   const [res, setRes] = useState<{ producto_cod: string; nombre: string; foto: string | null; rubro: string }[]>([]);
   const [mover, setMover] = useState<string | null>(null);
+  const [sel, setSel] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const { notify } = useToast();
 
@@ -53,6 +55,7 @@ export default function TipoAdmin({ rubro, categoria }: { rubro: string; categor
 
   if (!d || !bans) return <><Link href="/admin/categorias" className="font-sans text-[12px] text-muted hover:text-ink">← Categorías</Link><H1>{rubro}</H1><Spinner /></>;
   const ya = new Set(d.items.map((i) => i.producto_cod));
+  const todosSel = d.items.length > 0 && d.items.every((i) => sel.has(i.producto_cod));
   return (
     <>
       <Link href={categoria ? `/admin/categorias/${encodeURIComponent(categoria)}` : "/admin/categorias"} className="font-sans text-[12px] text-muted hover:text-ink">← {categoria || "Categorías"}</Link>
@@ -66,7 +69,7 @@ export default function TipoAdmin({ rubro, categoria }: { rubro: string; categor
         <div className="mt-3">
           {ban ? (
             <>
-              <BloqueForm b={ban} onChange={setBan} conKicker previewAspect="1125/300" />
+              <BloqueForm b={ban} onChange={setBan} conKicker previewAspect="1125/300" sugerido="1600 × 420 px" />
               <div className="mt-3 flex gap-2">
                 <button disabled={busy} onClick={() => { if (!ban.img && !ban.titulo?.trim()) { notify("El banner necesita una imagen o un título", "error"); return; } accion(async () => { await api(`/admin/tipos/${encodeURIComponent(rubro)}/banner`, { method: "PUT", json: { seccion: sec, banner: ban } }); }, "Banner guardado"); }} className="btn btn-primary btn-sm">{busy ? "Guardando…" : "Guardar banner"}</button>
                 <button disabled={busy} onClick={() => accion(async () => { await api(`/admin/tipos/${encodeURIComponent(rubro)}/banner`, { method: "PUT", json: { seccion: sec, banner: null } }); }, "Banner quitado")} className="btn btn-ghost btn-sm text-[#aa0b56]">Quitar banner</button>
@@ -93,14 +96,18 @@ export default function TipoAdmin({ rubro, categoria }: { rubro: string; categor
         </div>
       </Panel>
 
+      <LoteBar sel={sel} todos={d.items.map((i) => i.producto_cod)} onDone={async () => { setSel(new Set()); await cargar(); }} onClear={() => setSel(new Set())}
+        opcionesRubro={d.opciones_rubro.filter((r) => r !== rubro)} />
+
       <Panel className="mt-4 !p-0">
         <table className="w-full font-sans text-[13px]">
-          <thead><tr className="border-b-2 border-ink text-left text-[11px] uppercase text-ink-2"><th className="px-4 py-3" colSpan={2}>Producto</th><th className="py-3">Categoría</th><th className="py-3">Origen</th><th className="py-3 pr-6 text-right">Stock</th><th className="py-3">Publicación</th><th className="w-56" /></tr></thead>
+          <thead><tr className="border-b-2 border-ink text-left text-[11px] uppercase text-ink-2"><th className="px-3 py-3"><Check checked={todosSel} onChange={(v) => setSel(v ? new Set(d.items.map((i) => i.producto_cod)) : new Set())} /></th><th className="py-3" colSpan={2}>Producto</th><th className="py-3">Categoría</th><th className="py-3">Origen</th><th className="py-3 pr-6 text-right">Stock</th><th className="py-3">Publicación</th><th className="w-56" /></tr></thead>
           <tbody>
             {d.items.map((i) => (
-              <tr key={i.producto_cod} className="border-b border-line hover:bg-[#fafafa]">
-                <td className="w-[56px] px-4 py-2"><Thumb src={i.foto} className="h-[44px] w-[44px] object-contain" /></td>
-                <td className="py-2"><Link href={`/admin/catalogo/${i.producto_cod}`} className="font-bold hover:underline">{i.nombre}</Link><div className="card-meta"><b>{i.producto_cod}</b> · {i.marca}</div></td>
+              <tr key={i.producto_cod} className={`border-b border-line hover:bg-[#fafafa] ${sel.has(i.producto_cod) ? "bg-[#f3fbff]" : ""}`}>
+                <td className="px-3 py-2"><Check checked={sel.has(i.producto_cod)} onChange={(v) => { const n = new Set(sel); if (v) n.add(i.producto_cod); else n.delete(i.producto_cod); setSel(n); }} /></td>
+                <td className="w-[56px] py-2"><Thumb src={i.foto} className="h-[44px] w-[44px] object-contain" /></td>
+                <td className="py-2"><Link href={`/admin/catalogo/${i.producto_cod}`} className="font-bold hover:underline">{i.nombre}</Link><div className="card-meta"><b>{i.producto_cod}</b> · {i.marca}{i.destacado && <span className="ml-2 text-ink">★ destacado</span>}</div></td>
                 <td className="py-2">{i.categoria}</td>
                 <td className={`py-2 ${i.origen === "manual" ? "text-[#006786]" : "text-muted"}`}>{i.origen === "manual" ? <>manual <span className="text-muted">· Aleph: {i.rubro_aleph}</span></> : "Aleph"}</td>
                 <td className="py-2 pr-6 text-right">{i.stock}</td>
@@ -119,7 +126,7 @@ export default function TipoAdmin({ rubro, categoria }: { rubro: string; categor
                 </td>
               </tr>
             ))}
-            {d.items.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-muted">Sin productos.</td></tr>}
+            {d.items.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-muted">Sin productos.</td></tr>}
           </tbody>
         </table>
       </Panel>

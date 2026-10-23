@@ -14,9 +14,11 @@ export async function subirImagen(file: File): Promise<string> {
   return (await res.json()).url;
 }
 
-export default function BloqueForm({ b, onChange, onQuitar, conSubtitulo, conTag, conAncho, conKicker, previewAspect = "16/9" }: {
+export default function BloqueForm({ b, onChange, onQuitar, conSubtitulo, conTag, conAncho, conKicker, previewAspect = "16/9", sugerido }: {
   b: HomeBloque; onChange: (b: HomeBloque) => void; onQuitar?: () => void;
   conSubtitulo?: boolean; conTag?: boolean; conAncho?: boolean; conKicker?: boolean; previewAspect?: string;
+  /** Tamaño de imagen recomendado, ej. "1600 × 420 px" (se muestra al lado de «Subir»). */
+  sugerido?: string;
 }) {
   const [up, setUp] = useState(false);
   const [deProducto, setDeProducto] = useState(false);
@@ -29,6 +31,7 @@ export default function BloqueForm({ b, onChange, onQuitar, conSubtitulo, conTag
           {b.img && <img src={b.img} alt="" className="h-full w-full object-cover" />}
         </div>
         <Muted className="mt-1 truncate">{b.img ? (b.img.startsWith("/banners/") ? "Imagen por defecto" : b.img.startsWith("/api/media/") ? "Imagen subida" : "Imagen por URL") : "Sin imagen"}</Muted>
+        {sugerido && <Muted className="mt-1 text-[11.5px]">Tamaño sugerido: <b className="text-ink">{sugerido}</b> (JPG o PNG, hasta 10 MB)</Muted>}
         <div className="mt-2 flex flex-wrap gap-2">
           <label className={`btn btn-light btn-sm cursor-pointer ${up ? "opacity-50" : ""}`}>{up ? "Subiendo…" : "Subir"}<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; setUp(true); try { onChange({ ...b, img: await subirImagen(f) }); } catch (er) { notify(er instanceof ClientError ? er.message : "Error al subir", "error"); } finally { setUp(false); } }} /></label>
           <button type="button" onClick={() => setDeProducto(!deProducto)} className="btn btn-light btn-sm">Foto de un producto</button>

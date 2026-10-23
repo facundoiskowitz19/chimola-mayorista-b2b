@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 import adminlib
@@ -15,6 +15,7 @@ import overrides
 
 from api import colores, deps
 from api.routers.admin._common import PUB_LABELS, _j, _pub
+from api.routers.catalogo import relacionados_de
 
 router = APIRouter()
 
@@ -90,10 +91,30 @@ class LoteIn(BaseModel):
 
 @router.post("/catalogo/lote")
 def lote(body: LoteIn, c: deps.Ctx = Depends(deps.ctx_admin)):
-    campos = {k: v for k, v in body.campos.items() if k in ("publicado", "destacado")}
-    if not campos or not body.cods:
+    """Acción en lote sobre varios productos. `campos`: publicado / destacado / categoria / rubro
+    (escalares, batch de Firestore; categoria/rubro vacíos = vuelven a Aleph) y/o
+    `categoria_extra_add` / `categoria_extra_quitar` (categorías adicionales, por producto)."""
+    cods = [str(x).strip().upper() for x in body.cods if str(x).strip()]
+    simples = {k: v for k, v in body.campos.items() if k in ("publicado", "destacado", "categoria", "rubro")}
+    extra_add = str(body.campos.get("categoria_extra_add") or "").strip()
+    extra_del = str(body.campos.get("categoria_extra_quitar") or "").strip()
+    if not (simples or extra_add or extra_del) or not cods:
         raise HTTPException(422, "Nada para aplicar")
-    n = overrides.set_masivo(body.cods, campos, c.email)
+    if len(cods) > 2000:
+        raise HTTPException(422, "Demasiados productos en un solo lote")
+    n = 0
+    if simples:
+        n = overrides.set_masivo(cods, simples, c.email)
+    if extra_add or extra_del:
+        ov = overrides.get_catalogo_overrides()
+        for cod in cods:
+            extras = list((ov.get(cod) or {}).get("categorias_extra") or [])
+            if extra_del:
+                extras = [e for e in extras if e.lower() != extra_del.lower()]
+            if extra_add and extra_add.lower() not in {e.lower() for e in extras}:
+                extras.append(extra_add)
+            overrides.set_catalogo_override(cod, {"categorias_extra": extras}, c.email)
+        n = len(cods)
     return {"n": n}
 
 
@@ -111,7 +132,7 @@ def fotomap(q: str = "", marca: list[str] | None = Query(None), temporada: list[
 
 
 @router.get("/productos/{cod}")
-def producto_admin(cod: str):
+def producto_admin(cod: str, c: deps.Ctx = Depends(deps.ctx_admin)):
     cod = cod.upper()
     df = catalog.variantes_admin()
     filas = df[df["producto_cod"] == cod].copy()
@@ -161,6 +182,9 @@ def producto_admin(cod: str):
         "relacionados": _relacionados_info(o.get("relacionados") or [], df),
         "relacionados_inversos": _relacionados_info(
             [c for c, oo in overrides.get_catalogo_overrides().items() if cod in (oo.get("relacionados") or [])], df),
+        # Lo que el sitio arma solo (familia por nombre → mismo tipo + marca) cuando no hay manuales.
+        "relacionados_auto": _relacionados_info(
+            relacionados_de(deps.df_cliente(c), cod, f0["producto_nombre"], f0["rubro"], f0["marca"], manuales=[])["producto_cod"].tolist(), df),
     }
 
 
@@ -243,3 +267,56 @@ def agregar_extra(cod: str, body: ExtraIn, c: deps.Ctx = Depends(deps.ctx_admin)
                    "stock": int(body.stock), "precios": {"1": float(body.precio)}, "ean": body.ean.strip()}
     overrides.set_catalogo_override(cod, {"variantes_extra": nuevos}, c.email)
     return {"sku": sku}
+
+
+# ---------------------------------------------------------------------------
+# Fotos a mano: suben al MISMO bucket/carpeta que las del pipeline ("COD COLOR (n).jpg")
+# ---------------------------------------------------------------------------
+FOTO_MAX_BYTES = 15 * 1024 * 1024
+
+
+def _fotos_info(cod: str) -> dict:
+    files = sorted(fotos.indice_fotos().get(cod, []))
+    return {"files": files, "n": len(files), "urls": {fn: fotos.url_foto_publica(cod, fn) for fn in files},
+            "portada_auto": fotos._portada_filename(cod, files) if files else None}
+
+
+@router.post("/productos/{cod}/fotos")
+async def subir_fotos(cod: str, files: list[UploadFile] = File(...), color: str = Form(""),
+                      c: deps.Ctx = Depends(deps.ctx_admin)):
+    """Sube una o varias fotos del producto (opcionalmente atadas a un color del catálogo).
+    Se normalizan a JPEG ≤ 1600 px y quedan visibles al instante."""
+    cod = cod.upper()
+    if catalog.load_variantes().query("producto_cod == @cod").empty:
+        raise HTTPException(404, f"{cod} no está en el catálogo actual")
+    subidas = []
+    for f in files:
+        if not (f.content_type or "").startswith("image/"):
+            raise HTTPException(422, f"{f.filename}: solo imágenes")
+        data = await f.read()
+        if len(data) > FOTO_MAX_BYTES:
+            raise HTTPException(422, f"{f.filename}: máximo 15 MB")
+        try:
+            subidas.append(fotos.subir_foto(cod, data, color))
+        except Exception as e:  # noqa: BLE001 — PIL no pudo abrirla / GCS sin permiso
+            raise HTTPException(422, f"{f.filename}: no se pudo procesar ({e})") from e
+    return {"subidas": subidas, **_fotos_info(cod)}
+
+
+@router.delete("/productos/{cod}/fotos/{filename}")
+def borrar_foto(cod: str, filename: str, c: deps.Ctx = Depends(deps.ctx_admin)):
+    cod = cod.upper()
+    if not fotos.borrar_foto(cod, filename):
+        raise HTTPException(404, "Esa foto no existe")
+    # Si era la portada o estaba asignada a un color, el override queda apuntando a un archivo que no existe:
+    # el sitio ya lo ignora (`portada in files`), pero lo limpiamos para que el admin no lo vea como manual.
+    o = overrides.get_catalogo_overrides().get(cod, {})
+    cambios = {}
+    if o.get("portada") == filename:
+        cambios["portada"] = ""
+    fc = {k: v for k, v in (o.get("fotos_color") or {}).items() if v != filename}
+    if fc != (o.get("fotos_color") or {}):
+        cambios["fotos_color"] = fc
+    if cambios:
+        overrides.set_catalogo_override(cod, cambios, c.email)
+    return _fotos_info(cod)

@@ -434,6 +434,81 @@ def tiene_fotos(producto_cod: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Fotos subidas a mano desde el admin (al mismo bucket/carpeta que las del pipeline Woo,
+# con la convención de nombre "COD COLOR (n).jpg" para que el parsing las entienda)
+# ---------------------------------------------------------------------------
+FOTO_MAX_PX = 1600
+
+
+def _normalizar_imagen(data: bytes) -> bytes:
+    """JPEG RGB, lado mayor ≤ FOTO_MAX_PX, orientación EXIF aplicada, fondo blanco si había alfa."""
+    import io
+    from PIL import Image, ImageOps
+
+    im = Image.open(io.BytesIO(data))
+    im = ImageOps.exif_transpose(im)
+    if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
+        im = im.convert("RGBA")
+        fondo = Image.new("RGB", im.size, (255, 255, 255))
+        fondo.paste(im, mask=im.split()[-1])
+        im = fondo
+    elif im.mode != "RGB":
+        im = im.convert("RGB")
+    im.thumbnail((FOTO_MAX_PX, FOTO_MAX_PX))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=88, optimize=True)
+    return buf.getvalue()
+
+
+def _blob_foto(producto_cod: str, filename: str):
+    return _storage().bucket(config.BUCKET_FOTOS).blob(
+        f"{config.FOTOS_PREFIX.rstrip('/')}/{carpeta(producto_cod)}/{filename}")
+
+
+def subir_foto(producto_cod: str, data: bytes, color: str | None = None) -> str:
+    """Sube una foto del producto y la suma al índice en memoria (sin esperar el refresco horario).
+    Nombre: "COD COLOR (n).jpg" (n = siguiente libre para ese color; sin color → "COD (n).jpg",
+    que el parser trata como foto genérica). Devuelve el filename."""
+    prod = producto_cod.strip().upper()
+    color_u = re.sub(r"\s+", " ", (color or "").strip().upper())
+    color_u = re.sub(r"[()/\\]", "", color_u)
+    files = indice_fotos().get(prod, [])
+    usados = set()
+    for fn in files:
+        m = RE_NUM.match(fn)
+        if m and (m.group("color") or "").strip().upper() == color_u:
+            usados.add(int(m.group("n")))
+    n = 1
+    while n in usados:
+        n += 1
+    fn = f"{prod} {color_u} ({n}).jpg" if color_u else f"{prod} ({n}).jpg"
+    blob = _blob_foto(prod, fn)
+    blob.cache_control = "public, max-age=3600"
+    blob.upload_from_string(_normalizar_imagen(data), content_type="image/jpeg")
+    with _idx_lock:
+        _idx.setdefault(prod, []).append(fn)
+        _carpetas.setdefault(prod, prod)
+    log.info("Foto subida %s/%s (%d bytes)", prod, fn, len(data))
+    return fn
+
+
+def borrar_foto(producto_cod: str, filename: str) -> bool:
+    """Borra una foto del bucket y del índice. False si no existe."""
+    prod = producto_cod.strip().upper()
+    files = indice_fotos().get(prod, [])
+    if filename not in files:
+        return False
+    _blob_foto(prod, filename).delete()
+    with _idx_lock:
+        if filename in files:
+            files.remove(filename)
+        if not files:
+            _idx.pop(prod, None)
+    log.info("Foto borrada %s/%s", prod, filename)
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Foto ↔ VARIANTE (fase 9 — port de pipeline/images.py del Woo)
 # ---------------------------------------------------------------------------
 FUZZY_THRESHOLD = 0.85
