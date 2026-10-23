@@ -324,6 +324,9 @@ web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  �
     `"COD COLOR (n).jpg"` (JPEG ≤1600 px) y se suman al índice en memoria al instante. La SA necesita
     `roles/storage.objectUser` sobre ese bucket (está en `setup_infra.sh`; dado a mano a `sa-mayorista-dev` el
     2026-10-23; la de PROD todavía no lo tiene).
+- **Admin → Pedidos** (`v2.0.0-rc.3`): el detalle vive en `/admin/pedidos/{numero}` (antes se abría debajo de la
+  tabla y con 50+ filas quedaba fuera de pantalla: "no puedo entrar al pedido"). En el admin, todo detalle que se
+  abra desde una lista larga va en página propia, no inline.
 - Lint React 19 `set-state-in-effect` apagado en `eslint.config.mjs`: el patrón
   `useEffect(() => { cargar(); })` con await+setState lo disparaba en todo el admin.
 - **Stock nunca sale al cliente** (con una excepción): la API devuelve `disponible` y `stock` solo si
