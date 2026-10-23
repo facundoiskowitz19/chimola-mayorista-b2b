@@ -3,8 +3,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { api, qs } from "@/lib/client";
 import { money } from "@/lib/format";
+import Link from "next/link";
 import { H1, Muted, Panel, Pills, Spinner, Tag } from "@/components/admin/ui";
-import PedidoAdmin from "@/components/admin/PedidoAdmin";
 
 interface Row { numero: number; fecha_str: string; cliente_cod: number; cliente_nombre: string | null; usuario_email: string; unidades: number; total: number; estado: string; observaciones: string; email_enviado: boolean; n_items: number }
 interface Res { counts: Record<string, number>; clientes: [number, string][]; items: Row[] }
@@ -18,7 +18,8 @@ function PedidosAdmin() {
   const [cliente, setCliente] = useState("");
   const [desde, setDesde] = useState("");
   const [res, setRes] = useState<Res | null>(null);
-  const [abierto, setAbierto] = useState<number | null>(sp.get("n") ? parseInt(sp.get("n")!, 10) : null);
+  // Antes el detalle se abría debajo de la tabla (invisible con 50+ filas): ahora es una página propia.
+  useEffect(() => { const n = sp.get("n"); if (n) router.replace(`/admin/pedidos/${n}`); }, [sp, router]);
 
   const cargar = useCallback(async () => {
     setRes(await api<Res>(`/admin/pedidos${qs({ estado: estado === "todos" ? undefined : estado, cliente_cod: cliente || undefined, desde: desde || undefined })}`));
@@ -38,8 +39,8 @@ function PedidosAdmin() {
           <table className="w-full font-sans text-[13px]">
             <thead><tr className="border-b-2 border-ink text-left text-[11px] uppercase text-ink-2"><th className="px-4 py-3">N°</th><th className="py-3">Fecha</th><th className="py-3">Cliente</th><th className="py-3 text-right">Unid.</th><th className="py-3 text-right">Total</th><th className="py-3 pl-4">Estado</th><th className="py-3 text-center">Email</th></tr></thead>
             <tbody>{res.items.map((p) => (
-              <tr key={p.numero} onClick={() => setAbierto(abierto === p.numero ? null : p.numero)} className={`cursor-pointer border-b border-line hover:bg-[#fafafa] ${abierto === p.numero ? "bg-[#f3fbff]" : ""}`}>
-                <td className="px-4 py-2 font-bold">{String(p.numero).padStart(6, "0")}</td><td className="py-2">{p.fecha_str}</td>
+              <tr key={p.numero} onClick={() => router.push(`/admin/pedidos/${p.numero}`)} className="cursor-pointer border-b border-line hover:bg-[#fafafa]">
+                <td className="px-4 py-2 font-bold"><Link href={`/admin/pedidos/${p.numero}`} className="hover:underline">{String(p.numero).padStart(6, "0")}</Link></td><td className="py-2">{p.fecha_str}</td>
                 <td className="py-2">{(p.cliente_nombre || "").slice(0, 40)} <span className="text-muted">· {p.cliente_cod}</span>{p.observaciones && <div className="card-meta">“{p.observaciones.slice(0, 70)}”</div>}</td>
                 <td className="py-2 text-right">{p.unidades}</td><td className="py-2 text-right">{money(p.total)}</td><td className="py-2 pl-4"><Tag estado={p.estado} /></td><td className="py-2 text-center text-muted">{p.email_enviado ? "sí" : "—"}</td>
               </tr>
@@ -48,8 +49,7 @@ function PedidosAdmin() {
           </table>
         </Panel>
       )}
-      {abierto === null && res && res.items.length > 0 && <Muted className="mt-3">Click en una fila para ver el detalle.</Muted>}
-      {abierto !== null && <div className="mt-5"><PedidoAdmin numero={abierto} onChange={cargar} /></div>}
+      {res && res.items.length > 0 && <Muted className="mt-3">Click en una fila para entrar al detalle del pedido (estado, reenvío, modificación, Excel).</Muted>}
     </>
   );
 }
