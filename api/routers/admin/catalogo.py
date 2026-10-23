@@ -171,6 +171,7 @@ def producto_admin(cod: str, c: deps.Ctx = Depends(deps.ctx_admin)):
                   "portada": o.get("portada") if o.get("portada") in files else None,
                   "principal": fotos.foto_principal(cod) if files else None,
                   "urls": {fn: fotos.url_foto_publica(cod, fn) for fn in files},
+                  "manuales": [fn for fn in files if fotos.es_manual(cod, fn)],
                   "por_color": [{"color": c, "auto": mapa_auto.get(fotos.norm(c)),
                                  "manual": (o.get("fotos_color") or {}).get(fotos.norm(c)), "norm": fotos.norm(c)} for c in colores_prod]},
         "colores": [{"color": c, "hex": colores.hex_de(c)} for c in colores_prod],
@@ -278,14 +279,15 @@ FOTO_MAX_BYTES = 15 * 1024 * 1024
 def _fotos_info(cod: str) -> dict:
     files = sorted(fotos.indice_fotos().get(cod, []))
     return {"files": files, "n": len(files), "urls": {fn: fotos.url_foto_publica(cod, fn) for fn in files},
+            "manuales": [fn for fn in files if fotos.es_manual(cod, fn)],
             "portada_auto": fotos._portada_filename(cod, files) if files else None}
 
 
 @router.post("/productos/{cod}/fotos")
 async def subir_fotos(cod: str, files: list[UploadFile] = File(...), color: str = Form(""),
                       c: deps.Ctx = Depends(deps.ctx_admin)):
-    """Sube una o varias fotos del producto (opcionalmente atadas a un color del catálogo).
-    Se normalizan a JPEG ≤ 1600 px y quedan visibles al instante."""
+    """Sube una o varias fotos del producto (opcionalmente atadas a un color del catálogo) a la carpeta
+    PROPIA del sitio (`FOTOS_PREFIX_MANUAL`): solo este sitio las usa. JPEG ≤ 1600 px, visibles al instante."""
     cod = cod.upper()
     if catalog.load_variantes().query("producto_cod == @cod").empty:
         raise HTTPException(404, f"{cod} no está en el catálogo actual")
@@ -307,7 +309,7 @@ async def subir_fotos(cod: str, files: list[UploadFile] = File(...), color: str 
 def borrar_foto(cod: str, filename: str, c: deps.Ctx = Depends(deps.ctx_admin)):
     cod = cod.upper()
     if not fotos.borrar_foto(cod, filename):
-        raise HTTPException(404, "Esa foto no existe")
+        raise HTTPException(404, "Esa foto no existe o es del pipeline (solo se borran las subidas a mano)")
     # Si era la portada o estaba asignada a un color, el override queda apuntando a un archivo que no existe:
     # el sitio ya lo ignora (`portada in files`), pero lo limpiamos para que el admin no lo vea como manual.
     o = overrides.get_catalogo_overrides().get(cod, {})

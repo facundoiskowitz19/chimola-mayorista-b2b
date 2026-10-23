@@ -17,7 +17,7 @@ interface Data {
   aleph: { nombre: string; descripcion: string; precios: Record<string, number>; descvta: number };
   override: { publicado?: boolean | null; destacado?: boolean; nombre?: string; descripcion?: string; precios?: Record<string, number>; ub?: number; descuento_pct?: number | null; portada?: string; fotos_color?: Record<string, string>; variantes?: Record<string, Var["ov"]>; variantes_extra?: Record<string, Extra>; updated_by?: string; updated_at?: string | null; categoria?: string; rubro?: string; relacionados?: string[]; categorias_extra?: string[] };
   variantes: Var[];
-  fotos: { files: string[]; n: number; portada_auto: string | null; portada: string | null; principal: string | null; urls: Record<string, string>; por_color: { color: string; auto: string | null; manual: string | null; norm: string }[] };
+  fotos: { files: string[]; n: number; manuales: string[]; portada_auto: string | null; portada: string | null; principal: string | null; urls: Record<string, string>; por_color: { color: string; auto: string | null; manual: string | null; norm: string }[] };
   colores: { color: string; hex: string }[];
   clasificacion: { categoria: string; rubro: string; categoria_aleph: string; rubro_aleph: string; opciones_categoria: string[]; opciones_rubro: string[] };
   relacionados: RelInfo[];
@@ -321,7 +321,7 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
               </Panel>
               <Panel>
                 <Kicker>Subir fotos</Kicker>
-                <Muted className="mt-1">Van al mismo lugar que las del pipeline y se ven al instante. Si elegís un color, la foto queda atada a ese color (miniatura de la variante y swatch); sin color, es una foto genérica del producto. Se convierten a JPG de hasta 1600 px. {d.fotos.n === 0 && <b className="text-[#aa0b56]">Este producto no tiene fotos: no aparece en la grilla del cliente hasta que subas una.</b>}</Muted>
+                <Muted className="mt-1">Son solo para este sitio: van a una carpeta propia (no a la del pipeline, que usan otros sistemas) y se ven al instante. Si elegís un color, la foto queda atada a ese color (miniatura de la variante y swatch); sin color, es una foto genérica del producto. Se convierten a JPG de hasta 1600 px. {d.fotos.n === 0 && <b className="text-[#aa0b56]">Este producto no tiene fotos: no aparece en la grilla del cliente hasta que subas una.</b>}</Muted>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <select className="input !w-[220px]" value={fotoColor} onChange={(e) => setFotoColor(e.target.value)}>
                     <option value="">Sin color (genérica)</option>
@@ -339,11 +339,11 @@ export default function ProductoAdmin({ cod }: { cod: string }) {
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={d.fotos.urls[fn]} alt={fn} className="h-[84px] w-[96px] rounded-sm border border-line bg-white object-contain" />
                           <div className="mt-[2px] truncate font-sans text-[10px] text-muted" title={fn}>{fn}</div>
-                          <button type="button" onClick={() => setBorrarFoto(fn)} className="font-sans text-[11px] text-[#aa0b56] hover:underline">borrar</button>
+                          {d.fotos.manuales.includes(fn) ? <><Manual>subida a mano</Manual> · <button type="button" onClick={() => setBorrarFoto(fn)} className="font-sans text-[11px] text-[#aa0b56] hover:underline">borrar</button></> : <span className="font-sans text-[10px] text-muted">pipeline</span>}
                         </div>
                       ))}
                     </div>
-                    {borrarFoto && <div className="mt-3"><Confirm busy={busy} texto={<>Vas a borrar <b>{borrarFoto}</b> del bucket de fotos. No se puede deshacer. ¿Seguro?</>} onYes={confirmarBorrarFoto} onNo={() => setBorrarFoto(null)} /></div>}
+                    {borrarFoto && <div className="mt-3"><Confirm busy={busy} texto={<>Vas a borrar <b>{borrarFoto}</b> (subida a mano) del sitio. No se puede deshacer. ¿Seguro?</>} onYes={confirmarBorrarFoto} onNo={() => setBorrarFoto(null)} /></div>}
                   </>
                 )}
               </Panel>

@@ -321,7 +321,10 @@ web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  �
     junto a «Subir». La ficha admin trae `relacionados_auto` (lo que el sitio arma solo; `catalogo.relacionados_de`
     es la función compartida) y permite **subir/borrar fotos** (`POST /admin/productos/{cod}/fotos` multipart
     `files[]`+`color`, `DELETE …/fotos/{filename}`): van al bucket `ecommerce-b2b-imagenes` con el nombre
-    `"COD COLOR (n).jpg"` (JPEG ≤1600 px) y se suman al índice en memoria al instante. La SA necesita
+    `"COD COLOR (n).jpg"` (JPEG ≤1600 px) y se suman al índice en memoria al instante. **Desde rc.6 van a una carpeta
+    PROPIA** (`config.FOTOS_PREFIX_MANUAL` = `catalogo/fotos_sitio/<COD>/`, no a `fotos_productos/` que leen otros
+    sistemas): `indice_fotos` lista los dos prefijos, `fotos.es_manual` / `blob_name_foto` resuelven la ruta, y solo
+    las manuales se pueden borrar desde el admin (las del pipeline no se tocan). La SA necesita
     `roles/storage.objectUser` sobre ese bucket (está en `setup_infra.sh`; dado a mano a `sa-mayorista-dev` el
     2026-10-23; la de PROD todavía no lo tiene).
 - **Alias de nombres + curva por compras** (`v2.0.0-rc.5`, 2026-10-23):

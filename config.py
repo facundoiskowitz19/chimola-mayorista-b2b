@@ -35,6 +35,8 @@ MAX_BYTES_BILLED = int(os.getenv("MAX_BYTES_BILLED", str(1_000_000_000)))
 # Fotos (bucket vive en PROD; público hoy, igual firmamos URLs).
 BUCKET_FOTOS = os.getenv("BUCKET_FOTOS", "ecommerce-b2b-imagenes")
 FOTOS_PREFIX = os.getenv("FOTOS_PREFIX", "catalogo/fotos_productos")
+# Fotos subidas a mano desde el admin del sitio: carpeta PROPIA (no se mezclan con las del pipeline, que leen otros sistemas)
+FOTOS_PREFIX_MANUAL = os.getenv("FOTOS_PREFIX_MANUAL", "catalogo/fotos_sitio")
 FOTO_URL_TTL_SEG = int(os.getenv("FOTO_URL_TTL_SEG", "3600"))
 
 # Backup de pedidos.
