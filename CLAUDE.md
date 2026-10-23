@@ -322,7 +322,7 @@ web/  (Next.js 16 + Tailwind 4)  ──/api/* proxy──▶  api/  (FastAPI)  �
     es la función compartida) y permite **subir/borrar fotos** (`POST /admin/productos/{cod}/fotos` multipart
     `files[]`+`color`, `DELETE …/fotos/{filename}`): van al bucket `ecommerce-b2b-imagenes` con el nombre
     `"COD COLOR (n).jpg"` (JPEG ≤1600 px) y se suman al índice en memoria al instante. **Desde rc.6 van a una carpeta
-    PROPIA** (`config.FOTOS_PREFIX_MANUAL` = `catalogo/fotos_sitio/<COD>/`, no a `fotos_productos/` que leen otros
+    PROPIA** (`config.FOTOS_PREFIX_MANUAL` = `catalogo/fotos_sitio_b2b/<COD>/`, no a `fotos_productos/` que leen otros
     sistemas): `indice_fotos` lista los dos prefijos, `fotos.es_manual` / `blob_name_foto` resuelven la ruta, y solo
     las manuales se pueden borrar desde el admin (las del pipeline no se tocan). La SA necesita
     `roles/storage.objectUser` sobre ese bucket (está en `setup_infra.sh`; dado a mano a `sa-mayorista-dev` el
