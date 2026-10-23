@@ -62,8 +62,22 @@ def _storage() -> storage.Client:
 _idx_lock = threading.Lock()
 _idx: dict[str, list[str]] = {}
 _carpetas: dict[str, str] = {}   # COD (UPPER) → nombre REAL de la carpeta en el bucket (hay 15 con espacios/minúsculas)
+_manual: dict[str, set[str]] = {}   # COD → filenames subidos desde el admin (viven en FOTOS_PREFIX_MANUAL, solo el sitio los usa)
 _idx_ts = 0.0
 _IDX_TTL = 3600
+
+
+def es_manual(producto_cod: str, filename: str) -> bool:
+    indice_fotos()
+    return filename in _manual.get(producto_cod.strip().upper(), set())
+
+
+def blob_name_foto(producto_cod: str, filename: str) -> str:
+    """Ruta en el bucket: carpeta del pipeline (nombre real, con sus espacios) o la carpeta propia del sitio."""
+    prod = producto_cod.strip().upper()
+    if es_manual(prod, filename):
+        return f"{config.FOTOS_PREFIX_MANUAL.rstrip('/')}/{prod}/{filename}"
+    return f"{config.FOTOS_PREFIX.rstrip('/')}/{carpeta(prod)}/{filename}"
 
 
 def carpeta(producto_cod: str) -> str:
@@ -80,20 +94,29 @@ def indice_fotos(force: bool = False) -> dict[str, list[str]]:
         if _idx and not force and time.time() - _idx_ts < _IDX_TTL:
             return _idx
         t0 = time.time()
-        prefix = config.FOTOS_PREFIX.rstrip("/") + "/"
         out: dict[str, list[str]] = {}
         carpetas: dict[str, str] = {}
-        for blob in _storage().list_blobs(config.BUCKET_FOTOS, prefix=prefix):
-            rel = blob.name[len(prefix):]
-            if "/" not in rel:
-                continue
-            prod, fn = rel.split("/", 1)
-            if not fn or "/" in fn or not IMG_EXT.search(fn):
-                continue
-            out.setdefault(prod.strip().upper(), []).append(fn)
-            carpetas.setdefault(prod.strip().upper(), prod)
+        manual: dict[str, set[str]] = {}
+        # 1) fotos del pipeline (carpeta compartida con otros sistemas)  2) fotos subidas desde el admin (solo el sitio)
+        for prefix, es_man in ((config.FOTOS_PREFIX.rstrip("/") + "/", False), (config.FOTOS_PREFIX_MANUAL.rstrip("/") + "/", True)):
+            for blob in _storage().list_blobs(config.BUCKET_FOTOS, prefix=prefix):
+                rel = blob.name[len(prefix):]
+                if "/" not in rel:
+                    continue
+                prod, fn = rel.split("/", 1)
+                if not fn or "/" in fn or not IMG_EXT.search(fn):
+                    continue
+                key = prod.strip().upper()
+                if fn in out.get(key, []):      # mismo nombre en las dos carpetas: gana el pipeline
+                    continue
+                out.setdefault(key, []).append(fn)
+                if es_man:
+                    manual.setdefault(key, set()).add(fn)
+                else:
+                    carpetas.setdefault(key, prod)
         _idx, _idx_ts = out, time.time()
         _carpetas.clear(); _carpetas.update(carpetas)
+        _manual.clear(); _manual.update(manual)
         log.info("Índice de fotos: %d productos en %.1fs", len(out), time.time() - t0)
         return _idx
 
@@ -139,7 +162,7 @@ _url_lock = threading.Lock()
 
 def url_foto(producto_cod: str, filename: str) -> str:
     """URL (firmada, TTL 1h) de una foto. Cacheada 50 min."""
-    blob_name = f"{config.FOTOS_PREFIX.rstrip('/')}/{carpeta(producto_cod)}/{filename}"
+    blob_name = blob_name_foto(producto_cod, filename)
     with _url_lock:
         hit = _url_cache.get(blob_name)
         if hit and hit[1] > time.time():
@@ -166,7 +189,7 @@ def url_foto_publica(producto_cod: str, filename: str) -> str:
     """URL pública de una foto (no vence — para links en Excel y tablas largas).
     El bucket es público hoy (lo usa el Woo); si algún día se cierra, esto
     debe migrar a otro esquema."""
-    return _public_url(f"{config.FOTOS_PREFIX.rstrip('/')}/{carpeta(producto_cod)}/{filename}")
+    return _public_url(blob_name_foto(producto_cod, filename))
 
 
 def foto_variante_filename(producto_cod: str, color: str | None = None,
@@ -203,7 +226,7 @@ def miniatura_jpeg(producto_cod: str, filename: str, px: int = 56) -> bytes | No
 
     from PIL import Image
     try:
-        blob_name = f"{config.FOTOS_PREFIX.rstrip('/')}/{carpeta(producto_cod)}/{filename}"
+        blob_name = blob_name_foto(producto_cod, filename)
         data = _storage().bucket(config.BUCKET_FOTOS).blob(blob_name).download_as_bytes()
         im = Image.open(_io.BytesIO(data)).convert("RGB")
         im.thumbnail((px, px))
@@ -460,9 +483,9 @@ def _normalizar_imagen(data: bytes) -> bytes:
     return buf.getvalue()
 
 
-def _blob_foto(producto_cod: str, filename: str):
+def _blob_manual(producto_cod: str, filename: str):
     return _storage().bucket(config.BUCKET_FOTOS).blob(
-        f"{config.FOTOS_PREFIX.rstrip('/')}/{carpeta(producto_cod)}/{filename}")
+        f"{config.FOTOS_PREFIX_MANUAL.rstrip('/')}/{producto_cod.strip().upper()}/{filename}")
 
 
 def subir_foto(producto_cod: str, data: bytes, color: str | None = None) -> str:
@@ -482,26 +505,28 @@ def subir_foto(producto_cod: str, data: bytes, color: str | None = None) -> str:
     while n in usados:
         n += 1
     fn = f"{prod} {color_u} ({n}).jpg" if color_u else f"{prod} ({n}).jpg"
-    blob = _blob_foto(prod, fn)
+    blob = _blob_manual(prod, fn)
     blob.cache_control = "public, max-age=3600"
     blob.upload_from_string(_normalizar_imagen(data), content_type="image/jpeg")
     with _idx_lock:
         _idx.setdefault(prod, []).append(fn)
-        _carpetas.setdefault(prod, prod)
+        _manual.setdefault(prod, set()).add(fn)
     log.info("Foto subida %s/%s (%d bytes)", prod, fn, len(data))
     return fn
 
 
 def borrar_foto(producto_cod: str, filename: str) -> bool:
-    """Borra una foto del bucket y del índice. False si no existe."""
+    """Borra una foto SUBIDA A MANO del bucket y del índice. False si no existe o es del pipeline
+    (esas las comparten otros sistemas: no se tocan desde acá)."""
     prod = producto_cod.strip().upper()
     files = indice_fotos().get(prod, [])
-    if filename not in files:
+    if filename not in files or not es_manual(prod, filename):
         return False
-    _blob_foto(prod, filename).delete()
+    _blob_manual(prod, filename).delete()
     with _idx_lock:
         if filename in files:
             files.remove(filename)
+        _manual.get(prod, set()).discard(filename)
         if not files:
             _idx.pop(prod, None)
     log.info("Foto borrada %s/%s", prod, filename)
