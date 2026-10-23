@@ -138,7 +138,7 @@ export default function ClienteAdmin({ email }: { email: string }) {
                   </table>
                 </Panel>
               </div>
-              {abierto && <PedidoAdmin numero={abierto} onChange={cargar} />}
+              {abierto && <PedidoAdmin numero={abierto} onChange={cargar} linkPropio />}
               <Panel>
                 <details>
                   <summary className="cursor-pointer font-brand text-[14px] font-bold">Importar historial de Aleph</summary>

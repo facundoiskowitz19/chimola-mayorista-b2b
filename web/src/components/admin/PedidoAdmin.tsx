@@ -12,7 +12,7 @@ import { Check, Kicker, Muted, Panel, Spinner, Tag } from "./ui";
 
 const SIGUIENTES: Record<string, string[]> = { confirmado: ["procesado", "cancelado"], procesado: ["cancelado"], cancelado: [] };
 
-export default function PedidoAdmin({ numero, onChange }: { numero: number; onChange?: () => void }) {
+export default function PedidoAdmin({ numero, onChange, linkPropio = false }: { numero: number; onChange?: () => void; linkPropio?: boolean }) {
   const [p, setP] = useState<Pedido | null>(null);
   const [busy, setBusy] = useState(false);
   const [mod, setMod] = useState<Record<string, { cantidad: string; quitar: boolean }> | null>(null);
@@ -35,6 +35,7 @@ export default function PedidoAdmin({ numero, onChange }: { numero: number; onCh
     <Panel>
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="font-brand text-[20px] font-bold">Pedido N° {String(p.numero).padStart(6, "0")}</h2><Tag estado={p.estado} />
+        {linkPropio && <Link href={`/admin/pedidos/${p.numero}`} className="ml-auto font-sans text-[12px] hover:underline">Abrir en Pedidos ›</Link>}
       </div>
       <Muted className="mt-1">{p.fecha_str} · <b className="text-ink">{p.cliente_nombre}</b> (cliente <Link href={usuarioEmail ? `/admin/clientes/${encodeURIComponent(usuarioEmail)}` : "/admin/clientes"} className="underline">{p.cliente_cod}</Link>) · {usuarioEmail} · {p.unidades} u. · <b className="text-ink">{money(p.total)}</b> (desc. {p.descuento_pct}%)</Muted>
       {contacto && <Muted>Contacto del pedido: {contacto}</Muted>}
